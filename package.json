@@ -1,0 +1,49 @@
+{
+  "name": "turborepo-effect-starter",
+  "version": "0.0.1",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "oxlint --deny-warnings --config oxlint.config.ts",
+    "lint:fix": "oxlint --fix --config oxlint.config.ts",
+    "fmt": "oxfmt",
+    "fmt:check": "oxfmt --check",
+    "check": "bun run lint && bun run fmt:check",
+    "test": "turbo test && bun run test:scripts",
+    "test:scripts": "vitest run scripts",
+    "test:watch": "turbo test:watch",
+    "vendor:sync": "bun scripts/sync-vendor.ts",
+    "prepare": "effect-tsgo patch --oxlint"
+  },
+  "dependencies": {
+    "@effect/tsgo": "0.36.5",
+    "@types/bun": "catalog:",
+    "@typescript/native": "npm:typescript@^7.0.2",
+    "oxfmt": "^0.64.0",
+    "oxlint": "1.78.0",
+    "oxlint-tsgolint": "^7.0.2001",
+    "turbo": "^2.10.9",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "packageManager": "bun@1.4.0-canary.1",
+  "catalog": {
+    "@effect/atom-react": "4.0.0-rc.110",
+    "@effect/vitest": "4.0.0-rc.110",
+    "@types/bun": "^1.3.14",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "effect": "4.0.0-rc.110",
+    "lucide-react": "^1.17.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.10"
+  }
+}

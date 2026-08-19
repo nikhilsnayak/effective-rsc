@@ -1,0 +1,27 @@
+{
+  "name": "server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun build src/index.ts --compile --outfile dist/server",
+    "dev": "bun run --watch src/index.ts",
+    "start": "./dist/server",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
+    "test": "vitest run",
+    "test:watch": "vitest --watch"
+  },
+  "dependencies": {
+    "@effect/platform-bun": "4.0.0-rc.110",
+    "@effect/sql-pg": "4.0.0-rc.110",
+    "@effect/vitest": "catalog:",
+    "@repo/contracts": "workspace:*",
+    "@types/bun": "catalog:",
+    "drizzle-kit": "1.0.0-rc.5-ab785fc",
+    "drizzle-orm": "1.0.0-rc.5-169397b",
+    "effect": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

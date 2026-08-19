@@ -1,0 +1,16 @@
+{
+  "name": "@repo/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./AppRpcs": "./src/AppRpcs.ts",
+    "./InternalServerError": "./src/InternalServerError.ts",
+    "./modules/*": "./src/modules/*/index.ts"
+  },
+  "dependencies": {
+    "effect": "catalog:",
+    "typescript": "catalog:"
+  }
+}

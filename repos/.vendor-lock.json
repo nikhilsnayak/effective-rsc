@@ -40,6 +40,25 @@
     "commit": "0c42aa62a372f86512d6aca37848395f9fa56232",
     "sourcePath": "."
   },
+  "next.js": {
+    "repository": "https://github.com/vercel/next.js.git",
+    "ref": "canary",
+    "commit": "988a6ab72735d5c61f906d6ea0484930aa496713",
+    "sourcePaths": [
+      {
+        "sourcePath": "packages/next/src/server/app-render",
+        "destinationPath": "server/app-render"
+      },
+      {
+        "sourcePath": "packages/next/src/client/components",
+        "destinationPath": "client/components"
+      },
+      {
+        "sourcePath": "packages/next/src/shared/lib",
+        "destinationPath": "shared/lib"
+      }
+    ]
+  },
   "twofold": {
     "repository": "https://github.com/twofold-rsc/twofold.git",
     "ref": "main",

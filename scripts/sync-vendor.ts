@@ -20,7 +20,15 @@ type DirectoryVendor = VendorBase & {
   readonly sourcePath: string;
 };
 
-type Vendor = SubtreeVendor | DirectoryVendor;
+type DirectoriesVendor = VendorBase & {
+  readonly kind: 'directories';
+  readonly directories: ReadonlyArray<{
+    readonly destinationPath: string;
+    readonly sourcePath: string;
+  }>;
+};
+
+type Vendor = SubtreeVendor | DirectoryVendor | DirectoriesVendor;
 
 const vendors = {
   effect: {
@@ -101,6 +109,32 @@ const vendors = {
       'core/build/webpack.config.js',
       'core/client/index.js',
       'core/server/index.js',
+    ],
+  },
+  'next.js': {
+    kind: 'directories',
+    repository: 'https://github.com/vercel/next.js.git',
+    ref: 'canary',
+    directories: [
+      {
+        sourcePath: 'packages/next/src/server/app-render',
+        destinationPath: 'server/app-render',
+      },
+      {
+        sourcePath: 'packages/next/src/client/components',
+        destinationPath: 'client/components',
+      },
+      {
+        sourcePath: 'packages/next/src/shared/lib',
+        destinationPath: 'shared/lib',
+      },
+    ],
+    prefix: 'repos/next.js',
+    requiredPaths: [
+      'server/app-render/app-render.tsx',
+      'client/components/router-reducer/fetch-server-response.ts',
+      'shared/lib/app-router-types.ts',
+      'shared/lib/rsc-transport.ts',
     ],
   },
   twofold: {
@@ -253,6 +287,10 @@ type VendorLock = Record<
     readonly ref: string;
     readonly commit: string;
     readonly sourcePath?: string;
+    readonly sourcePaths?: ReadonlyArray<{
+      readonly destinationPath: string;
+      readonly sourcePath: string;
+    }>;
   }
 >;
 
@@ -267,6 +305,7 @@ const updateVendorLock = async (name: VendorName, vendor: Vendor, commit: string
     ref: vendor.ref,
     commit,
     ...(vendor.kind === 'directory' ? { sourcePath: vendor.sourcePath } : {}),
+    ...(vendor.kind === 'directories' ? { sourcePaths: vendor.directories } : {}),
   };
 
   await writeFile(lockPath, `${JSON.stringify(lock, undefined, 2)}\n`);
@@ -318,7 +357,7 @@ const syncSubtree = async (
 
 const syncDirectory = async (
   name: VendorName,
-  vendor: DirectoryVendor,
+  vendor: DirectoryVendor | DirectoriesVendor,
   commit: string,
   root: string,
 ) => {
@@ -359,51 +398,68 @@ const syncDirectory = async (
       );
     }
 
-    const isRepositoryRoot = vendor.sourcePath === '.';
-    const sourceTree = await output(
-      [
-        'git',
-        'ls-tree',
-        '-r',
-        '--full-tree',
-        commit,
-        ...(isRepositoryRoot ? [] : ['--', vendor.sourcePath]),
-      ],
-      temporaryRoot,
-    );
-    if (sourceTree.exitCode !== 0 || sourceTree.stdout === '') {
-      throw new Error(`${vendor.sourcePath} does not exist at ${commit}.`);
-    }
-    if (sourceTree.stdout.split('\n').some((line) => line.startsWith('160000 '))) {
-      throw new Error(`${vendor.sourcePath} contains nested gitlinks.`);
+    const directories =
+      vendor.kind === 'directory'
+        ? [{ sourcePath: vendor.sourcePath, destinationPath: '.' }]
+        : vendor.directories;
+    const isRepositoryRoot = directories.length === 1 && directories[0]?.sourcePath === '.';
+
+    for (const directory of directories) {
+      const sourceTree = await output(
+        [
+          'git',
+          'ls-tree',
+          '-r',
+          '--full-tree',
+          commit,
+          ...(directory.sourcePath === '.' ? [] : ['--', directory.sourcePath]),
+        ],
+        temporaryRoot,
+      );
+      if (sourceTree.exitCode !== 0 || sourceTree.stdout === '') {
+        throw new Error(`${directory.sourcePath} does not exist at ${commit}.`);
+      }
+      if (sourceTree.stdout.split('\n').some((line) => line.startsWith('160000 '))) {
+        throw new Error(`${directory.sourcePath} contains nested gitlinks.`);
+      }
     }
 
     const materializeCommands = isRepositoryRoot
       ? [['git', 'checkout', '--quiet', '--detach', commit]]
       : [
           ['git', 'sparse-checkout', 'init', '--cone'],
-          ['git', 'sparse-checkout', 'set', vendor.sourcePath],
+          ['git', 'sparse-checkout', 'set', ...directories.map(({ sourcePath }) => sourcePath)],
           ['git', 'checkout', '--quiet', '--detach', commit],
         ];
 
     for (const command of materializeCommands) {
       if ((await run(command, temporaryRoot)) !== 0) {
-        throw new Error(`Could not materialize ${vendor.sourcePath} at ${commit}.`);
+        throw new Error(`Could not materialize ${name} at ${commit}.`);
       }
     }
 
-    const source = isRepositoryRoot ? temporaryRoot : join(temporaryRoot, vendor.sourcePath);
     const destination = join(root, vendor.prefix);
     const stagedDestination = `${destination}.next-${process.pid}`;
     const temporaryGitDirectory = join(temporaryRoot, '.git');
 
     await rm(stagedDestination, { force: true, recursive: true });
     await mkdir(dirname(stagedDestination), { recursive: true });
-    await cp(source, stagedDestination, {
-      recursive: true,
-      filter: (path) =>
-        path !== temporaryGitDirectory && !path.startsWith(`${temporaryGitDirectory}/`),
-    });
+
+    if (vendor.kind === 'directory') {
+      const source = isRepositoryRoot ? temporaryRoot : join(temporaryRoot, vendor.sourcePath);
+      await cp(source, stagedDestination, {
+        recursive: true,
+        filter: (path) =>
+          path !== temporaryGitDirectory && !path.startsWith(`${temporaryGitDirectory}/`),
+      });
+    } else {
+      await mkdir(stagedDestination, { recursive: true });
+      for (const directory of directories) {
+        const stagedDirectory = join(stagedDestination, directory.destinationPath);
+        await mkdir(dirname(stagedDirectory), { recursive: true });
+        await cp(join(temporaryRoot, directory.sourcePath), stagedDirectory, { recursive: true });
+      }
+    }
 
     const missingPaths = vendor.requiredPaths.filter(
       (path) => !existsSync(join(stagedDestination, path)),
@@ -419,7 +475,8 @@ const syncDirectory = async (
     await cp(stagedDestination, destination, { recursive: true });
     await rm(stagedDestination, { force: true, recursive: true });
 
-    console.log(`Synced ${name} from ${vendor.repository}#${commit}:${vendor.sourcePath}`);
+    const sourceDescription = directories.map(({ sourcePath }) => sourcePath).join(', ');
+    console.log(`Synced ${name} from ${vendor.repository}#${commit}:${sourceDescription}`);
   } finally {
     await rm(temporaryRoot, { force: true, recursive: true });
   }

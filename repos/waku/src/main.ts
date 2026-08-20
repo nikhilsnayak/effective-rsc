@@ -1,0 +1,21 @@
+export { Link, useRouter, Slice } from 'waku/router/client';
+
+import type {
+  createPages as createPagesType,
+  fsRouter as fsRouterType,
+  getEnv as getEnvType,
+} from './main.react-server.js';
+
+export const createPages: typeof createPagesType = () => {
+  throw new Error(
+    '`createPages` is only available in react-server environment',
+  );
+};
+
+export const fsRouter: typeof fsRouterType = () => {
+  throw new Error('`fsRouter` is only available in react-server environment');
+};
+
+export const getEnv: typeof getEnvType = () => {
+  throw new Error('`getEnv` is only available in react-server environment');
+};

@@ -1,0 +1,14 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "outDir": "./dist",
+    "lib": ["esnext", "dom", "dom.iterable"]
+  },
+  "include": ["."],
+  "references": [
+    {
+      "path": ".."
+    }
+  ]
+}

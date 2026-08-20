@@ -1,0 +1,14 @@
+export { adapterAliasPlugin as unstable_adapterAliasPlugin } from './lib/vite-plugins/adapter-alias.js';
+export { allowServerPlugin as unstable_allowServerPlugin } from './lib/vite-plugins/allow-server.js';
+export { appEntriesPlugin as unstable_appEntriesPlugin } from './lib/vite-plugins/app-entries.js';
+export { buildMetadataPlugin as unstable_buildMetadataPlugin } from './lib/vite-plugins/build-metadata.js';
+export { combinedPlugins as unstable_combinedPlugins } from './lib/vite-plugins/combined-plugins.js';
+export { environmentsPlugin as unstable_environmentsPlugin } from './lib/vite-plugins/environments.js';
+export { extraPlugins as unstable_extraPlugins } from './lib/vite-plugins/extra-plugins.js';
+export { fsRouterTypegenPlugin as unstable_fsRouterTypegenPlugin } from './lib/vite-plugins/fs-router-typegen.js';
+export { htmlShellPlugin as unstable_htmlShellPlugin } from './lib/vite-plugins/html-shell.js';
+export { notFoundPlugin as unstable_notFoundPlugin } from './lib/vite-plugins/not-found.js';
+export { patchRsdwPlugin as unstable_patchRsdwPlugin } from './lib/vite-plugins/patch-rsdw.js';
+export { privateDirPlugin as unstable_privateDirPlugin } from './lib/vite-plugins/private-dir.js';
+export { staticBuildPlugin as unstable_staticBuildPlugin } from './lib/vite-plugins/static-build.js';
+export { virtualConfigPlugin as unstable_virtualConfigPlugin } from './lib/vite-plugins/virtual-config.js';

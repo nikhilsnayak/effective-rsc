@@ -1,0 +1,295 @@
+import assert from 'node:assert'
+import { type SpawnOptions, spawn } from 'node:child_process'
+import fs from 'node:fs'
+import path from 'node:path'
+import { stripVTControlCharacters, styleText } from 'node:util'
+import test from '@playwright/test'
+import { x } from 'tinyexec'
+
+function runCli(options: { command: string; label?: string } & SpawnOptions) {
+  const [name, ...args] = options.command.split(' ')
+  const child = x(name!, args, { nodeOptions: options }).process!
+  const label = `[${options.label ?? 'cli'}]`
+  let stdout = ''
+  let stderr = ''
+  child.stdout!.on('data', (data) => {
+    stdout += stripVTControlCharacters(String(data))
+    if (process.env.TEST_DEBUG) {
+      console.log(styleText('cyan', label), data.toString())
+    }
+  })
+  child.stderr!.on('data', (data) => {
+    stderr += stripVTControlCharacters(String(data))
+    console.log(styleText('magenta', label), data.toString())
+  })
+  const done = new Promise<void>((resolve) => {
+    child.on('close', (code) => {
+      if (code !== 0 && code !== 143 && process.platform !== 'win32') {
+        console.log(styleText('magenta', `${label}`), `exit code ${code}`)
+      }
+      resolve()
+    })
+  })
+
+  async function findPort(): Promise<number> {
+    let portOutput = ''
+    return new Promise((resolve, reject) => {
+      function cleanup() {
+        child.stdout!.off('data', onData)
+        child.off('close', onClose)
+        child.off('error', onError)
+      }
+
+      function onData(data: Buffer) {
+        portOutput += stripVTControlCharacters(String(data))
+        const match = portOutput.match(/http:\/\/localhost:(\d+)/)
+        if (match) {
+          cleanup()
+          resolve(Number(match[1]))
+        }
+      }
+
+      function onClose(code: number | null, signal: NodeJS.Signals | null) {
+        cleanup()
+        const details = stderr.trim() || stdout.trim()
+        reject(
+          new Error(
+            `${label} exited with ${code ?? signal ?? 'unknown status'} before publishing a port` +
+              (details ? `\n${details}` : ''),
+          ),
+        )
+      }
+
+      function onError(error: Error) {
+        cleanup()
+        reject(error)
+      }
+
+      child.stdout!.on('data', onData)
+      child.on('close', onClose)
+      child.on('error', onError)
+    })
+  }
+
+  function kill() {
+    if (process.platform === 'win32') {
+      spawn('taskkill', ['/pid', String(child.pid), '/t', '/f'])
+    } else {
+      child.kill()
+    }
+  }
+
+  return {
+    proc: child,
+    done,
+    findPort,
+    kill,
+    stdout: () => stdout,
+    stderr: () => stderr,
+  }
+}
+
+export type Fixture = ReturnType<typeof useFixture>
+
+export function useFixture(options: {
+  root: string
+  mode?: 'dev' | 'build'
+  command?: string
+  buildCommand?: string
+  cliOptions?: SpawnOptions
+}) {
+  let baseURL!: string
+
+  const cwd = path.resolve(options.root)
+  let proc!: ReturnType<typeof runCli>
+
+  async function startServer() {
+    const command =
+      options.command ??
+      (options.mode === 'build' ? `pnpm preview` : `pnpm dev`)
+    proc = runCli({
+      command,
+      label: `${options.root}:${options.mode}`,
+      cwd,
+      ...options.cliOptions,
+    })
+    const port = await proc.findPort()
+    baseURL = `http://localhost:${port}`
+  }
+
+  async function stopServer() {
+    proc.kill()
+    await proc.done
+  }
+
+  // TODO: `beforeAll` is called again on any test failure.
+  // https://playwright.dev/docs/test-retries
+  test.beforeAll(async () => {
+    if (options.mode === 'build') {
+      if (!process.env.TEST_SKIP_BUILD) {
+        const buildProc = runCli({
+          command: options.buildCommand ?? `pnpm build`,
+          label: `${options.root}:build`,
+          cwd,
+          ...options.cliOptions,
+        })
+        await buildProc.done
+        assert(buildProc.proc.exitCode === 0)
+      }
+    }
+    if (options.mode) await startServer()
+  })
+
+  test.afterAll(async () => {
+    if (options.mode) await stopServer()
+  })
+
+  const createEditor = useCreateEditor(cwd)
+
+  return {
+    mode: options.mode,
+    root: cwd,
+    url: (url: string = './') => new URL(url, baseURL).href,
+    createEditor,
+    proc: () => proc,
+    restart: async () => {
+      await stopServer()
+      await startServer()
+    },
+  }
+}
+
+export function useCreateEditor(cwd: string) {
+  const originalFiles: Record<string, string> = {}
+
+  test.afterAll(async () => {
+    for (const [filepath, content] of Object.entries(originalFiles)) {
+      fs.writeFileSync(filepath, content)
+    }
+  })
+
+  function createEditor(filepath: string) {
+    filepath = path.resolve(cwd, filepath)
+    const init = fs.readFileSync(filepath, 'utf-8')
+    originalFiles[filepath] ??= init
+    let current = init
+    return {
+      read: () => current,
+      edit(editFn: (data: string) => string): void {
+        const next = editFn(current)
+        assert(next !== current, 'Edit function did not change the content')
+        current = next
+        fs.writeFileSync(filepath, next)
+      },
+      reset(): void {
+        fs.writeFileSync(filepath, originalFiles[filepath]!)
+      },
+      resave(): void {
+        fs.writeFileSync(filepath, current)
+      },
+    }
+  }
+
+  return createEditor
+}
+
+export async function setupIsolatedFixture(options: {
+  src: string
+  dest: string
+  overrides?: Record<string, string>
+}) {
+  // copy fixture
+  fs.rmSync(options.dest, { recursive: true, force: true })
+  fs.cpSync(options.src, options.dest, {
+    recursive: true,
+    filter: (src) => !src.includes('node_modules'),
+  })
+
+  // extract workspace overrides
+  const rootDir = path.join(import.meta.dirname, '..', '..', '..')
+  const { stdout: overridesJson } = await x(
+    'pnpm',
+    ['config', 'get', 'overrides', '--json', '--location', 'project'],
+    { throwOnError: true, nodeOptions: { cwd: rootDir } },
+  )
+  const workspaceOverrides: Record<string, string> = JSON.parse(
+    overridesJson || '{}',
+  )
+  const overrides: Record<string, string> = {
+    '@vitejs/plugin-rsc': `file:${path.join(rootDir, 'packages/plugin-rsc')}`,
+    '@vitejs/plugin-react': `file:${path.join(rootDir, 'packages/plugin-react')}`,
+    ...workspaceOverrides,
+    ...options.overrides,
+  }
+  const tempWorkspaceYaml = `overrides:\n${Object.entries(overrides)
+    .map(([k, v]) => `  ${JSON.stringify(k)}: ${JSON.stringify(v)}`)
+    .join('\n')}\n`
+  fs.writeFileSync(
+    path.join(options.dest, 'pnpm-workspace.yaml'),
+    tempWorkspaceYaml,
+  )
+
+  // install
+  await x('pnpm', ['i'], {
+    throwOnError: true,
+    nodeOptions: {
+      cwd: options.dest,
+      stdio: [
+        'ignore',
+        process.env.TEST_DEBUG ? 'inherit' : 'ignore',
+        'inherit',
+      ],
+    },
+  })
+}
+
+// inspired by
+//   https://github.com/remix-run/react-router/blob/433872f6ab098eaf946cc6c9cf80abf137420ad2/integration/helpers/vite.ts#L239
+// for syntax highlighting of /* js */, use this extension
+//   https://github.com/mjbvz/vscode-comment-tagged-templates
+export async function setupInlineFixture(options: {
+  src: string
+  dest: string
+  files?: Record<
+    string,
+    string | { cp: string } | { edit: (s: string) => string }
+  >
+}) {
+  fs.rmSync(options.dest, { recursive: true, force: true })
+  fs.mkdirSync(options.dest, { recursive: true })
+
+  // copy src
+  fs.cpSync(options.src, options.dest, {
+    recursive: true,
+    filter: (src) => !src.includes('node_modules') && !src.includes('dist'),
+  })
+
+  // write additional files
+  if (options.files) {
+    for (let [filename, contents] of Object.entries(options.files)) {
+      const destFile = path.join(options.dest, filename)
+      fs.mkdirSync(path.dirname(destFile), { recursive: true })
+
+      // custom command
+      if (typeof contents === 'object' && 'cp' in contents) {
+        const srcFile = path.join(options.dest, contents.cp)
+        fs.copyFileSync(srcFile, destFile)
+        continue
+      }
+      if (typeof contents === 'object' && 'edit' in contents) {
+        const editted = contents.edit(fs.readFileSync(destFile, 'utf-8'))
+        fs.writeFileSync(destFile, editted)
+        continue
+      }
+
+      // write a new file
+      contents = contents.replace(/^\n*/, '').replace(/\s*$/, '\n')
+      const indent = contents.match(/^\s*/)?.[0] ?? ''
+      const strippedContents = contents
+        .split('\n')
+        .map((line) => line.replace(new RegExp(`^${indent}`), ''))
+        .join('\n')
+      fs.writeFileSync(destFile, strippedContents)
+    }
+  }
+}

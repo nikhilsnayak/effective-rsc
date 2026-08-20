@@ -1,0 +1,21 @@
+packages:
+  - 'examples/*'
+  - 'e2e/**'
+
+minimumReleaseAgeExclude:
+  - '@rsbuild/*'
+  - '@rslib/*'
+  - '@rslint/*'
+  - '@rspack/*'
+  - '@rspack-canary/*'
+  - '@rspress/*'
+  - '@rstackjs/*'
+  - '@rstest/*'
+  - '@typescript/*'
+  - 'react-server-dom-rspack'
+  - 'rsbuild-plugin-*'
+  - rstack
+  - typescript
+
+overrides:
+  '@rspack/core': '2.2.0-beta.1'

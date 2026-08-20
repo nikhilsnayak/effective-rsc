@@ -1,0 +1,64 @@
+import fs from 'node:fs'
+import { defineConfig } from 'tsdown'
+
+export default defineConfig({
+  entry: [
+    'src/index.ts',
+    'src/plugin.ts',
+    'src/browser.ts',
+    'src/ssr.tsx',
+    'src/ssr.node.tsx',
+    'src/rsc.tsx',
+    'src/rsc/server.tsx',
+    'src/rsc/client.ts',
+    'src/rsc/static.tsx',
+    'src/rsc.node.tsx',
+    'src/rsc/server.node.tsx',
+    'src/rsc/client.node.ts',
+    'src/rsc/static.node.tsx',
+    'src/core/browser.ts',
+    'src/core/ssr.ts',
+    'src/core/rsc.ts',
+    'src/core/plugin.ts',
+    'src/react/browser.ts',
+    'src/react/ssr.ts',
+    'src/react/ssr.node.ts',
+    'src/react/rsc.ts',
+    'src/react/rsc/server.ts',
+    'src/react/rsc/client.ts',
+    'src/react/rsc/static.ts',
+    'src/react/rsc/server.node.ts',
+    'src/react/rsc/client.node.ts',
+    'src/react/rsc/static.node.ts',
+    'src/transforms/index.ts',
+    'src/plugins/cjs.ts',
+    'src/utils/rpc.ts',
+    'src/utils/encryption-runtime.ts',
+  ],
+  format: ['esm'],
+  // TODO: specify explicitly
+  inlineOnly: false,
+  fixedExtension: false,
+  external: [/^virtual:/, /^@vitejs\/plugin-rsc\/vendor\//],
+  dts: {
+    sourcemap: process.argv.slice(2).includes('--sourcemap'),
+  },
+  plugins: [
+    {
+      name: 'vendor-react-server-dom',
+      buildStart() {
+        fs.rmSync('./dist/vendor/', { recursive: true, force: true })
+        fs.mkdirSync('./dist/vendor', { recursive: true })
+        fs.cpSync(
+          './node_modules/react-server-dom-webpack',
+          './dist/vendor/react-server-dom',
+          { recursive: true, dereference: true },
+        )
+        fs.rmSync('./dist/vendor/react-server-dom/node_modules', {
+          recursive: true,
+          force: true,
+        })
+      },
+    },
+  ],
+}) as any

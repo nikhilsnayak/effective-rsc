@@ -1,36 +1,25 @@
-# Turborepo Effect Starter
+# effective-rsc
 
-A Bun/Turborepo starter with an Effect server, shared RPC contracts and client runtime, React web
-app, Expo mobile app, and shared UI package.
+An experimental, highly opinionated React Server Components framework built with React Canary,
+Rspack, Effect v4, and TypeScript 7.
 
-## Create from the template
+effective-rsc asks what an RSC framework could look like if React owned the UI protocol while Effect
+owned requests, resources, failures, services, and cancellation.
 
-1. Create a GitHub repository from this template and clone it. GitHub creates the new repository's
-   initial commit before any vendored reference is added.
-2. Install dependencies with `bun install`.
-3. From a clean, committed working tree, run `bun run vendor:sync effect`. The first run creates a
-   squashed `git subtree add`; later runs create squashed subtree pulls.
-4. Copy each workspace's `.env.example` to `.env`. When using a physical mobile device, replace
-   `localhost` in `apps/mobile/.env` with your computer's LAN address.
-5. Start PostgreSQL with `docker compose -f apps/server/docker-compose.yml up -d`, then run
-   `bun run --cwd apps/server db:migrate`.
-6. Start the workspaces with `bun run dev`.
+It deliberately chooses one modern path: filesystem routing, streaming SSR, React Server Functions,
+and a Navigation API client router. It targets current React and browser capabilities without legacy
+fallbacks or a promise of production stability.
 
-For the Expo web target, run `bun run --cwd apps/mobile web`. The root build exports that target as
-static files, so both web clients are covered by `bun run build`.
+## Status
 
-The files under `repos/` are read-only source references. Application code must use package
-dependencies and never import from a vendored repository.
+The framework is at foundation stage. Its direction and hard architectural decisions are recorded;
+the first runnable vertical slice is next.
 
-## Verification
+That slice will render `/` and `/slow` through Rspack, Effect HTTP, RSC, and streaming SSR, hydrate
+from the embedded Flight response, and use `loading.tsx` during Navigation API transitions.
 
-Run the complete root workflow:
+## Explore
 
-```sh
-bun run check
-bun run test
-bun run build
-```
-
-Tests use Vitest and `@effect/vitest`, live beside the behavior they protect, and favor observable
-results and typed Effect test layers over module mocks.
+Start with [the vision](docs/VISION.md), then read the [architecture](docs/ARCHITECTURE.md) and
+[decision register](docs/DECISIONS.md). The [source references](repos/README.md) collect the upstream
+implementations we are studying.

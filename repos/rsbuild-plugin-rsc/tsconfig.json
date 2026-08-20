@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "lib": ["DOM", "ESNext"],
+    "target": "ES2023",
+    "types": ["node"],
+    "skipLibCheck": true,
+
+    /* modules */
+    "module": "Node16",
+    "moduleDetection": "force",
+    "moduleResolution": "node16",
+    "verbatimModuleSyntax": true,
+    "noUncheckedSideEffectImports": true,
+
+    /* type checking */
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "composite": true,
+    "isolatedDeclarations": true
+  },
+  "include": ["src"]
+}

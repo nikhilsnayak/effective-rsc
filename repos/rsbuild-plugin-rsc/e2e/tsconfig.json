@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "target": "ESNext",
+    "noEmit": true,
+    "skipLibCheck": true,
+    "jsx": "react-jsx",
+    "types": ["webpack-env", "node"],
+
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+
+    "strict": true
+  },
+  "include": [
+    "*.ts",
+    "development/**/*.ts",
+    "helper/**/*.cts",
+    "helper/**/*.ts",
+    "integration/**/*.d.ts",
+    "integration/**/*.ts",
+    "integration/**/*.tsx",
+    "../types/**/*.d.ts"
+  ]
+}

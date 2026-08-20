@@ -1,0 +1,139 @@
+:root {
+  color: #19222e;
+  background: #f4efe5;
+  font-family:
+    'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Palatino, serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(
+      circle at top left,
+      rgba(212, 164, 92, 0.28),
+      transparent 32%
+    ),
+    linear-gradient(180deg, #f8f2e8 0%, #efe6d9 100%);
+}
+
+a {
+  color: inherit;
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  border-bottom: 1px solid rgba(25, 34, 46, 0.12);
+  backdrop-filter: blur(18px);
+  background: rgba(248, 242, 232, 0.9);
+}
+
+.app-header__inner {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 1rem;
+  align-items: center;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1rem 1.25rem;
+}
+
+.app-nav {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.app-nav a {
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  text-decoration: none;
+  border: 1px solid rgba(25, 34, 46, 0.12);
+}
+
+.app-nav a[aria-current='page'] {
+  background: #19222e;
+  color: #f8f2e8;
+}
+
+.app-status {
+  min-width: 5.5rem;
+  text-align: right;
+  font-size: 0.95rem;
+}
+
+.app-main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 3rem 1.25rem 4rem;
+}
+
+.panel {
+  padding: 1.5rem;
+  border: 1px solid rgba(25, 34, 46, 0.12);
+  border-radius: 24px;
+  background: rgba(255, 252, 247, 0.88);
+  box-shadow: 0 20px 60px rgba(75, 56, 30, 0.08);
+}
+
+.eyebrow {
+  margin: 0 0 0.75rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  opacity: 0.65;
+}
+
+.hero {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: clamp(2.4rem, 5vw, 4rem);
+  line-height: 0.95;
+}
+
+.hero p {
+  margin: 0;
+  max-width: 48rem;
+  font-size: 1.05rem;
+  line-height: 1.6;
+}
+
+.counter-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.counter-button {
+  width: fit-content;
+  padding: 0.75rem 1rem;
+  border: 0;
+  border-radius: 999px;
+  background: #19222e;
+  color: #f8f2e8;
+  font: inherit;
+  cursor: pointer;
+}
+
+.counter-button[disabled] {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+@media (max-width: 720px) {
+  .app-header__inner {
+    grid-template-columns: 1fr;
+  }
+
+  .app-status {
+    text-align: left;
+  }
+}

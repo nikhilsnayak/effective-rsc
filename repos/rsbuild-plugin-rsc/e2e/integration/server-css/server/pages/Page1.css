@@ -1,0 +1,13 @@
+.page-one-css {
+  box-sizing: border-box;
+  padding: 18px;
+  color: rgb(22, 50, 68);
+  background-color: rgb(230, 244, 255);
+  border: 5px solid rgb(70, 130, 180);
+  border-radius: 12px;
+}
+
+.page-one-css h3 {
+  margin: 0 0 8px;
+  font-size: 20px;
+}

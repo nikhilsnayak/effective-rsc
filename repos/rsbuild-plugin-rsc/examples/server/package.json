@@ -1,0 +1,27 @@
+{
+  "name": "rsbuild-rsc-server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "rsbuild build",
+    "dev": "NODE_OPTIONS=\"--experimental-vm-modules\" rsbuild",
+    "preview": "node server.js"
+  },
+  "dependencies": {
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-server-dom-rspack": "0.1.0",
+    "rsc-html-stream": "^0.0.7"
+  },
+  "devDependencies": {
+    "@rsbuild/core": "^2.1.2",
+    "@rsbuild/plugin-react": "^2.1.0",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.9.4",
+    "@types/webpack-env": "^1.18.8",
+    "express": "^5.2.1",
+    "rsbuild-plugin-rsc": "workspace:*",
+    "srvx": "^0.11.18"
+  }
+}

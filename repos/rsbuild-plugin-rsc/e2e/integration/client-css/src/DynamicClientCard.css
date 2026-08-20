@@ -1,0 +1,30 @@
+.dynamic-client-card {
+  box-sizing: border-box;
+  width: min(480px, 100%);
+  padding: 24px;
+  border: 6px solid rgb(255, 207, 102);
+  border-radius: 18px;
+  background-color: rgb(9, 74, 83);
+  box-shadow: 0 18px 36px rgba(9, 74, 83, 0.35);
+  color: rgb(255, 255, 255);
+}
+
+.dynamic-client-card h2 {
+  margin: 0 0 8px;
+  font-size: 24px;
+}
+
+.dynamic-client-card p {
+  margin: 0 0 18px;
+}
+
+.dynamic-client-button {
+  border: 0;
+  border-radius: 999px;
+  background-color: rgb(255, 207, 102);
+  color: rgb(9, 74, 83);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 10px 18px;
+}

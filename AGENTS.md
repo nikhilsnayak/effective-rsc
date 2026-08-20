@@ -4,37 +4,36 @@
   manifests reference it, counting the workspace root; dependencies used by only one manifest
   declare their version locally.
 - Workspace packages reference shared catalog versions with `catalog:`.
-- `apps/mobile` must pin Expo's `react`, `react-native`, and `@types/react` versions.
+- Pin React Canary, React DOM Canary, and `react-server-dom-rspack` to one exact compatible release.
 
 ## References
 
+- Read `docs/README.md` and the relevant owning documents before planning or changing framework
+  behavior. Do not contradict an Accepted decision or silently resolve an Open question; surface
+  the conflict instead.
 - `repos/` contains read-only references. Never edit or import from them; prefer them over web
   sources.
 - Read `repos/effect/LLMS.md` before writing Effect code.
 
 ## Code
 
-- Import features from `@repo/<pkg>/modules/<feature>`, never package roots. Use direct-file exports
-  for single-file modules and barrels only for real aggregates.
-- Match feature-folder casing to its files: use PascalCase in server, contracts, and client-runtime
-  modules (for example, `modules/Todo`), and lowercase or kebab-case in web and mobile modules.
-- React Compiler is enabled; avoid manual memoization without measured need.
-- Use `<package>/<module-name>/<file>` Effect service keys (for example,
-  `@repo/server/Todo/TodoService`); never include source-container names such as `src`, `modules`, or
-  `lib`. Use `*Layer` layer names and `layerTest` for reusable fakes. Use `Effect.fn` for public
-  operations implemented as `(params) => Effect.gen(...)` and `Effect.fnUntraced` for internal
-  operations with that shape. Prefer direct effects and pipe combinators for simpler operations,
-  adding `Effect.withSpan` when a composed operation is publicly exposed.
-- Keep RPC handlers transport-only: adapt validated payloads and delegate. Services own use-case
-  semantics, contract decoding, and persistence-error translation. Repositories own database calls
-  and return projections plus `Option`/booleans for expected absence; they do not construct RPC
-  errors or log failures.
-- Keep every atom seeded through `RegistryProvider`'s `initialValues` under `Atom.keepAlive`, and say
-  why at the declaration.
+- Keep browser, RSC, SSR, and shared module graphs explicit. Code for one runtime must not depend on
+  another runtime's entry point or ambient globals.
+- Export deliberate public subpaths from package manifests; do not expose package roots as broad
+  barrels. Use direct-file exports for single-file modules and barrels only for real aggregates.
+- Use path-qualified Effect service identifiers, `*Layer` layer names, and `layerTest` for reusable
+  fakes. Use `Effect.fn` for public operations implemented as `(params) => Effect.gen(...)` and
+  `Effect.fnUntraced` for internal operations with that shape.
+- Propagate request and navigation cancellation through Effect interruption and Web Streams. Do not
+  detach work from its request scope without an explicit lifetime owner.
+- Preserve React's native RSC and Server Function protocols. Framework APIs may add Effect typing,
+  validation, and lifecycle management but must not invent replacement transports.
+- Generated framework artifacts live under `.effective/`; never hand-edit or import them across
+  package boundaries except through their documented generated entry points.
 
 ## Verify
 
 - Run `bun run check`, `bun run test`, and `bun run build` from the repository root outside managed
   filesystem or seccomp sandboxes.
-- Keep testable server modules runtime-independent and run their tests with Vitest directly;
-  production builds validate the Bun-specific entry points.
+- Keep protocol and compiler tests runtime-independent where possible. Integration tests own the
+  boundaries between Rspack compilation, RSC rendering, SSR, hydration, and browser navigation.

@@ -1,0 +1,55 @@
+{
+  "effect": {
+    "repository": "https://github.com/Effect-TS/effect.git",
+    "ref": "main",
+    "commit": "d5689682e963f43157571cd71d4b422247ae09b9"
+  },
+  "react-server-dom-rspack": {
+    "repository": "https://github.com/react/react.git",
+    "ref": "f148045f80fb8841f3a9b098cda2aeaa7a20bb69",
+    "commit": "f148045f80fb8841f3a9b098cda2aeaa7a20bb69",
+    "sourcePath": "packages/react-server-dom-rspack"
+  },
+  "rspack-rsc": {
+    "repository": "https://github.com/rstackjs/rstack-examples.git",
+    "ref": "main",
+    "commit": "2d1aa4445eb23be0dfb7114bc2c01dc291275fc5",
+    "sourcePath": "rspack/rspack-rsc"
+  },
+  "rsbuild-plugin-rsc": {
+    "repository": "https://github.com/rstackjs/rsbuild-plugin-rsc.git",
+    "ref": "main",
+    "commit": "5a2cfc2c14218fd71f5b1e6d7c2d852d49aed845",
+    "sourcePath": "."
+  },
+  "vite-plugin-rsc": {
+    "repository": "https://github.com/vitejs/vite-plugin-react.git",
+    "ref": "main",
+    "commit": "a8d5b4915acb89c1d3758a8fa6872e39c098a4de",
+    "sourcePath": "packages/plugin-rsc"
+  },
+  "rsc-html-stream": {
+    "repository": "https://github.com/devongovett/rsc-html-stream.git",
+    "ref": "main",
+    "commit": "7246b7dc33d8272324bc9c0ba7ee8f240318518c",
+    "sourcePath": "."
+  },
+  "cosmos-rsc": {
+    "repository": "https://github.com/nikhilsnayak/cosmos-rsc.git",
+    "ref": "main",
+    "commit": "0c42aa62a372f86512d6aca37848395f9fa56232",
+    "sourcePath": "."
+  },
+  "twofold": {
+    "repository": "https://github.com/twofold-rsc/twofold.git",
+    "ref": "main",
+    "commit": "6f6d2b831ebd777d9a024149ec6ee36fcdde1e05",
+    "sourcePath": "packages"
+  },
+  "waku": {
+    "repository": "https://github.com/wakujs/waku.git",
+    "ref": "main",
+    "commit": "76cd032df3ab90ba6338b04fe622fc7fb06d3170",
+    "sourcePath": "packages/waku"
+  }
+}

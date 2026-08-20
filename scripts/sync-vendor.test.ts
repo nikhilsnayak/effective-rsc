@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseRemoteCommit, parseSubtreeSplit } from './sync-vendor';
+import { isCommit, parseRemoteCommit, parseSubtreeSplit } from './sync-vendor';
 
 const commit = '0123456789abcdef0123456789abcdef01234567';
 
@@ -35,4 +35,15 @@ describe('vendor sync metadata parsing', () => {
   ])('rejects malformed or unexpected remote output', (remoteOutput, ref) => {
     expect(parseRemoteCommit(remoteOutput, ref)).toBeUndefined();
   });
+
+  it('recognizes an immutable lowercase commit ref', () => {
+    expect(isCommit(commit)).toBe(true);
+  });
+
+  it.each(['main', '0123', '0123456789ABCDEF0123456789ABCDEF01234567', `${commit}0`])(
+    'rejects a mutable or malformed commit ref: %s',
+    (ref) => {
+      expect(isCommit(ref)).toBe(false);
+    },
+  );
 });

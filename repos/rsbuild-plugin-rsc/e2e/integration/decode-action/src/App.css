@@ -1,0 +1,54 @@
+:root {
+  color: #172033;
+  background: #f4f7fb;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  box-sizing: border-box;
+  width: min(42rem, calc(100% - 2rem));
+  margin: 4rem auto;
+  padding: 2rem;
+  border: 1px solid #d7deea;
+  border-radius: 1rem;
+  background: #fff;
+  box-shadow: 0 1rem 3rem rgb(37 55 86 / 10%);
+}
+
+form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+input,
+button {
+  box-sizing: border-box;
+  min-height: 2.75rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid #aeb9ca;
+  border-radius: 0.5rem;
+  font: inherit;
+}
+
+button {
+  border-color: #3158d3;
+  color: #fff;
+  background: #3158d3;
+  cursor: pointer;
+}
+
+[data-testid='submitted-message'] {
+  padding: 0.8rem;
+  border-radius: 0.5rem;
+  background: #edf2ff;
+}

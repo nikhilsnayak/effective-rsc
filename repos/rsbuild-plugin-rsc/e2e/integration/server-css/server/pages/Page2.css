@@ -1,0 +1,13 @@
+.page-two-css {
+  box-sizing: border-box;
+  padding: 18px;
+  color: rgb(70, 24, 34);
+  background-color: rgb(255, 240, 230);
+  border: 5px solid rgb(220, 20, 60);
+  border-radius: 12px;
+}
+
+.page-two-css h3 {
+  margin: 0 0 8px;
+  font-size: 20px;
+}

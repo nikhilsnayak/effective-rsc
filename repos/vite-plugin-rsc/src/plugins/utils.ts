@@ -1,0 +1,155 @@
+import { createHash } from 'node:crypto'
+import path from 'node:path'
+import { exactRegex } from '@rolldown/pluginutils'
+import {
+  normalizePath,
+  type Plugin,
+  type ResolvedConfig,
+  type Rollup,
+} from 'vite'
+
+export function sortObject<T extends object>(o: T) {
+  return Object.fromEntries(
+    Object.entries(o).sort(([a], [b]) => a.localeCompare(b)),
+  ) as T
+}
+
+// Rethrow transform error through `this.error` with `error.pos`
+export function withRollupError<F extends (...args: any[]) => any>(
+  ctx: Rollup.TransformPluginContext,
+  f: F,
+): F {
+  function processError(e: any): never {
+    if (e && typeof e === 'object' && typeof e.pos === 'number') {
+      return ctx.error(e, e.pos)
+    }
+    throw e
+  }
+  return function (this: any, ...args: any[]) {
+    try {
+      const result = f.apply(this, args)
+      if (result instanceof Promise) {
+        return result.catch((e: any) => processError(e))
+      }
+      return result
+    } catch (e: any) {
+      processError(e)
+    }
+  } as F
+}
+
+export function createVirtualPlugin(
+  name: string,
+  load: Plugin['load'],
+): Plugin {
+  const virtualId = 'virtual:' + name
+  const resolvedId = '\0' + virtualId
+  return {
+    name: `rsc:virtual-${name}`,
+    resolveId: {
+      filter: { id: exactRegex(virtualId) },
+      handler(source) {
+        if (source === virtualId) {
+          return resolvedId
+        }
+      },
+    },
+    load: {
+      filter: { id: exactRegex(resolvedId) },
+      handler(id, options) {
+        if (id === resolvedId) {
+          return (load as Function).apply(this, [id, options])
+        }
+      },
+    },
+  }
+}
+
+export function normalizeRelativePath(s: string): string {
+  s = normalizePath(s)
+  return s[0] === '.' ? s : './' + s
+}
+
+export function getEntrySource(
+  config: Pick<ResolvedConfig, 'build'>,
+  name?: string,
+): string {
+  const input = config.build.rollupOptions.input
+  if (!name) {
+    return getFallbackRollupEntry(input).source
+  }
+  if (
+    typeof input === 'object' &&
+    !Array.isArray(input) &&
+    name in input &&
+    typeof input[name] === 'string'
+  ) {
+    return input[name]
+  }
+  throw new Error(
+    `[vite-rsc:getEntrySource] expected 'build.rollupOptions.input' to be an object with a '${name}' property that is a string, but got ${JSON.stringify(input)}`,
+  )
+}
+
+export function getFallbackRollupEntry(
+  input: Rollup.InputOptions['input'] = {},
+): {
+  name: string
+  source: string
+} {
+  const inputEntries = Object.entries(normalizeRollupOptionsInput(input))
+  if (inputEntries.length === 1) {
+    const [name, source] = inputEntries[0]!
+    return { name, source }
+  }
+  throw new Error(
+    `[vite-rsc] cannot determine fallback entry name from multiple entries, please specify the entry name explicitly`,
+  )
+}
+
+// normalize to object form
+// https://rollupjs.org/configuration-options/#input
+// https://rollupjs.org/configuration-options/#output-entryfilenames
+export function normalizeRollupOptionsInput(
+  input: Rollup.InputOptions['input'] = {},
+): Record<string, string> {
+  if (typeof input === 'string') {
+    input = [input]
+  }
+  if (Array.isArray(input)) {
+    return Object.fromEntries(
+      input.map((file) => [
+        path.basename(file).slice(0, -path.extname(file).length),
+        file,
+      ]),
+    )
+  }
+  return input
+}
+
+export function hashString(v: string): string {
+  return createHash('sha256').update(v).digest().toString('hex').slice(0, 12)
+}
+
+// normalize server entry exports to align with server runtimes
+// https://developers.cloudflare.com/workers/runtime-apis/handlers/fetch/
+// https://srvx.h3.dev/guide
+// https://vercel.com/docs/functions/functions-api-reference?framework=other#fetch-web-standard
+// https://github.com/jacob-ebey/rsbuild-rsc-playground/blob/eb1a54afa49cbc5ff93c315744d7754d5ed63498/plugin/fetch-server.ts#L59-L79
+export function getFetchHandlerExport(exports: object): any {
+  if ('default' in exports) {
+    const default_ = exports.default
+    if (
+      default_ &&
+      typeof default_ === 'object' &&
+      'fetch' in default_ &&
+      typeof default_.fetch === 'function'
+    ) {
+      return default_.fetch
+    }
+    if (typeof default_ === 'function') {
+      return default_
+    }
+  }
+  throw new Error('Invalid server handler entry')
+}

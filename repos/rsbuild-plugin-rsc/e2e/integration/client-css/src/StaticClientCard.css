@@ -1,0 +1,30 @@
+.static-client-card {
+  box-sizing: border-box;
+  width: min(480px, 100%);
+  padding: 24px;
+  border: 6px solid rgb(124, 223, 205);
+  border-radius: 18px;
+  background-color: rgb(69, 38, 107);
+  box-shadow: 0 18px 36px rgba(69, 38, 107, 0.32);
+  color: rgb(255, 255, 255);
+}
+
+.static-client-card h2 {
+  margin: 0 0 8px;
+  font-size: 24px;
+}
+
+.static-client-card p {
+  margin: 0 0 18px;
+}
+
+.static-client-button {
+  border: 0;
+  border-radius: 999px;
+  background-color: rgb(124, 223, 205);
+  color: rgb(69, 38, 107);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 10px 18px;
+}

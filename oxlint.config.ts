@@ -3,7 +3,13 @@ import { defineConfig } from 'oxlint';
 
 export default defineConfig({
   extends: [recommended],
-  ignorePatterns: ['**/routeTree.gen.ts', 'repos/**', '**/node_modules/**', '**/dist/**'],
+  ignorePatterns: [
+    '**/.effective/**',
+    '**/coverage/**',
+    '**/dist/**',
+    '**/node_modules/**',
+    'repos/**',
+  ],
   plugins: [
     'eslint',
     'typescript',
@@ -20,18 +26,4 @@ export default defineConfig({
     typeAware: true,
     typeCheck: true,
   },
-  overrides: [
-    {
-      files: [
-        'apps/web/**/*.ts',
-        'apps/web/**/*.tsx',
-        'apps/mobile/**/*.ts',
-        'apps/mobile/**/*.tsx',
-      ],
-      rules: {
-        'effecttsgo/async-function': 'off',
-        'effecttsgo/crypto-random-uuid': 'off',
-      },
-    },
-  ],
 });

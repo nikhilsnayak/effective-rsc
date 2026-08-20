@@ -1,7 +1,7 @@
 import { defineConfig } from 'oxfmt';
 
 export default defineConfig({
-  ignorePatterns: ['**/routeTree.gen.ts', '**/repos/**'],
+  ignorePatterns: ['.effective/**', '**/coverage/**', '**/dist/**', 'repos/**'],
   singleQuote: true,
   jsxSingleQuote: true,
   sortImports: true,

@@ -1,0 +1,553 @@
+import { parseAstAsync } from 'vite'
+import { describe, expect, test } from 'vitest'
+import {
+  type TransformWrapExportOptions,
+  transformWrapExport,
+} from './wrap-export'
+
+async function testTransform(
+  input: string,
+  options?: Omit<TransformWrapExportOptions, 'runtime'>,
+) {
+  const ast = await parseAstAsync(input)
+  const { output } = transformWrapExport(input, ast, {
+    runtime: (value, name) =>
+      `$$wrap(${value}, "<id>", ${JSON.stringify(name)})`,
+    ignoreExportAllDeclaration: true,
+    ...options,
+  })
+  return output.hasChanged() && output.toString()
+}
+
+async function testTransformNames(input: string) {
+  const ast = await parseAstAsync(input)
+  const result = transformWrapExport(input, ast, {
+    runtime: (value, name) =>
+      `$$wrap(${value}, "<id>", ${JSON.stringify(name)})`,
+    ignoreExportAllDeclaration: true,
+  })
+  return result.exportNames
+}
+
+describe(transformWrapExport, () => {
+  test('basic', async () => {
+    const input = `
+export const Arrow = () => {};
+export default "hi";
+export function Fn() {};
+export async function AsyncFn() {};
+export class Cls {};
+`
+    expect(await testTransform(input)).toMatchInlineSnapshot(`
+      "
+      let Arrow = () => {};
+      const $$default = "hi";
+      function Fn() {};
+      async function AsyncFn() {};
+      class Cls {};
+      Arrow = /* #__PURE__ */ $$wrap(Arrow, "<id>", "Arrow");
+      export { Arrow };
+      Fn = /* #__PURE__ */ $$wrap(Fn, "<id>", "Fn");
+      export { Fn };
+      AsyncFn = /* #__PURE__ */ $$wrap(AsyncFn, "<id>", "AsyncFn");
+      export { AsyncFn };
+      Cls = /* #__PURE__ */ $$wrap(Cls, "<id>", "Cls");
+      export { Cls };
+      ;
+      const $$wrap_$$default = /* #__PURE__ */ $$wrap($$default, "<id>", "default");
+      export { $$wrap_$$default as default };
+      "
+    `)
+
+    expect(await testTransformNames(input)).toMatchInlineSnapshot(`
+      [
+        "Arrow",
+        "default",
+        "Fn",
+        "AsyncFn",
+        "Cls",
+      ]
+    `)
+  })
+
+  test('preserve reference', async () => {
+    const input = `
+export let count = 0;
+export function changeCount() {
+  count += 1;
+}
+`
+    expect(await testTransform(input)).toMatchInlineSnapshot(`
+      "
+      let count = 0;
+      function changeCount() {
+        count += 1;
+      }
+      count = /* #__PURE__ */ $$wrap(count, "<id>", "count");
+      export { count };
+      changeCount = /* #__PURE__ */ $$wrap(changeCount, "<id>", "changeCount");
+      export { changeCount };
+      "
+    `)
+  })
+
+  test('export destructuring', async () => {
+    const input = `
+export const { x, y: [z] } = { x: 0, y: [1] };
+`
+    expect(await testTransform(input)).toMatchInlineSnapshot(`
+      "
+      let { x, y: [z] } = { x: 0, y: [1] };
+      x = /* #__PURE__ */ $$wrap(x, "<id>", "x");
+      z = /* #__PURE__ */ $$wrap(z, "<id>", "z");
+      export { x, z };
+      "
+    `)
+  })
+
+  test('default function', async () => {
+    const input = `export default function Fn() {}`
+    expect(await testTransform(input)).toMatchInlineSnapshot(
+      `
+      "function Fn() {};
+      const $$wrap_Fn = /* #__PURE__ */ $$wrap(Fn, "<id>", "default");
+      export { $$wrap_Fn as default };
+      "
+    `,
+    )
+  })
+
+  test('default anonymous function', async () => {
+    const input = `export default function () {}`
+    expect(await testTransform(input)).toMatchInlineSnapshot(
+      `
+      "const $$default = function () {};
+      const $$wrap_$$default = /* #__PURE__ */ $$wrap($$default, "<id>", "default");
+      export { $$wrap_$$default as default };
+      "
+    `,
+    )
+  })
+
+  test('default class', async () => {
+    const input = `export default class Cls {}`
+    expect(await testTransform(input)).toMatchInlineSnapshot(
+      `
+      "class Cls {};
+      const $$wrap_Cls = /* #__PURE__ */ $$wrap(Cls, "<id>", "default");
+      export { $$wrap_Cls as default };
+      "
+    `,
+    )
+  })
+
+  test('export simple', async () => {
+    const input = `
+const x = 0;
+export { x }
+`
+    expect(await testTransform(input)).toMatchInlineSnapshot(`
+      "
+      const x = 0;
+
+      ;
+      const $$wrap_x = /* #__PURE__ */ $$wrap(x, "<id>", "x");
+      export { $$wrap_x as x };
+      "
+    `)
+  })
+
+  test('export rename', async () => {
+    const input = `
+const x = 0;
+export { x as y }
+`
+    expect(await testTransform(input)).toMatchInlineSnapshot(`
+      "
+      const x = 0;
+
+      ;
+      const $$wrap_x = /* #__PURE__ */ $$wrap(x, "<id>", "y");
+      export { $$wrap_x as y };
+      "
+    `)
+  })
+
+  test('export string name throws', async () => {
+    const input = `
+const x = 0;
+export { x as "my thing" }
+`
+    await expect(testTransform(input)).rejects.toThrow(
+      'unsupported string literal export name',
+    )
+  })
+
+  test('re-export simple', async () => {
+    const input = `export { x } from "./dep"`
+    expect(await testTransform(input)).toMatchInlineSnapshot(`
+      ";
+      import { x as $$import_x } from "./dep";
+      const $$wrap_$$import_x = /* #__PURE__ */ $$wrap($$import_x, "<id>", "x");
+      export { $$wrap_$$import_x as x };
+      "
+    `)
+  })
+
+  test('re-export rename', async () => {
+    const input = `export { x as y } from "./dep"`
+    expect(await testTransform(input)).toMatchInlineSnapshot(`
+      ";
+      import { x as $$import_x } from "./dep";
+      const $$wrap_$$import_x = /* #__PURE__ */ $$wrap($$import_x, "<id>", "y");
+      export { $$wrap_$$import_x as y };
+      "
+    `)
+  })
+
+  test('re-export all simple', async () => {
+    const input = `export * from "./dep"`
+    expect(await testTransform(input)).toMatchInlineSnapshot(`false`)
+  })
+
+  test('re-export all rename', async () => {
+    const input = `export * as all from "./dep"`
+    expect(await testTransform(input)).toMatchInlineSnapshot(`false`)
+  })
+
+  test('filter', async () => {
+    const input = `
+export const a = 0;
+export const b = 0, b_no = 0;
+export { c } from "./c";
+export { a as aa };
+`
+    const result = await testTransform(input, {
+      filter: (name) => !name.endsWith('no'),
+    })
+    expect(result).toMatchInlineSnapshot(`
+      "
+      let a = 0;
+      let b = 0, b_no = 0;
+
+
+      a = /* #__PURE__ */ $$wrap(a, "<id>", "a");
+      export { a };
+      b = /* #__PURE__ */ $$wrap(b, "<id>", "b");
+      export { b, b_no };
+      ;
+      import { c as $$import_c } from "./c";
+      const $$wrap_$$import_c = /* #__PURE__ */ $$wrap($$import_c, "<id>", "c");
+      export { $$wrap_$$import_c as c };
+      const $$wrap_a = /* #__PURE__ */ $$wrap(a, "<id>", "aa");
+      export { $$wrap_a as aa };
+      "
+    `)
+  })
+
+  test.each([
+    `export function action() {}`,
+    `export const action = () => {}`,
+    `const action = () => {}; export { action }`,
+    `export { action } from './dep'`,
+    `export default () => {}`,
+  ])('does not rewrite fully filtered export groups: %s', async (input) => {
+    const ast = await parseAstAsync(input)
+    const result = transformWrapExport(input, ast, {
+      runtime: (value) => `$$wrap(${value})`,
+      filter: () => false,
+    })
+
+    expect(result.exportNames).toEqual([])
+    expect(result.output.hasChanged()).toBe(false)
+    expect(result.output.toString()).toBe(input)
+  })
+
+  test('preserves filtered export specifiers', async () => {
+    const input = `\
+const selected = 0, skipped = 1
+export { selected, skipped as renamed }
+export { remote, ignored as forwarded } from './dep'
+`
+    const result = await testTransform(input, {
+      filter: (name) => name === 'selected' || name === 'remote',
+    })
+
+    expect(result).toMatchInlineSnapshot(`
+      "const selected = 0, skipped = 1
+
+
+      ;
+      const $$wrap_selected = /* #__PURE__ */ $$wrap(selected, \"<id>\", \"selected\");
+      export { $$wrap_selected as selected };
+      export { skipped as renamed };
+      import { remote as $$import_remote } from './dep';
+      const $$wrap_$$import_remote = /* #__PURE__ */ $$wrap($$import_remote, \"<id>\", \"remote\");
+      export { $$wrap_$$import_remote as remote };
+      export { ignored as forwarded } from './dep';
+      "
+    `)
+  })
+
+  test('rejects selected uninitialized variables', async () => {
+    const input = `export let selected, skipped`
+    const ast = await parseAstAsync(input)
+
+    expect(() =>
+      transformWrapExport(input, ast, {
+        runtime: (value) => `$$wrap(${value})`,
+        rejectNonAsyncFunction: true,
+        filter: (name) => name === 'selected',
+      }),
+    ).toThrow('unsupported non async function')
+
+    const filtered = transformWrapExport(input, ast, {
+      runtime: (value) => `$$wrap(${value})`,
+      rejectNonAsyncFunction: true,
+      filter: () => false,
+    })
+    expect(filtered.output.hasChanged()).toBe(false)
+  })
+
+  test('filter meta', async () => {
+    const input = `
+export const a = 0;
+export const b = function() {}
+export const c = () => {}
+export default function d() {}
+`
+    const result = await testTransform(input, {
+      filter: (_name, meta) => !!(meta.isFunction && meta.declName),
+    })
+    expect(result).toMatchInlineSnapshot(`
+      "
+      export const a = 0;
+      let b = function() {}
+      let c = () => {}
+      function d() {}
+      b = /* #__PURE__ */ $$wrap(b, "<id>", "b");
+      export { b };
+      c = /* #__PURE__ */ $$wrap(c, "<id>", "c");
+      export { c };
+      ;
+      const $$wrap_d = /* #__PURE__ */ $$wrap(d, "<id>", "default");
+      export { $$wrap_d as default };
+      "
+    `)
+  })
+
+  test('filter meta 2', async () => {
+    const input = `
+export default () => {}
+`
+    const result = await testTransform(input, {
+      filter: (_name, meta) => !!(meta.isFunction && meta.declName),
+    })
+    expect(result).toMatchInlineSnapshot(`false`)
+  })
+
+  test('filter defaultExportIdentifierName', async () => {
+    const input = `
+const Page = () => {}
+export default Page;
+`
+    expect(
+      await testTransform(input, {
+        filter: (_name, meta) => meta.defaultExportIdentifierName === 'Page',
+      }),
+    ).toMatchInlineSnapshot(`
+      "
+      const Page = () => {}
+      const $$default = Page;
+      ;
+      const $$wrap_$$default = /* #__PURE__ */ $$wrap($$default, "<id>", "default");
+      export { $$wrap_$$default as default };
+      "
+    `)
+  })
+
+  test('filter value node', async () => {
+    const input = `\
+export const action = async () => {}
+export const objectValue = {}
+export const arrayValue = []
+`
+    const ast = await parseAstAsync(input)
+    const result = transformWrapExport(input, ast, {
+      runtime: (value, name) => `$$wrap(${value}, ${JSON.stringify(name)})`,
+      rejectNonAsyncFunction: true,
+      filter: (_name, meta) =>
+        meta.valueNode?.type !== 'ObjectExpression' &&
+        meta.valueNode?.type !== 'ArrayExpression',
+    })
+
+    expect(result.exportNames).toEqual(['action'])
+    expect(result.output.toString()).toMatchInlineSnapshot(`
+      "let action = async () => {}
+      export const objectValue = {}
+      export const arrayValue = []
+      action = /* #__PURE__ */ $$wrap(action, "action");
+      export { action };
+      "
+    `)
+  })
+
+  test('filtered exports are not validated or reported', async () => {
+    const input = `
+export const revalidate = 1;
+export default async function Page() {}
+`
+    const ast = await parseAstAsync(input)
+    const result = transformWrapExport(input, ast, {
+      runtime: (value, name) => `$$wrap(${value}, ${JSON.stringify(name)})`,
+      rejectNonAsyncFunction: true,
+      filter: (name) => name !== 'revalidate',
+    })
+    expect(result.exportNames).toEqual(['default'])
+    expect(result.output.toString()).toMatchInlineSnapshot(`
+      "
+      export const revalidate = 1;
+      async function Page() {}
+      ;
+      const $$wrap_Page = /* #__PURE__ */ $$wrap(Page, "default");
+      export { $$wrap_Page as default };
+      "
+    `)
+  })
+
+  test('filtered default exports are not validated or reported', async () => {
+    const input = `export default 1;`
+    const ast = await parseAstAsync(input)
+    const result = transformWrapExport(input, ast, {
+      runtime: (value, name) => `$$wrap(${value}, ${JSON.stringify(name)})`,
+      rejectNonAsyncFunction: true,
+      filter: () => false,
+    })
+    expect(result.exportNames).toEqual([])
+    expect(result.output.hasChanged()).toBe(false)
+    expect(result.output.toString()).toBe(input)
+  })
+
+  test('unknown identifier exports remain eligible for wrapping', async () => {
+    const input = `
+const cached = async () => 1;
+export default cached;
+`
+    const ast = await parseAstAsync(input)
+    const result = transformWrapExport(input, ast, {
+      runtime: (value, name) => `$$wrap(${value}, ${JSON.stringify(name)})`,
+      filter: (_name, meta) => meta.isFunction !== false,
+    })
+    expect(result.exportNames).toEqual(['default'])
+    expect(result.output.toString()).toMatchInlineSnapshot(`
+      "
+      const cached = async () => 1;
+      const $$default = cached;
+      ;
+      const $$wrap_$$default = /* #__PURE__ */ $$wrap($$default, "default");
+      export { $$wrap_$$default as default };
+      "
+    `)
+  })
+
+  test('runtime export meta', async () => {
+    const examples: [input: string, expected: unknown[]][] = [
+      [`export function Fn() {}`, [{ isFunction: true, declName: 'Fn' }]],
+      [`export class Cls {}`, [{ isFunction: false, declName: 'Cls' }]],
+      [
+        `export const Arrow = () => {}`,
+        [{ isFunction: true, declName: 'Arrow' }],
+      ],
+      [
+        `export const FnExpression = function () {}`,
+        [{ isFunction: true, declName: 'FnExpression' }],
+      ],
+      [
+        `export const Literal = 1`,
+        [{ isFunction: false, declName: 'Literal' }],
+      ],
+      [
+        `export const ObjectValue = {}`,
+        [{ isFunction: false, declName: 'ObjectValue' }],
+      ],
+      [
+        `export const ArrayValue = []`,
+        [{ isFunction: false, declName: 'ArrayValue' }],
+      ],
+      [
+        `export const ClassValue = class {}`,
+        [{ isFunction: false, declName: 'ClassValue' }],
+      ],
+      [`export const Unknown = getValue()`, [{ declName: 'Unknown' }]],
+      [`export const { id } = getValue()`, [{ declName: 'id' }]],
+      [`export const [a, b] = []`, [{ declName: 'a' }, { declName: 'b' }]],
+      [
+        `export const MultiFn = () => {}, MultiValue = 1, MultiUnknown = getValue()`,
+        [
+          { isFunction: true, declName: 'MultiFn' },
+          { isFunction: false, declName: 'MultiValue' },
+          { declName: 'MultiUnknown' },
+        ],
+      ],
+      [
+        `export default function Page() {}`,
+        [
+          {
+            isFunction: true,
+            declName: 'Page',
+          },
+        ],
+      ],
+      [`export default function () {}`, [{ isFunction: true }]],
+      [
+        `export default class Page {}`,
+        [
+          {
+            isFunction: false,
+            declName: 'Page',
+          },
+        ],
+      ],
+      [`export default class {}`, [{ isFunction: false }]],
+      [
+        `export default () => {}`,
+        [
+          {
+            isFunction: true,
+          },
+        ],
+      ],
+      [
+        `export default 1`,
+        [
+          {
+            isFunction: false,
+          },
+        ],
+      ],
+      [
+        `const Page = () => {}; export default Page`,
+        [
+          {
+            defaultExportIdentifierName: 'Page',
+          },
+        ],
+      ],
+      [`const id = async () => {}; export { id }`, [{}]],
+      [`export { id } from './dep'`, [{}]],
+    ]
+
+    for (const [input, expected] of examples) {
+      const actual: unknown[] = []
+      const ast = await parseAstAsync(input)
+      transformWrapExport(input, ast, {
+        runtime(value, _name, meta) {
+          const { valueNode: _, ...rest } = meta
+          actual.push(rest)
+          return value
+        },
+      })
+      expect(actual).toEqual(expected)
+    }
+  })
+})

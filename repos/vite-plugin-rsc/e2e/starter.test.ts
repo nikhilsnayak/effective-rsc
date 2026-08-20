@@ -1,0 +1,190 @@
+import { expect, test } from '@playwright/test'
+import { x } from 'tinyexec'
+import { setupInlineFixture, useFixture, type Fixture } from './fixture'
+import { expectNoPageError, waitForHydration } from './helper'
+import { defineStarterTest } from './starter'
+
+test.describe('dev-default', () => {
+  const f = useFixture({ root: 'examples/starter', mode: 'dev' })
+  defineStarterTest(f)
+
+  test('validate reference 1', async () => {
+    const requestUrl = f.url('_.rsc')
+    const formData = new FormData()
+    const payload = {
+      '0': [1, '$F1'],
+      '1': { id: '__invalid_reference1__# ' },
+    }
+    for (const [k, v] of Object.entries(payload)) {
+      formData.append(k, JSON.stringify(v))
+    }
+    const response = await fetch(requestUrl, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'x-rsc-action': '/src/action.tsx#updateServerCounter',
+      },
+    })
+    // patch for 19.2.3 seems to make the payload above invalid and not reach server reference decoding anymore.
+    // https://react.dev/blog/2025/12/11/denial-of-service-and-source-code-exposure-in-react-server-components
+    // expect(f.proc().stderr()).toContain(
+    //   `invalid server reference '__invalid_reference1__`,
+    // )
+    expect(response.status).toBe(500)
+  })
+
+  test('validate reference 2', async () => {
+    const requestUrl = f.url('_.rsc')
+    const formData = new FormData()
+    const payload = {
+      '0': [1],
+    }
+    for (const [k, v] of Object.entries(payload)) {
+      formData.append(k, JSON.stringify(v))
+    }
+    const response = await fetch(requestUrl, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'x-rsc-action': `__invalid_reference2__# `,
+      },
+    })
+    expect(f.proc().stderr()).toContain(
+      `invalid server reference '__invalid_reference2__'`,
+    )
+    expect(response.status).toBe(500)
+  })
+})
+
+test.describe('build-default', () => {
+  const f = useFixture({ root: 'examples/starter', mode: 'build' })
+  defineStarterTest(f)
+})
+
+test.describe('dev-production', () => {
+  const f = useFixture({
+    root: 'examples/starter',
+    mode: 'dev',
+    cliOptions: {
+      env: { NODE_ENV: 'production' },
+    },
+  })
+  defineStarterTest(f, { variant: 'dev-production' })
+
+  test('verify production', async ({ page }) => {
+    await page.goto(f.url())
+    await waitForHydration(page)
+    const res = await page.request.get(f.url('src/client.tsx'))
+    expect(await res.text()).not.toContain('jsxDEV')
+  })
+})
+
+test.describe('build-development', () => {
+  const f = useFixture({
+    root: 'examples/starter',
+    mode: 'build',
+    cliOptions: {
+      env: { NODE_ENV: 'development' },
+    },
+  })
+  defineStarterTest(f)
+
+  test('verify development', async ({ page }) => {
+    let output!: string
+    page.on('response', async (response) => {
+      if (response.url().match(/\/assets\/entry.rsc-[\w-]+\.js$/)) {
+        output = await response.text()
+      }
+    })
+    await page.goto(f.url())
+    await waitForHydration(page)
+    expect(output).toContain('jsxDEV')
+  })
+})
+
+test.describe('duplicate loadCss', () => {
+  const root = 'examples/e2e/temp/duplicate-load-css'
+  test.beforeAll(async () => {
+    await setupInlineFixture({
+      src: 'examples/starter',
+      dest: root,
+      files: {
+        'src/root.tsx': {
+          edit: (s) =>
+            s.replace(
+              '</head>',
+              () =>
+                `\
+{import.meta.viteRsc.loadCss()}
+{import.meta.viteRsc.loadCss()}
+</head>`,
+            ),
+        },
+      },
+    })
+  })
+
+  test.describe('dev', () => {
+    const f = useFixture({ root, mode: 'dev' })
+    defineTest(f)
+  })
+
+  test.describe('build', () => {
+    const f = useFixture({ root, mode: 'build' })
+    defineTest(f)
+  })
+
+  function defineTest(f: Fixture) {
+    test('basic', async ({ page }) => {
+      using _ = expectNoPageError(page)
+      await page.goto(f.url())
+      await waitForHydration(page)
+    })
+  }
+})
+
+test.describe('isolated build', () => {
+  const root = 'examples/e2e/temp/isolated-build'
+
+  test.beforeAll(async () => {
+    // build twice programmatically to verify two plugin states are independent
+    async function testFn() {
+      const vite = await import('vite')
+      const fs = await import('node:fs')
+
+      console.log('======== first build ========')
+      const builder1 = await vite.createBuilder()
+      await builder1.buildApp()
+
+      // edit files to remove client references
+      fs.rmSync(`src/client.tsx`)
+      fs.writeFileSync(
+        `src/root.tsx`,
+        fs
+          .readFileSync(`src/root.tsx`, 'utf-8')
+          .replace(`import { ClientCounter } from './client.tsx'`, '')
+          .replace(`<ClientCounter />`, ''),
+      )
+
+      console.log('======== second build ========')
+      const builder2 = await vite.createBuilder()
+      await builder2.buildApp()
+    }
+
+    await setupInlineFixture({
+      src: 'examples/starter',
+      dest: root,
+      files: {
+        'test.js': `await (${testFn.toString()})();\n`,
+      },
+    })
+  })
+
+  test('build', async () => {
+    const result = await x('node', ['./test.js'], {
+      nodeOptions: { cwd: root },
+    })
+    expect(result.stderr).not.toContain('Build failed')
+    expect(result.exitCode).toBe(0)
+  })
+})

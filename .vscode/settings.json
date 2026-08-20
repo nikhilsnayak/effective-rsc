@@ -4,14 +4,14 @@
     "source.removeUnusedImports": "always"
   },
   "files.readonlyInclude": {
-    "**/routeTree.gen.ts": true
+    "**/.effective/**": true
   },
   "files.watcherExclude": {
-    "**/routeTree.gen.ts": true,
+    "**/.effective/**": true,
     "repos/**": true
   },
   "search.exclude": {
-    "**/routeTree.gen.ts": true,
+    "**/.effective/**": true,
     "repos/**": true
   },
   "js/ts.preferences.autoImportFileExcludePatterns": ["repos/**"],

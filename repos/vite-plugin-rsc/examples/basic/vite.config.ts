@@ -1,0 +1,400 @@
+import assert from 'node:assert'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import tailwindcss from '@tailwindcss/vite'
+import react from '@vitejs/plugin-react'
+import rsc from '@vitejs/plugin-rsc'
+import { type Plugin, type Rollup, defineConfig, normalizePath } from 'vite'
+
+export default defineConfig({
+  clearScreen: false,
+  plugins: [
+    // import("vite-plugin-inspect").then(m => m.default()),
+    tailwindcss(),
+    react(),
+    vitePluginVirtualModuleTest(),
+    testRscVirtualClientPackagePlugin(),
+    rsc({
+      entries: {
+        client: './src/framework/entry.browser.tsx',
+        ssr: './src/framework/entry.ssr.tsx',
+        rsc: './src/framework/entry.rsc.tsx',
+      },
+      clientChunks(meta) {
+        if (process.env.TEST_CUSTOM_CLIENT_CHUNKS) {
+          if (meta.id.includes('/src/routes/chunk/')) {
+            return 'custom-chunk'
+          }
+        }
+      },
+    }),
+    {
+      name: 'test-tree-shake',
+      enforce: 'post',
+      writeBundle(_options, bundle) {
+        for (const chunk of Object.values(bundle)) {
+          if (chunk.type === 'chunk') {
+            assert(!chunk.code.includes('__unused_client_reference__'))
+            assert(!chunk.code.includes('__unused_server_export__'))
+            assert(!chunk.code.includes('__unused_tree_shake2__'))
+          }
+        }
+      },
+    },
+    {
+      // dump entire bundle to analyze build output for e2e
+      name: 'test-metadata',
+      enforce: 'post',
+      writeBundle(options, bundle) {
+        const chunks: Rollup.OutputChunk[] = []
+        for (const chunk of Object.values(bundle)) {
+          if (chunk.type === 'chunk') {
+            chunks.push(chunk)
+          }
+        }
+        fs.writeFileSync(
+          path.join(options.dir!, '.vite/test.json'),
+          JSON.stringify({ chunks }, null, 2),
+        )
+      },
+    },
+    {
+      name: 'test-server-assets-security',
+      buildStart() {
+        if (this.environment.name === 'rsc') {
+          this.emitFile({
+            type: 'asset',
+            fileName: '__server_secret.txt',
+            source: '__server_secret',
+          })
+        }
+      },
+      writeBundle(_options, bundle) {
+        if (this.environment.name === 'rsc') {
+          assert(Object.keys(bundle).includes('__server_secret.txt'))
+        } else {
+          assert(!Object.keys(bundle).includes('__server_secret.txt'))
+        }
+
+        const viteManifest = bundle['.vite/manifest.json']
+        assert(viteManifest.type === 'asset')
+        assert(typeof viteManifest.source === 'string')
+        if (this.environment.name === 'rsc') {
+          assert(viteManifest.source.includes('src/framework/entry.rsc.tsx'))
+          assert(
+            !viteManifest.source.includes('src/framework/entry.browser.tsx'),
+          )
+        }
+        if (this.environment.name === 'client') {
+          assert(!viteManifest.source.includes('src/framework/entry.rsc.tsx'))
+          assert(
+            viteManifest.source.includes('src/framework/entry.browser.tsx'),
+          )
+        }
+      },
+    },
+    {
+      name: 'test-browser-only',
+      writeBundle(_options, bundle) {
+        const moduleIds = Object.values(bundle).flatMap((c) =>
+          c.type === 'chunk' ? [...c.moduleIds] : [],
+        )
+        const browserId = normalizePath(
+          path.resolve('src/routes/browser-only/browser-dep.tsx'),
+        )
+        if (this.environment.name === 'client') {
+          assert(moduleIds.includes(browserId))
+        }
+        if (this.environment.name === 'ssr') {
+          assert(!moduleIds.includes(browserId))
+        }
+      },
+    },
+    {
+      name: 'optimize-chunks',
+      apply: 'build',
+      config() {
+        const resolvePackageSource = (source: string) =>
+          normalizePath(fileURLToPath(import.meta.resolve(source)))
+
+        // TODO: this package entry isn't a public API.
+        const reactServerDom = resolvePackageSource(
+          '@vitejs/plugin-rsc/react/browser',
+        )
+
+        return {
+          environments: {
+            client: {
+              build: {
+                rollupOptions: {
+                  output: {
+                    manualChunks: (id) => {
+                      // need to use functional form to handle commonjs plugin proxy module
+                      // e.g. `(id)?commonjs-es-import`
+                      if (
+                        id.includes('node_modules/react/') ||
+                        id.includes('node_modules/react-dom/') ||
+                        id.includes(reactServerDom)
+                      ) {
+                        return 'lib-react'
+                      }
+                      if (id === '\0vite/preload-helper.js') {
+                        return 'lib-vite'
+                      }
+                    },
+                  },
+                },
+              },
+            },
+          },
+        }
+      },
+      // verify chunks are "stable"
+      writeBundle(_options, bundle) {
+        if (this.environment.name === 'client') {
+          const entryChunks: Rollup.OutputChunk[] = []
+          const libChunks: Record<string, Rollup.OutputChunk[]> = {}
+          for (const chunk of Object.values(bundle)) {
+            if (chunk.type === 'chunk') {
+              if (chunk.isEntry) {
+                entryChunks.push(chunk)
+              }
+              if (chunk.name.startsWith('lib-')) {
+                ;(libChunks[chunk.name] ??= []).push(chunk)
+              }
+            }
+          }
+
+          // react vendor chunk has no import
+          assert.equal(libChunks['lib-react'].length, 1)
+          assert.deepEqual(
+            // https://rolldown.rs/guide/in-depth/advanced-chunks#why-there-s-always-a-runtime-js-chunk
+            libChunks['lib-react'][0].imports.filter(
+              (f) => !f.includes('rolldown-runtime'),
+            ),
+            [],
+          )
+          assert.deepEqual(libChunks['lib-react'][0].dynamicImports, [])
+
+          // entry chunk has no export
+          assert.equal(entryChunks.length, 1)
+          assert.deepEqual(entryChunks[0].exports, [])
+        }
+      },
+    },
+    {
+      name: 'cf-build',
+      enforce: 'post',
+      apply: () => !!process.env.CF_BUILD,
+      configEnvironment() {
+        return {
+          keepProcessEnv: false,
+          define: {
+            'process.env.NO_CSP': 'false',
+          },
+          resolve: {
+            noExternal: true,
+          },
+        }
+      },
+      generateBundle() {
+        if (this.environment.name === 'rsc') {
+          this.emitFile({
+            type: 'asset',
+            fileName: 'cloudflare.js',
+            source: `\
+import handler from './index.js';
+export default { fetch: handler };
+`,
+          })
+        }
+        if (this.environment.name === 'client') {
+          // https://developers.cloudflare.com/workers/static-assets/headers/#custom-headers
+          this.emitFile({
+            type: 'asset',
+            fileName: '_headers',
+            source: `\
+/favicon.ico
+  Cache-Control: public, max-age=3600, s-maxage=3600
+/test.css
+  Cache-Control: public, max-age=3600, s-maxage=3600
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+`,
+          })
+        }
+      },
+    },
+    testBuildPlugin(),
+  ],
+  build: {
+    minify: false,
+    manifest: true,
+  },
+  environments: {
+    client: {
+      optimizeDeps: {
+        entries: [
+          './src/routes/**/client.tsx',
+          './src/framework/entry.browser.tsx',
+        ],
+        exclude: [
+          '@vitejs/test-dep-client-in-server/client',
+          '@vitejs/test-dep-client-in-server2/client',
+          '@vitejs/test-dep-server-in-client/client',
+        ],
+      },
+    },
+    ssr: {
+      optimizeDeps: {
+        include: ['@vitejs/test-dep-transitive-cjs > @vitejs/test-dep-cjs'],
+      },
+    },
+  },
+}) as any
+
+function testRscVirtualClientPackagePlugin(): Plugin {
+  return {
+    name: 'test-rsc-virtual-client-package',
+    enforce: 'pre',
+    resolveId(source, importer) {
+      // `rsc:virtual-client-package` should pass an explicit root importer.
+      if (
+        this.environment.name === 'rsc' &&
+        source === '@vitejs/test-dep-transitive-client/client' &&
+        importer == null
+      ) {
+        throw new Error(
+          '`rsc:virtual-client-package` root resolution requires an importer',
+        )
+      }
+    },
+  }
+}
+
+function testBuildPlugin(): Plugin[] {
+  const moduleIds: { name: string; ids: string[] }[] = []
+  return [
+    {
+      name: 'test-scan',
+      apply: 'build',
+      buildEnd() {
+        moduleIds.push({
+          name: this.environment.name,
+          ids: [...this.getModuleIds()],
+        })
+      },
+      buildApp: {
+        order: 'post',
+        async handler() {
+          // client scan build discovers additional modules for server references.
+          const [m1, m2] = moduleIds.filter((m) => m.name === 'rsc')
+          const diff = m2.ids.filter((id) => !m1.ids.includes(id))
+          assert(diff.length > 0)
+
+          // but make sure it's not due to import.meta.glob
+          // https://github.com/vitejs/rolldown-vite/issues/373
+          assert.equal(
+            diff.find((id) => id.includes('import-meta-glob/dep.tsx')),
+            undefined,
+          )
+        },
+      },
+    },
+    {
+      name: 'test-copyPublicDir',
+      apply: 'build',
+      buildApp: {
+        order: 'post',
+        async handler() {
+          assert(fs.existsSync('dist/client/favicon.ico'))
+          assert(!fs.existsSync('dist/rsc/favicon.ico'))
+          assert(!fs.existsSync('dist/ssr/favicon.ico'))
+        },
+      },
+    },
+  ]
+}
+
+function vitePluginVirtualModuleTest(): Plugin[] {
+  return [
+    {
+      name: 'test-virtual-client',
+      resolveId(source) {
+        if (source === 'virtual:test-virtual-client') {
+          return `\0${source}`
+        }
+      },
+      load(id) {
+        if (id === '\0virtual:test-virtual-client') {
+          return `
+'use client'
+
+import React from 'react'
+
+export function TestVirtualClient() {
+  const [clicked, setClicked] = React.useState(false)
+  return React.createElement(
+    'button',
+    {
+      type: 'button',
+      'data-testid': 'test-virtual-client',
+      onClick: () => setClicked(true),
+    },
+    'test-virtual-client: ' + (clicked ? 'clicked' : 'not-clicked')
+  )
+}
+`
+        }
+      },
+    },
+    // Query-aware virtual CSS: handles ?direct query, works with <link> in dev
+    {
+      name: 'test-virtual-css-query-aware',
+      resolveId(source) {
+        const clean = source.split('?')[0]
+        if (
+          clean === 'virtual:test-style-server-query.css' ||
+          clean === 'virtual:test-style-client-query.css'
+        ) {
+          // Preserve query in resolved id for Vite's CSS plugin to see ?direct
+          const query = source.includes('?')
+            ? source.slice(source.indexOf('?'))
+            : ''
+          return `\0${clean}${query}`
+        }
+      },
+      load(id) {
+        const clean = id.split('?')[0]
+        if (clean === '\0virtual:test-style-server-query.css') {
+          return `.test-virtual-style-server-query { color: rgb(50, 100, 150); }`
+        }
+        if (clean === '\0virtual:test-style-client-query.css') {
+          return `.test-virtual-style-client-query { color: rgb(50, 150, 100); }`
+        }
+      },
+    },
+    // Exact-match virtual CSS: standard pattern, does NOT work with <link> in dev
+    // (works fine when imported via JS)
+    {
+      name: 'test-virtual-css-exact',
+      resolveId(source) {
+        if (source === 'virtual:test-style-server-exact.css') {
+          return `\0${source}`
+        }
+        if (source === 'virtual:test-style-client-exact.css') {
+          return `\0${source}`
+        }
+      },
+      load(id) {
+        if (id === '\0virtual:test-style-server-exact.css') {
+          return `.test-virtual-style-server-exact { color: rgb(200, 100, 50); }`
+        }
+        if (id === '\0virtual:test-style-client-exact.css') {
+          return `.test-virtual-style-client-exact { color: rgb(200, 50, 100); }`
+        }
+      },
+    },
+  ]
+}

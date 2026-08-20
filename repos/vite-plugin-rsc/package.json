@@ -1,0 +1,91 @@
+{
+  "name": "@vitejs/plugin-rsc",
+  "version": "0.5.34",
+  "description": "React Server Components (RSC) support for Vite.",
+  "keywords": [
+    "react",
+    "react-server-components",
+    "rsc",
+    "vite",
+    "vite-plugin"
+  ],
+  "homepage": "https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-rsc",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vitejs/vite-plugin-react.git",
+    "directory": "packages/plugin-rsc"
+  },
+  "files": [
+    "dist",
+    "types"
+  ],
+  "type": "module",
+  "exports": {
+    "./package.json": "./package.json",
+    "./types": "./types/index.d.ts",
+    ".": "./dist/index.js",
+    "./transforms": "./dist/transforms/index.js",
+    "./*": "./dist/*.js"
+  },
+  "scripts": {
+    "test": "vitest",
+    "test-e2e": "playwright test --project=chromium",
+    "test-e2e-ci": "playwright test",
+    "tsc": "tsc -b ./tsconfig.json ./e2e/tsconfig.json ./examples/*/tsconfig.json",
+    "tsc-dev": "pnpm tsc --watch --preserveWatchOutput",
+    "dev": "tsdown --sourcemap --watch src",
+    "build": "tsdown",
+    "prepack": "tsdown"
+  },
+  "dependencies": {
+    "@rolldown/pluginutils": "^1.0.1",
+    "es-module-lexer": "^2.3.1",
+    "estree-walker": "^3.0.3",
+    "magic-string": "^0.30.21",
+    "srvx": "^0.12.5",
+    "strip-literal": "^3.1.0",
+    "turbo-stream": "^3.2.0",
+    "vitefu": "^1.1.3"
+  },
+  "devDependencies": {
+    "@hiogawa/utils": "^1.7.0",
+    "@playwright/test": "^1.62.1",
+    "@tsconfig/strictest": "^2.0.8",
+    "@types/estree": "^1.0.9",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "workspace:*",
+    "@vitejs/test-dep-cjs-and-esm": "./test-dep/cjs-and-esm",
+    "@vitejs/test-dep-cjs-falsy-primitive": "./test-dep/cjs-falsy-primitive",
+    "picocolors": "^1.1.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-server-dom-webpack": "^19.2.8",
+    "tinyexec": "^1.3.0",
+    "tsdown": "^0.22.14"
+  },
+  "peerDependencies": {
+    "react": "*",
+    "react-dom": "*",
+    "react-server-dom-webpack": "*",
+    "vite": "*"
+  },
+  "peerDependenciesMeta": {
+    "react-server-dom-webpack": {
+      "optional": true
+    }
+  },
+  "compatiblePackages": {
+    "schemaVersion": 1,
+    "rolldown": {
+      "type": "incompatible",
+      "reason": "Uses Vite-specific APIs"
+    },
+    "rollup": {
+      "type": "incompatible",
+      "reason": "Uses Vite-specific APIs"
+    }
+  }
+}

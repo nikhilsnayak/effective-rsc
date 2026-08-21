@@ -3,13 +3,7 @@ import { defineConfig } from 'oxlint';
 
 export default defineConfig({
   extends: [recommended],
-  ignorePatterns: [
-    '**/.effective/**',
-    '**/coverage/**',
-    '**/dist/**',
-    '**/node_modules/**',
-    'repos/**',
-  ],
+  ignorePatterns: ['**/.ersc/**', '**/coverage/**', '**/dist/**', '**/node_modules/**', 'repos/**'],
   plugins: [
     'eslint',
     'typescript',

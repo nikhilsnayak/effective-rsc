@@ -1,0 +1,82 @@
+import { describe, expect, it, vi } from '@effect/vitest';
+import { Effect } from 'effect';
+import { Children, Fragment, isValidElement, type ReactNode } from 'react';
+import type { ReactFormState } from 'react-dom/client';
+import type { RenderToReadableStreamOptions } from 'react-dom/server';
+
+import type { FlightPayload } from '../../src/rsc/flight';
+import { HtmlRenderer } from '../../src/server/html-renderer';
+import { ServerConfig } from '../../src/server/server-config';
+
+const formState = Symbol('formState') as unknown as ReactFormState;
+const clientBootstrapScripts = ['/assets/runtime.js', '/assets/main.js'];
+let renderOptions: RenderToReadableStreamOptions | undefined;
+let renderedRoot: ReactNode;
+
+const decodeFlight = vi.fn((_stream: ReadableStream<Uint8Array>) =>
+  Promise.resolve({ formState: null, root: null } satisfies FlightPayload),
+);
+const renderDocument = vi.fn((root: ReactNode, options?: RenderToReadableStreamOptions) => {
+  renderedRoot = root;
+  renderOptions = options;
+  return Promise.resolve(new ReadableStream<Uint8Array>());
+});
+
+vi.doMock('react-server-dom-rspack/client', () => ({
+  createFromReadableStream: decodeFlight,
+}));
+vi.doMock('react-dom/server.bun', () => ({
+  renderToReadableStream: renderDocument,
+}));
+vi.doMock('rsc-html-stream/server', () => ({
+  injectRSCPayload: () => new TransformStream<Uint8Array, Uint8Array>(),
+}));
+
+const { HtmlRendererLayer } = await import('../../src/server/ssr');
+
+describe('HtmlRenderer', () => {
+  it.effect('passes the request form state to Fizz without eagerly decoding Flight', () =>
+    Effect.gen(function* () {
+      const renderer = yield* HtmlRenderer;
+      const flightStream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.close();
+        },
+      });
+
+      yield* renderer.render({ flightStream, formState });
+
+      expect(decodeFlight).not.toHaveBeenCalled();
+      expect(renderDocument).toHaveBeenCalledTimes(1);
+      expect(isValidElement<{ children: ReactNode }>(renderedRoot)).toBe(true);
+      if (!isValidElement<{ children: ReactNode }>(renderedRoot)) {
+        return;
+      }
+
+      expect(renderedRoot.type).toBe(Fragment);
+      const resources = Children.toArray(renderedRoot.props.children);
+      expect(resources[0]).toMatchObject({
+        props: {
+          href: '/assets/main.css',
+          precedence: 'default',
+          rel: 'stylesheet',
+        },
+        type: 'link',
+      });
+      expect(renderOptions?.bootstrapScripts).toEqual(clientBootstrapScripts);
+      expect(renderOptions?.formState).toBe(formState);
+    }).pipe(
+      Effect.provide(HtmlRendererLayer),
+      Effect.provideService(
+        ServerConfig,
+        ServerConfig.of({
+          clientAssetsRoot: '/tmp/effective-rsc-client',
+          clientBootstrapScripts,
+          clientStylesheets: ['/assets/main.css'],
+          hostname: 'localhost',
+          port: 18193,
+        }),
+      ),
+    ),
+  );
+});

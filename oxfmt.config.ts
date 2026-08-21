@@ -1,7 +1,7 @@
 import { defineConfig } from 'oxfmt';
 
 export default defineConfig({
-  ignorePatterns: ['.effective/**', '**/coverage/**', '**/dist/**', 'repos/**'],
+  ignorePatterns: ['**/.ersc/**', '**/coverage/**', '**/dist/**', 'repos/**'],
   singleQuote: true,
   jsxSingleQuote: true,
   sortImports: true,

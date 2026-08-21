@@ -1,0 +1,41 @@
+{
+  "name": "effective-rsc",
+  "version": "0.0.0",
+  "bin": {
+    "ersc": "./src/cli.ts"
+  },
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@effect/platform-browser": "4.0.0-rc.110",
+    "@effect/platform-bun": "4.0.0-rc.110",
+    "@rsbuild/core": "2.1.6",
+    "@rsbuild/plugin-react": "2.1.0",
+    "@rsbuild/plugin-tailwindcss": "2.0.3",
+    "react-server-dom-rspack": "0.1.0",
+    "rsbuild-plugin-rsc": "0.1.1",
+    "rsc-html-stream": "0.0.8"
+  },
+  "devDependencies": {
+    "@effect/vitest": "catalog:",
+    "@types/bun": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "19.2.4",
+    "effect": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "effect": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:"
+  }
+}

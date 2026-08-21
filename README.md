@@ -1,22 +1,14 @@
 # effective-rsc
 
 An experimental, highly opinionated React Server Components framework built with React Canary,
-Rspack, Effect v4, and TypeScript 7.
+Rsbuild, Effect v4, and TypeScript 7.
 
 effective-rsc asks what an RSC framework could look like if React owned the UI protocol while Effect
 owned requests, resources, failures, services, and cancellation.
 
-It deliberately chooses one modern path: filesystem routing, streaming SSR, React Server Functions,
-and a Navigation API client router. It targets current React and browser capabilities without legacy
-fallbacks or a promise of production stability.
-
-## Status
-
-The framework is at foundation stage. Its direction and hard architectural decisions are recorded;
-the first runnable vertical slice is next.
-
-That slice will render `/` and `/slow` through Rspack, Effect HTTP, RSC, and streaming SSR, hydrate
-from the embedded Flight response, and use `loading.tsx` during Navigation API transitions.
+It deliberately chooses one modern path: an explicit typed route map, streaming SSR, React Server
+Functions, and a Navigation API client router. It targets current React and browser capabilities
+without legacy fallbacks or a promise of production stability.
 
 ## Explore
 

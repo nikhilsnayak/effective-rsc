@@ -1,8 +1,8 @@
 ## Dependencies
 
-- No `devDependencies`. Put a dependency version in the root catalog only when at least two package
-  manifests reference it, counting the workspace root; dependencies used by only one manifest
-  declare their version locally.
+- Put a dependency version in the root catalog only when at least two package manifests reference
+  it, counting the workspace root; dependencies used by only one manifest declare their version
+  locally.
 - Workspace packages reference shared catalog versions with `catalog:`.
 - Pin React Canary, React DOM Canary, and `react-server-dom-rspack` to one exact compatible release.
 
@@ -21,14 +21,16 @@
   another runtime's entry point or ambient globals.
 - Export deliberate public subpaths from package manifests; do not expose package roots as broad
   barrels. Use direct-file exports for single-file modules and barrels only for real aggregates.
-- Use path-qualified Effect service identifiers, `*Layer` layer names, and `layerTest` for reusable
-  fakes. Use `Effect.fn` for public operations implemented as `(params) => Effect.gen(...)` and
+- Use path-qualified Effect service identifiers and `layerTest` for reusable fakes. A service owns
+  `static readonly layer` when its contract and implementation share a runtime graph; a contract
+  shared across runtime graphs stays implementation-free and its owning runtime exports a `*Layer`.
+  Use `Effect.fn` for public operations implemented as `(params) => Effect.gen(...)` and
   `Effect.fnUntraced` for internal operations with that shape.
 - Propagate request and navigation cancellation through Effect interruption and Web Streams. Do not
   detach work from its request scope without an explicit lifetime owner.
 - Preserve React's native RSC and Server Function protocols. Framework APIs may add Effect typing,
   validation, and lifecycle management but must not invent replacement transports.
-- Generated framework artifacts live under `.effective/`; never hand-edit or import them across
+- Generated framework artifacts live under `.ersc/`; never hand-edit or import them across
   package boundaries except through their documented generated entry points.
 
 ## Verify

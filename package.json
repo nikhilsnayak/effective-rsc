@@ -1,5 +1,5 @@
 {
-  "name": "effective-rsc",
+  "name": "effective-rsc-monorepo",
   "version": "0.0.0",
   "private": true,
   "workspaces": [
@@ -21,16 +21,25 @@
     "vendor:sync": "bun scripts/sync-vendor.ts",
     "prepare": "effect-tsgo patch --oxlint"
   },
-  "dependencies": {
+  "devDependencies": {
     "@effect/tsgo": "0.36.5",
-    "@types/bun": "^1.3.14",
-    "@typescript/native": "npm:typescript@^7.0.2",
+    "@types/bun": "catalog:",
     "oxfmt": "^0.64.0",
     "oxlint": "1.78.0",
     "oxlint-tsgolint": "^7.0.2001",
     "turbo": "^2.10.9",
-    "typescript": "~6.0.3",
-    "vitest": "^4.1.10"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
-  "packageManager": "bun@1.4.0-canary.1"
+  "packageManager": "bun@1.4.0-canary.1",
+  "catalog": {
+    "@effect/vitest": "4.0.0-rc.110",
+    "@types/bun": "^1.3.14",
+    "@types/react": "19.2.18",
+    "effect": "4.0.0-rc.110",
+    "react": "19.3.0-canary-eb8feb71-20260814",
+    "react-dom": "19.3.0-canary-eb8feb71-20260814",
+    "typescript": "7.0.2",
+    "vitest": "^4.1.10"
+  }
 }

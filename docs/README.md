@@ -16,16 +16,6 @@ different version.
 ## Documents
 
 - [VISION.md](VISION.md): purpose, principles, and non-goals.
-- [ARCHITECTURE.md](ARCHITECTURE.md): runtime flow, authoring model, and planned package boundaries.
+- [ARCHITECTURE.md](ARCHITECTURE.md): runtime flow, application model, and module-graph boundaries.
 - [DECISIONS.md](DECISIONS.md): compact register of accepted and deferred decisions.
 - [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md): choices that need evidence from implementation.
-
-## Current phase
-
-The repository is at foundation stage. The application starter has been removed while retaining the
-Bun, Turbo, TypeScript, Effect tooling, linting, formatting, testing, CI, and vendored-reference
-workflow used across the author's other projects.
-
-The next milestone is one end-to-end vertical slice: `/` and `/slow`, compiled by Rspack, served by
-Effect HTTP, streamed through RSC and SSR, hydrated without an extra initial request, and navigated
-through the Navigation API with `loading.tsx`.

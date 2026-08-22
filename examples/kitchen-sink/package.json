@@ -1,5 +1,5 @@
 {
-  "name": "@effective-rsc/example-basic",
+  "name": "@effective-rsc/example-kitchen-sink",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -7,17 +7,25 @@
     "build": "ersc build",
     "dev": "ersc dev",
     "start": "ersc start",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "vitest run tests",
+    "test:e2e": "playwright test",
+    "test:watch": "vitest tests"
   },
   "dependencies": {
+    "@base-ui/react": "^1.7.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "effect": "catalog:",
     "effective-rsc": "workspace:*",
+    "lucide-react": "^1.33.0",
     "react": "catalog:",
-    "react-dom": "catalog:"
+    "react-dom": "catalog:",
+    "react-server-dom-rspack": "catalog:",
+    "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
     "@effect/vitest": "catalog:",
+    "@playwright/test": "1.61.1",
     "@types/bun": "catalog:",
     "@types/react": "catalog:",
     "tailwindcss": "4.3.3",

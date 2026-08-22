@@ -22,7 +22,7 @@ const StaticAssetsLayer = Layer.unwrap(
   Effect.map(ServerConfig, ({ clientAssetsRoot }) =>
     HttpStaticServer.layer({
       cacheControl: 'no-store',
-      prefix: '/assets',
+      prefix: '/_ersc/assets',
       root: clientAssetsRoot,
     }),
   ),
@@ -46,12 +46,16 @@ const fromWebStream = (stream: ReadableStream<Uint8Array>) =>
 const httpLayer = <Services, ApplicationError>(
   application: ApplicationDefinition<Services, ApplicationError>,
 ) => {
-  const render = Effect.fnUntraced(function* (request: HttpServerRequest.HttpServerRequest) {
+  const render = Effect.fnUntraced(function* (
+    request: HttpServerRequest.HttpServerRequest,
+    pathname: `/${string}`,
+  ) {
     const formState: FlightPayload['formState'] = null;
     const flightRenderer = yield* FlightRenderer;
     const flightStream = yield* flightRenderer.render({
       component: application.component,
       formState,
+      pathname,
     });
 
     if (request.headers['accept']?.includes(FlightMediaType)) {
@@ -69,8 +73,17 @@ const httpLayer = <Services, ApplicationError>(
   });
 
   const RequestLayer = Layer.mergeAll(RenderersLayer, application.servicesLayer);
+  const UiRoutesLayer = Layer.effectDiscard(
+    Effect.gen(function* () {
+      const router = yield* HttpRouter.HttpRouter;
 
-  return Layer.mergeAll(HttpRouter.add('GET', '/', render), StaticAssetsLayer).pipe(
+      for (const pathname of application.paths) {
+        yield* router.add('GET', pathname, (request) => render(request, pathname));
+      }
+    }),
+  );
+
+  return Layer.mergeAll(UiRoutesLayer, StaticAssetsLayer).pipe(
     HttpRouter.provideRequest(RequestLayer),
   );
 };

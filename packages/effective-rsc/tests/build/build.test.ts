@@ -9,6 +9,7 @@ it.effect('uses real framework entries and private aliases for application sourc
   Effect.gen(function* () {
     const { applicationRoot, entries } = yield* resolveApplicationBuild({ root: '/workspace' });
     const config = makeBuildConfig(applicationRoot, entries);
+    const clientEnvironment = config.environments?.['client'];
     const serverEnvironment = config.environments?.['server'];
 
     expect(entries.application).toBe('/workspace/src/application.tsx');
@@ -21,9 +22,10 @@ it.effect('uses real framework entries and private aliases for application sourc
         layer: Layers.rsc,
       },
     });
-    expect(serverEnvironment?.resolve?.alias).toMatchObject({
+    expect(serverEnvironment?.resolve?.alias).toEqual({
       'effective-rsc/application-entry': entries.application,
       'effective-rsc/application-stylesheet': entries.stylesheet,
     });
+    expect(clientEnvironment?.resolve).toBeUndefined();
   }).pipe(Effect.provide(Path.layer)),
 );

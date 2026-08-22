@@ -15,7 +15,8 @@
     "fmt": "oxfmt . '!repos/**'",
     "fmt:check": "oxfmt --check . '!repos/**'",
     "check": "bun run lint && bun run fmt:check",
-    "test": "turbo test && bun run test:scripts",
+    "test": "turbo test && turbo test:e2e && bun run test:scripts",
+    "test:e2e": "turbo test:e2e",
     "test:scripts": "vitest run scripts",
     "test:watch": "turbo test:watch",
     "vendor:sync": "bun scripts/sync-vendor.ts",
@@ -39,6 +40,7 @@
     "effect": "4.0.0-rc.110",
     "react": "19.3.0-canary-eb8feb71-20260814",
     "react-dom": "19.3.0-canary-eb8feb71-20260814",
+    "react-server-dom-rspack": "0.1.0",
     "typescript": "7.0.2",
     "vitest": "^4.1.10"
   }

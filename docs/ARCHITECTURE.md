@@ -13,7 +13,7 @@ packages/
       build/        Rsbuild lifecycle, compiler entry, and compiled-server loading
 
 examples/
-  basic/      executable specification and integration-test fixture
+  kitchen-sink/  realistic conference-planner example and integration-test fixture
 ```
 
 `effective-rsc` is the only framework package and intentionally aggregates the application API at
@@ -38,20 +38,38 @@ have no routing semantics and may be organized however the author prefers. Its r
 the static imports, URL topology, and ownership of each typed concern.
 
 ```tsx
+const RootLayout = Layout.make({
+  slots: ['sidebar', 'modal'],
+  render: Effect.fn('RootLayout')(function* ({ children, sidebar, modal }) {
+    return (
+      <html>
+        <body>
+          <main>{children}</main>
+          <aside>{sidebar}</aside>
+          {modal}
+        </body>
+      </html>
+    );
+  }),
+});
+
 export default Application.make({
   routes: {
     '/': {
       layout: RootLayout,
       loading: RootLoading,
       page: HomePage,
+      slots: {
+        sidebar: { content: Sidebar, loading: SidebarLoading },
+        modal: null,
+      },
     },
-    '/users': {
-      layout: UsersLayout,
-      loading: UsersLoading,
-    },
-    '/users/:userId': {
-      page: UserPage,
-      error: UserError,
+    '/about': {
+      page: AboutPage,
+      slots: {
+        sidebar: { content: Sidebar, loading: SidebarLoading },
+        modal: null,
+      },
     },
   },
 });
@@ -59,8 +77,12 @@ export default Application.make({
 
 - `Page.make(...)` accepts an operation created with `Effect.fn` or `Effect.fnUntraced` and turns it
   into a Server Component using the request Effect runtime.
-- `Layout.make(...)` accepts a layout-specific Effect operation and establishes a persistent nested
-  layout contract. The root layout owns the full `<html>`, `<head>`, and `<body>` document tree.
+- `Layout.make({ slots, render })` declares its named parallel-slot contract and accepts a
+  layout-specific Effect operation. The root layout owns the full `<html>`, `<head>`, and `<body>`
+  document tree. Its `children` prop is the implicit outlet for the matched Page and is not repeated
+  in the `slots` declaration.
+- `Slot.make(...)` accepts an Effect operation for a named parallel branch such as a sidebar or
+  modal. A non-empty route slot may own its own synchronous Loading concern.
 - `Loading.make(...)` accepts only a synchronous renderer and becomes the Suspense fallback for its
   route subtree.
 - `ErrorBoundary.make(...)` and `NotFound.make(...)` define their own boundary contracts.
@@ -82,11 +104,14 @@ to each HTTP request, so request-scoped render Effects inherit the application c
 their original typed error channel.
 
 Each concern-specific factory has a private shared implementation where useful, but there is no
-public generic segment factory. `Page.make`, `Layout.make`, `Loading.make`, and the root-only
-`Application.make` are implemented in the current checkpoint. Layout and Page operations share the
-request-scoped Effect runtime, and the application combines their service requirements. Branded Page,
-Layout, and Loading values prevent route definitions from substituting arbitrary components;
-Loading also rejects an explicitly asynchronous fallback.
+public generic segment factory. `Page.make`, `Slot.make`, `Layout.make`, `Loading.make`, and
+`Application.make` are implemented in the current checkpoint. The route map accepts multiple
+literal static paths; the root route owns the Layout and optional primary Loading concerns, and
+every matched static route supplies one Page plus the exact named-slot record declared by that
+Layout. `null` is an intentionally empty named slot. Layout, Page, and non-empty Slot operations
+share the request Effect runtime, and the application combines all their service requirements.
+Branded Page, Slot, Layout, and Loading values prevent route definitions from substituting arbitrary
+components; Loading also rejects an explicitly asynchronous fallback.
 
 ## Route compilation — Working
 
@@ -112,16 +137,25 @@ proxy entries for them. Browser assets are emitted under
 build tree. Build and development compilers only watch real framework and application modules, so
 another process has no shared generated source entry to remove or rewrite. Neither the directive nor
 private compiler aliases are part of application
-source or package metadata. The application component composes the root layout, optional native
-Suspense boundary, and page without route discovery. Path matching, nested route compilation, and
-schema decoding are later slices.
+source or package metadata. Each literal static path is registered directly with Effect's HTTP
+router when the application Layer is built, so request dispatch does not add a second framework
+matcher. The application component performs one map lookup and creates an n-ary route tree. The
+root Layout, matched Page, and every non-empty named Slot are independent values in that tree rather
+than nested Server Components, so all of them can begin rendering without waiting for a parent.
+The framework passes internal `RouteOutlet` placeholders as the Layout's `children` and declared
+slot props; a Client Component recursively stitches each child node into its outlet in both the SSR
+and browser client environments. Primary and slot-specific Loading concerns wrap only their owned
+branch in native Suspense without delaying the root Layout or sibling branches. Unknown paths retain
+the HTTP router's native empty `404` response. `/_ersc/assets` remains reserved for framework
+compiler output. Dynamic matching and nested route-specific concerns are later slices; their
+representation is already fixed as named branches of the same n-ary tree.
 
 ## Initial document request — Accepted
 
 ```text
 Request
   -> Effect HTTP runtime
-  -> compiled route matcher
+  -> Effect HTTP router exact static-path match
   -> request-scoped Layer and Scope
   -> React Server Components render produces { root, formState } as native Flight
   -> split Flight stream
@@ -199,11 +233,13 @@ stylesheet-resource semantics place the resulting stylesheets in the head of the
 The application declares Tailwind because its stylesheet imports it; component-library packages
 imported by application source also remain application dependencies.
 
-React, React DOM, and Effect are shared authoring runtimes: application source imports them directly
-and declares them as dependencies, while `effective-rsc` declares exact peer versions. The framework
-does not vendor, alias, or re-export those packages. Framework-only adapters and compiler plugins,
-including the Effect Bun and browser platforms and the official Rsbuild Tailwind plugin, remain
-ordinary framework dependencies.
+React, React DOM, Effect, and `react-server-dom-rspack` are shared runtimes: application source
+declares them as dependencies, while `effective-rsc` declares exact peer versions. The framework
+does not vendor, alias, or re-export those packages. `react-server-dom-rspack` is not an application
+authoring API, but its peer placement lets Rspack resolve the protocol imports injected into the
+application graph without bypassing isolated dependency boundaries. Framework-only adapters and
+compiler plugins, including the Effect Bun and browser platforms and the official Rsbuild Tailwind
+plugin, remain ordinary framework dependencies.
 
 The public `effective-rsc` CLI is built with `effect/unstable/cli`. It owns build and start command
 parsing, supplies Bun platform services, and delegates compilation to the private `build` module

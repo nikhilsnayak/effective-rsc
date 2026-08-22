@@ -11,15 +11,17 @@ export class FlightRenderer extends Context.Service<FlightRenderer>()(
       render: Effect.fn('FlightRenderer.render')(function* <Services>({
         component: RootComponent,
         formState,
+        pathname,
       }: {
         readonly component: ApplicationComponent<Services>;
         readonly formState: FlightPayload['formState'];
+        readonly pathname: `/${string}`;
       }) {
         const signal = yield* Effect.abortSignal;
         const runtime = yield* FiberSet.makeRuntimePromise<Services>();
         const payload: FlightPayload = {
           formState,
-          root: <RootComponent runtime={runtime} />,
+          root: <RootComponent pathname={pathname} runtime={runtime} />,
         };
 
         return renderToReadableStream(payload, { signal });

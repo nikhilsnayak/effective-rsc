@@ -18,7 +18,6 @@
     "@rsbuild/core": "2.1.6",
     "@rsbuild/plugin-react": "2.1.0",
     "@rsbuild/plugin-tailwindcss": "2.0.3",
-    "react-server-dom-rspack": "0.1.0",
     "rsbuild-plugin-rsc": "0.1.1",
     "rsc-html-stream": "0.0.8"
   },
@@ -30,12 +29,14 @@
     "effect": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
+    "react-server-dom-rspack": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
   "peerDependencies": {
     "effect": "catalog:",
     "react": "catalog:",
-    "react-dom": "catalog:"
+    "react-dom": "catalog:",
+    "react-server-dom-rspack": "catalog:"
   }
 }

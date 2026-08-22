@@ -8,11 +8,23 @@ class ShellTitle extends Context.Service<ShellTitle, { readonly value: string }>
 ) {}
 
 describe('Layout.make', () => {
+  it('rejects duplicate and explicitly declared children slots', () => {
+    const render = () => Effect.succeed(<main />);
+
+    expect(() => Layout.make({ slots: ['children'], render })).toThrowError(
+      'Layout slot "children" is implicit',
+    );
+    expect(() => Layout.make({ slots: ['sidebar', 'sidebar'], render })).toThrowError(
+      'Layout slot "sidebar" is declared more than once.',
+    );
+  });
+
   it.effect('runs an Effect.fnUntraced operation with children and request services', () =>
     Effect.gen(function* () {
       const runtime = yield* FiberSet.makeRuntimePromise<ShellTitle>();
-      const LayoutComponent = Layout.make(
-        Effect.fnUntraced(function* ({ children }: LayoutProps) {
+      const LayoutComponent = Layout.make({
+        slots: [],
+        render: Effect.fnUntraced(function* ({ children }: LayoutProps) {
           const title = yield* ShellTitle;
           return (
             <html lang='en'>
@@ -23,7 +35,7 @@ describe('Layout.make', () => {
             </html>
           );
         }),
-      );
+      });
 
       const rendered = yield* Effect.promise(() =>
         Promise.resolve(LayoutComponent({ children: <main>Home</main>, runtime })),
@@ -48,12 +60,13 @@ describe('Layout.make', () => {
       const started = yield* Deferred.make<void>();
       const interrupted = yield* Ref.make(false);
       const runtime = yield* FiberSet.makeRuntimePromise<never>().pipe(Scope.provide(scope));
-      const LayoutComponent = Layout.make(
-        Effect.fnUntraced(function* (_props: LayoutProps) {
+      const LayoutComponent = Layout.make({
+        slots: [],
+        render: Effect.fnUntraced(function* (_props: LayoutProps) {
           yield* Deferred.succeed(started, void 0);
           return yield* Effect.never.pipe(Effect.onInterrupt(() => Ref.set(interrupted, true)));
         }),
-      );
+      });
       const execution = Promise.resolve(LayoutComponent({ children: null, runtime })).then(
         () => 'completed' as const,
         () => 'interrupted' as const,

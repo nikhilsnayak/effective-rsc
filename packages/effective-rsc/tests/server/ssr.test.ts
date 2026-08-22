@@ -9,7 +9,7 @@ import { HtmlRenderer } from '../../src/server/html-renderer';
 import { ServerConfig } from '../../src/server/server-config';
 
 const formState = Symbol('formState') as unknown as ReactFormState;
-const clientBootstrapScripts = ['/assets/runtime.js', '/assets/main.js'];
+const clientBootstrapScripts = ['/_ersc/assets/runtime.js', '/_ersc/assets/main.js'];
 let renderOptions: RenderToReadableStreamOptions | undefined;
 let renderedRoot: ReactNode;
 
@@ -57,7 +57,7 @@ describe('HtmlRenderer', () => {
       const resources = Children.toArray(renderedRoot.props.children);
       expect(resources[0]).toMatchObject({
         props: {
-          href: '/assets/main.css',
+          href: '/_ersc/assets/main.css',
           precedence: 'default',
           rel: 'stylesheet',
         },
@@ -72,7 +72,7 @@ describe('HtmlRenderer', () => {
         ServerConfig.of({
           clientAssetsRoot: '/tmp/effective-rsc-client',
           clientBootstrapScripts,
-          clientStylesheets: ['/assets/main.css'],
+          clientStylesheets: ['/_ersc/assets/main.css'],
           hostname: 'localhost',
           port: 18193,
         }),

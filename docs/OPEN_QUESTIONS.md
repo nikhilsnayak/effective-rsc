@@ -32,9 +32,23 @@ Fizz and `hydrateRoot` both need that state after a progressively enhanced form 
 a value carried by React Flight, not a replacement transport. Additional navigation or Server
 Function metadata remains open.
 
+The static-route checkpoint registers every declared literal path directly with Effect's HTTP
+router and renders its Page plus exact named Slot record through the inherited root Layout. Service
+requirements are inferred across the Layout, every Page, and every non-empty Slot. This establishes
+multiple HTML and Flight destinations without choosing the still-open dynamic-parameter schema.
+
+The parallel-rendering checkpoint resolves the nested representation as an n-ary tree with named
+slots. The primary Page is the implicit `children` branch; `Slot.make` defines additional named
+parallel branches declared by `Layout.make`, and `null` records an intentionally empty branch.
+Layout, Page, and Slot concerns are independent values in one native Flight model, and a
+framework-owned `RouteOutlet` Client Component recursively stitches each child node into its
+declared outlet. The whole matched tree still travels in one Flight response under D-005; partial
+segment requests remain a later decision.
+
 ## Later milestones
 
-1. The `Application.make` route API for Effect Schema decoding of path and search parameters.
+1. Dynamic path matching and the `Application.make` API for Effect Schema decoding of path and
+   search parameters.
 2. Typed `Link` and imperative navigation syntax.
 3. Error-channel mapping between expected Effect failures, `ErrorBoundary`, `NotFound`, redirects,
    and unexpected defects.
@@ -43,5 +57,3 @@ Function metadata remains open.
 5. Development-server orchestration, RSC-aware HMR, and route-declaration diagnostics.
 6. Prefetch policy, cache lifetime, invalidation, and React Activity integration.
 7. The exact scope of Fragment refs and View Transition types exposed by the client router.
-8. Whether matched nested route concerns are serialized as a stack with recursive placeholders or
-   as an n-ary structure so layouts and pages begin rendering in parallel without data waterfalls.

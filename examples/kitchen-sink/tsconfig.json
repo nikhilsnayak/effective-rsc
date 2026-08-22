@@ -2,7 +2,10 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "jsx": "react-jsx",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
     "types": ["bun"]
   },
-  "include": ["src", "tests"]
+  "include": ["e2e", "playwright.config.ts", "src", "tests"]
 }

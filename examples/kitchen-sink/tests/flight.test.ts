@@ -6,7 +6,7 @@ import { access } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
 
-import { describe, expect, layer } from '@effect/vitest';
+import { describe, expect, it, layer } from '@effect/vitest';
 import { Context, Effect, Layer, Schema, Stream } from 'effect';
 import { FetchHttpClient, HttpClient } from 'effect/unstable/http';
 
@@ -30,6 +30,15 @@ const requestText = Effect.fnUntraced(function* (
 
   return { body, response } as const;
 });
+
+const readRenderTimestamp = (html: string, attribute: string) => {
+  const value = html.match(new RegExp(`${attribute}="(\\d+)"`))?.[1];
+  if (value === undefined) {
+    throw new Error(`Expected rendered HTML to contain ${attribute}.`);
+  }
+
+  return Number(value);
+};
 
 const assertApplicationPortAvailable = Effect.callback<void, IntegrationError>((resume) => {
   const probe = createServer();
@@ -78,6 +87,45 @@ type ApplicationProcess = {
 
 const hasExited = ({ child }: ApplicationProcess) =>
   child.exitCode !== null || child.signalCode !== null;
+
+const waitForApplicationExit = ({ child, spawnError }: ApplicationProcess) =>
+  Effect.callback<number | null, IntegrationError>((resume) => {
+    let completed = false;
+    const cleanup = () => {
+      child.off('error', onError);
+      child.off('exit', onExit);
+    };
+    const complete = (effect: Effect.Effect<number | null, IntegrationError>) => {
+      if (completed) {
+        return;
+      }
+      completed = true;
+      cleanup();
+      resume(effect);
+    };
+    const onError = (cause: unknown) =>
+      complete(
+        Effect.fail(
+          new IntegrationError({
+            message: 'Failed to launch the application process.',
+            cause,
+          }),
+        ),
+      );
+    const onExit = (code: number | null) => complete(Effect.succeed(code));
+
+    child.once('error', onError);
+    child.once('exit', onExit);
+
+    const initialSpawnError = spawnError();
+    if (initialSpawnError !== undefined) {
+      onError(initialSpawnError);
+    } else if (child.exitCode !== null || child.signalCode !== null) {
+      onExit(child.exitCode);
+    }
+
+    return Effect.sync(cleanup);
+  });
 
 const spawnApplication = (command: 'build' | 'dev' | 'start', captureOutput = false) =>
   Effect.try({
@@ -192,29 +240,7 @@ const runBuild = Effect.scoped(
     const process = yield* Effect.acquireRelease(spawnApplication('build', true), (process) =>
       stopApplication(process).pipe(Effect.orDie),
     );
-    let exitCode = process.child.exitCode;
-    if (!hasExited(process)) {
-      exitCode = yield* Effect.callback<number | null, IntegrationError>((resume) => {
-        const onError = (cause: unknown) =>
-          resume(
-            Effect.fail(
-              new IntegrationError({
-                message: 'Failed to launch ersc build.',
-                cause,
-              }),
-            ),
-          );
-        const onExit = (code: number | null) => resume(Effect.succeed(code));
-
-        process.child.once('error', onError);
-        process.child.once('exit', onExit);
-
-        return Effect.sync(() => {
-          process.child.off('error', onError);
-          process.child.off('exit', onExit);
-        });
-      });
-    }
+    const exitCode = yield* waitForApplicationExit(process);
 
     if (exitCode !== 0) {
       return yield* new IntegrationError({
@@ -231,7 +257,7 @@ class ProductionFixture extends Context.Service<
     readonly flight: string;
     readonly html: string;
   }
->()('effective-rsc/examples/basic/tests/ProductionFixture') {
+>()('effective-rsc/examples/kitchen-sink/tests/ProductionFixture') {
   static readonly layer = Layer.effect(
     this,
     Effect.gen(function* () {
@@ -239,10 +265,10 @@ class ProductionFixture extends Context.Service<
       const process = yield* acquireApplication('start');
       yield* waitForServer(process, 'start');
 
-      const [flightResponse, htmlResponse] = yield* Effect.all(
-        [requestText(serverUrl, { accept: 'text/x-component' }), requestText(serverUrl)],
-        { concurrency: 'unbounded' },
-      );
+      const flightResponse = yield* requestText(serverUrl, {
+        accept: 'text/x-component',
+      }).pipe(Effect.timeout('3 seconds'));
+      const htmlResponse = yield* requestText(serverUrl);
 
       return ProductionFixture.of({
         flight: flightResponse.body,
@@ -252,22 +278,7 @@ class ProductionFixture extends Context.Service<
   );
 }
 
-class DevFixture extends Context.Service<DevFixture, ApplicationProcess>()(
-  'effective-rsc/examples/basic/tests/DevFixture',
-) {
-  static readonly layer = Layer.effect(
-    this,
-    Effect.gen(function* () {
-      yield* assertApplicationPortAvailable;
-      const process = yield* acquireApplication('dev', true);
-      yield* waitForServer(process, 'dev');
-      return DevFixture.of(process);
-    }).pipe(Effect.provide(FetchHttpClient.layer)),
-  );
-}
-
 const ProductionTestLayer = Layer.merge(ProductionFixture.layer, FetchHttpClient.layer);
-const DevTestLayer = Layer.merge(DevFixture.layer, FetchHttpClient.layer);
 
 describe.sequential('Rspack RSC integration', () => {
   layer(ProductionTestLayer, { excludeTestServices: true, timeout: '20 seconds' })(
@@ -277,9 +288,9 @@ describe.sequential('Rspack RSC integration', () => {
         Effect.gen(function* () {
           const { flight } = yield* ProductionFixture;
 
-          expect(flight).toContain('effective-rsc compiler probe');
-          expect(flight).toContain('This text was rendered by a Server Component.');
-          expect(flight).toContain('Hello from an application Effect service.');
+          expect(flight).toContain('Saturday schedule');
+          expect(flight).toContain('Server Components from first principles');
+          expect(flight).toContain('Your agenda');
           expect(flight).toContain('"formState":null');
           expect(flight).toContain('"root"');
           expect(flight).toContain('"html"');
@@ -287,16 +298,38 @@ describe.sequential('Rspack RSC integration', () => {
         }),
       );
 
-      it.effect('serializes the client component as a native Flight import', () =>
+      it.effect('runs the independent conference queries concurrently', () =>
+        Effect.gen(function* () {
+          const { html } = yield* ProductionFixture;
+          const latestStart = Math.max(
+            readRenderTimestamp(html, 'data-conference-started-at'),
+            readRenderTimestamp(html, 'data-schedule-started-at'),
+            readRenderTimestamp(html, 'data-navigation-started-at'),
+            readRenderTimestamp(html, 'data-agenda-started-at'),
+          );
+          const earliestCompletion = Math.min(
+            readRenderTimestamp(html, 'data-conference-completed-at'),
+            readRenderTimestamp(html, 'data-schedule-completed-at'),
+            readRenderTimestamp(html, 'data-navigation-completed-at'),
+            readRenderTimestamp(html, 'data-agenda-completed-at'),
+          );
+
+          expect(latestStart).toBeLessThan(earliestCompletion);
+        }),
+      );
+
+      it.effect('serializes the route-tree Client Components as native Flight imports', () =>
         Effect.gen(function* () {
           const { flight } = yield* ProductionFixture;
           const importRows = flight
             .split('\n')
             .filter((row) => /^[0-9a-f]+:I/.test(row))
             .map((row) => JSON.parse(row.slice(row.indexOf(':I') + 2)) as unknown);
+          const serializedImports = importRows.map((row) => JSON.stringify(row));
 
           expect(importRows.length).toBeGreaterThan(0);
-          expect(importRows.some((row) => JSON.stringify(row).includes('Counter'))).toBe(true);
+          expect(serializedImports.some((row) => row.includes('RouteTree'))).toBe(true);
+          expect(serializedImports.some((row) => row.includes('RouteOutlet'))).toBe(true);
         }),
       );
 
@@ -308,9 +341,48 @@ describe.sequential('Rspack RSC integration', () => {
 
           expect(response.status).toBe(200);
           expect(response.headers['content-type']).toBe('text/x-component;charset=utf-8');
-          expect(body).toContain('effective-rsc compiler probe');
-          expect(body).toContain('Hello from an application Effect service.');
+          expect(body).toContain('Saturday schedule');
+          expect(body).toContain('Server Components from first principles');
+          expect(body).toContain('Your agenda');
           expect(body).toMatch(/^[0-9a-f]+:I/m);
+        }),
+      );
+
+      it.effect('renders an additional static route through HTML and Flight', () =>
+        Effect.gen(function* () {
+          const [htmlResponse, flightResponse] = yield* Effect.all(
+            [
+              requestText(`${serverUrl}/schedule/day-two?source=integration`),
+              requestText(`${serverUrl}/schedule/day-two`, { accept: 'text/x-component' }),
+            ],
+            { concurrency: 'unbounded' },
+          );
+
+          expect(htmlResponse.response.status).toBe(200);
+          expect(htmlResponse.body).toContain('<title>Converge 2026 — Conference schedule</title>');
+          expect(htmlResponse.body).toMatch(/<h1[^>]*>Sunday schedule<\/h1>/);
+          expect(htmlResponse.body).toContain('Mutation protocols that compose');
+          expect(htmlResponse.body).not.toMatch(/<h1[^>]*>Saturday schedule<\/h1>/);
+          expect(flightResponse.response.status).toBe(200);
+          expect(flightResponse.body).toContain('Sunday schedule');
+          expect(flightResponse.body).toContain('"formState":null');
+        }),
+      );
+
+      it.effect('returns the native HTTP router 404 for an unknown path', () =>
+        Effect.gen(function* () {
+          const [htmlResponse, flightResponse] = yield* Effect.all(
+            [
+              requestText(`${serverUrl}/missing`),
+              requestText(`${serverUrl}/missing`, { accept: 'text/x-component' }),
+            ],
+            { concurrency: 'unbounded' },
+          );
+
+          expect(htmlResponse.response.status).toBe(404);
+          expect(htmlResponse.body).toBe('');
+          expect(flightResponse.response.status).toBe(404);
+          expect(flightResponse.body).toBe('');
         }),
       );
 
@@ -322,13 +394,15 @@ describe.sequential('Rspack RSC integration', () => {
           expect(response.headers['content-type']).toBe('text/html;charset=utf-8');
           expect(body.startsWith('<!DOCTYPE html>')).toBe(true);
           expect(body).toMatch(/<html[^>]* lang="en"[^>]*>/);
-          expect(body).toContain('<title>effective-rsc</title>');
-          expect(body).toContain('Loading root route...');
-          expect(body).toMatch(/<h1[^>]*>effective-rsc compiler probe<\/h1>/);
-          expect(body).toContain('Hello from an application Effect service.');
-          expect(body).toMatch(/<button[^>]+>Count: <!-- -->1<\/button>/);
-          expect(body).toMatch(/<head><link rel="stylesheet" href="\/assets\/[^"]+\.css"/);
-          expect(body).toContain('<script src="/assets/main.js"');
+          expect(body).toContain('<title>Converge 2026 — Conference schedule</title>');
+          expect(body).toContain('Loading conference schedule...');
+          expect(body).toMatch(/<h1[^>]*>Saturday schedule<\/h1>/);
+          expect(body).toContain('Server Components from first principles');
+          expect(body).toContain('data-slot="card"');
+          expect(body).toContain('data-slot="badge"');
+          expect(body).toContain('data-slot="button"');
+          expect(body).toMatch(/<head><link rel="stylesheet" href="\/_ersc\/assets\/[^"]+\.css"/);
+          expect(body).toContain('<script src="/_ersc/assets/main.js"');
           expect(body).toContain('self.__FLIGHT_DATA');
           expect(body).not.toContain('effective-rsc-root');
         }),
@@ -365,16 +439,16 @@ describe.sequential('Rspack RSC integration', () => {
                 const prefix = state.prefix + chunk;
                 return {
                   found:
-                    prefix.includes('Loading root route...') ||
-                    prefix.includes('effective-rsc compiler probe'),
+                    prefix.includes('Loading conference schedule...') ||
+                    /<h1[^>]*>Saturday schedule<\/h1>/.test(prefix),
                   prefix,
                 };
               },
             ),
           );
 
-          expect(observed.prefix).toContain('Loading root route...');
-          expect(observed.prefix).not.toContain('effective-rsc compiler probe');
+          expect(observed.prefix).toContain('Loading conference schedule...');
+          expect(observed.prefix).not.toMatch(/<h1[^>]*>Saturday schedule<\/h1>/);
         }),
       );
 
@@ -388,7 +462,7 @@ describe.sequential('Rspack RSC integration', () => {
             .filter((chunk): chunk is string => typeof chunk === 'string')
             .join('');
 
-          expect(embeddedFlight).toContain('effective-rsc compiler probe');
+          expect(embeddedFlight).toContain('Saturday schedule');
           expect(embeddedFlight).toMatch(/^[0-9a-f]+:I/m);
         }),
       );
@@ -402,9 +476,9 @@ describe.sequential('Rspack RSC integration', () => {
           );
 
           expect(clientChunk).toBeDefined();
-          expect(bootstrapScripts).toContain('/assets/main.js');
+          expect(bootstrapScripts).toContain('/_ersc/assets/main.js');
           expect(bootstrapScripts.length).toBeGreaterThan(1);
-          const assetPaths = new Set([...bootstrapScripts, `/assets/${clientChunk}`]);
+          const assetPaths = new Set([...bootstrapScripts, `/_ersc/assets/${clientChunk}`]);
           const responses = yield* Effect.all(
             [...assetPaths].map((assetPath) => requestText(`${serverUrl}${assetPath}`)),
             { concurrency: 'unbounded' },
@@ -422,58 +496,58 @@ describe.sequential('Rspack RSC integration', () => {
         Effect.gen(function* () {
           const { html } = yield* ProductionFixture;
 
-          expect(html).toContain('Loading root route...');
-          expect(html).toMatch(/<h1[^>]*>effective-rsc compiler probe<\/h1>/);
-          expect(html).toContain('Hello from an application Effect service.');
-          expect(html).toMatch(/<button[^>]+>Count: <!-- -->1<\/button>/);
+          expect(html).toContain('Loading conference schedule...');
+          expect(html).toMatch(/<h1[^>]*>Saturday schedule<\/h1>/);
+          expect(html).toContain('Server Components from first principles');
+          expect(html).toContain('Your agenda');
         }),
       );
     },
   );
 
-  layer(DevTestLayer, { excludeTestServices: true, timeout: '20 seconds' })(
-    'development server',
-    (it) => {
-      it.effect('stays live while a separate production compiler builds the application', () =>
-        Effect.gen(function* () {
-          const devProcess = yield* DevFixture;
-          const generatedEntryExists = yield* Effect.tryPromise({
-            try: () =>
-              access(generatedEntryPath).then(
-                () => true,
-                (cause: NodeJS.ErrnoException) => {
-                  if (cause.code === 'ENOENT') {
-                    return false;
-                  }
-                  throw cause;
-                },
-              ),
-            catch: (cause) =>
-              new IntegrationError({
-                message: 'Failed to inspect the retired generated RSC entry.',
-                cause,
-              }),
-          });
+  it.live(
+    'keeps the development server live while a separate production compiler builds the application',
+    () =>
+      Effect.gen(function* () {
+        yield* assertApplicationPortAvailable;
+        const devProcess = yield* acquireApplication('dev', true);
+        yield* waitForServer(devProcess, 'dev');
+        const generatedEntryExists = yield* Effect.tryPromise({
+          try: () =>
+            access(generatedEntryPath).then(
+              () => true,
+              (cause: NodeJS.ErrnoException) => {
+                if (cause.code === 'ENOENT') {
+                  return false;
+                }
+                throw cause;
+              },
+            ),
+          catch: (cause) =>
+            new IntegrationError({
+              message: 'Failed to inspect the retired generated RSC entry.',
+              cause,
+            }),
+        });
 
-          expect(generatedEntryExists).toBe(false);
-          yield* runBuild;
-          yield* Effect.sleep('200 millis');
+        expect(generatedEntryExists).toBe(false);
+        yield* runBuild;
+        yield* Effect.sleep('200 millis');
 
-          expect(hasExited(devProcess)).toBe(false);
-          expect(devProcess.output()).not.toContain('building removed .ersc/entries/rsc.ts');
-          expect(devProcess.output()).not.toContain('Module not found');
+        expect(hasExited(devProcess)).toBe(false);
+        expect(devProcess.output()).not.toContain('building removed .ersc/entries/rsc.ts');
+        expect(devProcess.output()).not.toContain('Module not found');
 
-          const [htmlResponse, flightResponse] = yield* Effect.all(
-            [requestText(serverUrl), requestText(serverUrl, { accept: 'text/x-component' })],
-            { concurrency: 'unbounded' },
-          );
+        const [htmlResponse, flightResponse] = yield* Effect.all(
+          [requestText(serverUrl), requestText(serverUrl, { accept: 'text/x-component' })],
+          { concurrency: 'unbounded' },
+        );
 
-          expect(htmlResponse.response.status).toBe(200);
-          expect(htmlResponse.body).toContain('effective-rsc compiler probe');
-          expect(flightResponse.response.status).toBe(200);
-          expect(flightResponse.body).toMatch(/^[0-9a-f]+:I/m);
-        }),
-      );
-    },
+        expect(htmlResponse.response.status).toBe(200);
+        expect(htmlResponse.body).toContain('Saturday schedule');
+        expect(flightResponse.response.status).toBe(200);
+        expect(flightResponse.body).toMatch(/^[0-9a-f]+:I/m);
+      }).pipe(Effect.provide(FetchHttpClient.layer)),
+    20_000,
   );
 });

@@ -22,7 +22,7 @@ export type LoadServerBundle = () => Promise<unknown>;
 
 type DevServerCompile = (loadServerBundle: LoadServerBundle) => Promise<void>;
 
-const FrameworkAssetPrefix = '/assets/';
+const FrameworkAssetPrefix = '/_ersc/assets/';
 const ApplicationEntrySpecifier = 'effective-rsc/application-entry';
 const ApplicationStylesheetSpecifier = 'effective-rsc/application-stylesheet';
 

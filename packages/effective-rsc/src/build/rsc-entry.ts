@@ -8,6 +8,7 @@ import { Application } from '../server/application';
 export const ApplicationRoot = App.component;
 const CompiledApplication = {
   component: ApplicationRoot,
+  paths: App.paths,
   servicesLayer: App.servicesLayer,
 };
 

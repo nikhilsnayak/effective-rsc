@@ -13,6 +13,10 @@
     "test": {
       "dependsOn": ["build"]
     },
+    "test:e2e": {
+      "dependsOn": ["build"],
+      "cache": false
+    },
     "test:watch": {
       "cache": false,
       "persistent": true

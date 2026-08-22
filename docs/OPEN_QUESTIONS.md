@@ -13,6 +13,11 @@ and decision register when the relevant vertical slice provides evidence.
 3. How should an SSR failure be represented before headers are committed, and what diagnostic is
    emitted if failure happens after streaming begins?
 4. Which development diagnostics prove that a `Loading.make` renderer attempted to suspend?
+5. Should `ServerFn.make` become a genuinely async function through a private request-local Effect
+   runner, or remain a framework-only Effect-returning intrinsic that cannot be invoked directly on
+   the server?
+6. How should Effect services required only by `ServerFn.make` handlers join the service union
+   enforced by `Application.make`?
 
 Current evidence: the HTTP negotiation checkpoint keeps pre-header HTML rendering failures as a
 typed `HtmlRenderError` in Effect. Mapping that failure to a framework response, and diagnosing
@@ -31,6 +36,16 @@ small serialized model containing the complete document root and React's opaque 
 Fizz and `hydrateRoot` both need that state after a progressively enhanced form submission. This is
 a value carried by React Flight, not a replacement transport. Additional navigation or Server
 Function metadata remains open.
+
+The Server Function checkpoint is intentionally Working. A named `ServerFn.make` reference imported
+directly by a Client Component proves hydrated invocation and whole-tree refresh without replacing
+React's protocol. The progressive form path executes the mutation but its full-document response
+does not yet complete. Server-side binding of that factory-created named export is waiting on
+Rspack's server-layer metadata fix, while inline lexical capture is waiting on matching bound-argument
+helper exports between the pinned Rspack and RSDR releases. Local aliases and export-shape workarounds
+are not evidence and are not retained. Independently of those upstream blockers, the
+Promise-versus-Effect contract and action-only service inference in questions 5 and 6 must be
+resolved before `ServerFn.make` is considered complete.
 
 The static-route checkpoint registers every declared literal path directly with Effect's HTTP
 router and renders its Page plus exact named Slot record through the inherited root Layout. Service

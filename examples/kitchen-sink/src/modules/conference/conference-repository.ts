@@ -1,4 +1,4 @@
-import { Clock, Context, Duration, Effect, Layer } from 'effect';
+import { Clock, Context, Duration, Effect, Layer, MutableRef } from 'effect';
 
 export type ConferenceDay = 'saturday' | 'sunday';
 
@@ -15,6 +15,7 @@ export type Session = {
   readonly description: string;
   readonly endsAt: string;
   readonly id: string;
+  readonly isInAgenda: boolean;
   readonly room: string;
   readonly speaker: string;
   readonly speakerRole: string;
@@ -28,6 +29,12 @@ export type Schedule = {
   readonly day: ConferenceDay;
   readonly label: string;
   readonly sessions: ReadonlyArray<Session>;
+};
+
+type SessionDefinition = Omit<Session, 'isInAgenda'>;
+
+type ScheduleDefinition = Omit<Schedule, 'sessions'> & {
+  readonly sessions: ReadonlyArray<SessionDefinition>;
 };
 
 export type AgendaItem = Pick<Session, 'endsAt' | 'id' | 'room' | 'startsAt' | 'title'> & {
@@ -168,41 +175,86 @@ const schedules = {
       },
     ],
   },
-} as const satisfies Record<ConferenceDay, Schedule>;
+} as const satisfies Record<ConferenceDay, ScheduleDefinition>;
 
 const navigation = [
   { day: 'saturday', href: '/', label: 'Saturday', shortDate: '22 Aug' },
   { day: 'sunday', href: '/schedule/day-two', label: 'Sunday', shortDate: '23 Aug' },
 ] as const satisfies ReadonlyArray<NavigationItem>;
 
-const agenda = [
-  {
-    dayLabel: 'Saturday',
-    endsAt: '10:15',
-    id: 'server-components-from-first-principles',
-    room: 'Auditorium',
-    startsAt: '09:30',
-    title: 'Server Components from first principles',
-  },
-  {
-    dayLabel: 'Sunday',
-    endsAt: '11:30',
-    id: 'mutation-protocols-that-compose',
-    room: 'Studio',
-    startsAt: '10:45',
-    title: 'Mutation protocols that compose',
-  },
-] as const satisfies ReadonlyArray<AgendaItem>;
+const initialAgenda = new Set([
+  'server-components-from-first-principles',
+  'mutation-protocols-that-compose',
+]);
+const selectedSessionIds = MutableRef.make<ReadonlySet<string>>(initialAgenda);
+
+const sessionById: ReadonlyMap<
+  string,
+  { readonly dayLabel: string; readonly session: SessionDefinition }
+> = new Map(
+  Object.values(schedules).flatMap((schedule) =>
+    schedule.sessions.map(
+      (session) => [session.id, { dayLabel: schedule.label, session }] as const,
+    ),
+  ),
+);
 
 export class ConferenceRepository extends Context.Service<ConferenceRepository>()(
   '@effective-rsc/example-kitchen-sink/conference/ConferenceRepository',
   {
     make: Effect.succeed({
-      agenda: query({ latency: '130 millis', value: agenda }),
+      agenda: Effect.sync(() => MutableRef.get(selectedSessionIds)).pipe(
+        Effect.flatMap((selectedIds) => {
+          const items: Array<AgendaItem> = [];
+          for (const [sessionId, { dayLabel, session }] of sessionById) {
+            if (selectedIds.has(sessionId)) {
+              items.push({
+                dayLabel,
+                endsAt: session.endsAt,
+                id: session.id,
+                room: session.room,
+                startsAt: session.startsAt,
+                title: session.title,
+              });
+            }
+          }
+
+          return query({ latency: '130 millis', value: items });
+        }),
+      ),
       conference: query({ latency: '80 millis', value: conference }),
       navigation: query({ latency: '90 millis', value: navigation }),
       schedule: Effect.fn('ConferenceRepository.schedule')(function* (day: ConferenceDay) {
-        return yield* query({ latency: '220 millis', value: schedules[day] });
+        const selectedIds = MutableRef.get(selectedSessionIds);
+        const definition = schedules[day];
+        const value: Schedule = {
+          ...definition,
+          sessions: definition.sessions.map((session) => ({
+            ...session,
+            isInAgenda: selectedIds.has(session.id),
+          })),
+        };
+
+        return yield* query({ latency: '220 millis', value });
+      }),
+      toggleAgenda: Effect.fn('ConferenceRepository.toggleAgenda')(function* (sessionId: string) {
+        if (!sessionById.has(sessionId)) {
+          return null;
+        }
+
+        return yield* Effect.sync(() => {
+          const selectedIds = MutableRef.get(selectedSessionIds);
+          const nextSelectedIds = new Set(selectedIds);
+          const selected = !nextSelectedIds.has(sessionId);
+          if (selected) {
+            nextSelectedIds.add(sessionId);
+          } else {
+            nextSelectedIds.delete(sessionId);
+          }
+
+          MutableRef.set(selectedSessionIds, nextSelectedIds);
+          return { selected };
+        });
       }),
     }),
   },

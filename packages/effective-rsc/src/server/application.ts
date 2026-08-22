@@ -12,6 +12,7 @@ import type { FlightPayload } from '../rsc/flight';
 import { FlightRenderer } from './flight';
 import { HtmlRenderer } from './html-renderer';
 import { ServerConfig } from './server-config';
+import { handleServerFnRequest, ServerFnRequestError } from './server-fn';
 import { HtmlRendererLayer } from './ssr';
 
 const FlightMediaType = 'text/x-component';
@@ -49,41 +50,71 @@ const httpLayer = <Services, ApplicationError>(
   const render = Effect.fnUntraced(function* (
     request: HttpServerRequest.HttpServerRequest,
     pathname: `/${string}`,
+    options: {
+      readonly formState: FlightPayload['formState'];
+      readonly serverFnResult: FlightPayload['serverFnResult'];
+      readonly status: number;
+      readonly temporaryReferences?: import('./flight').TemporaryReferenceSet;
+    },
   ) {
-    const formState: FlightPayload['formState'] = null;
     const flightRenderer = yield* FlightRenderer;
     const flightStream = yield* flightRenderer.render({
       component: application.component,
-      formState,
+      formState: options.formState,
       pathname,
+      serverFnResult: options.serverFnResult,
+      temporaryReferences: options.temporaryReferences,
     });
 
     if (request.headers['accept']?.includes(FlightMediaType)) {
       return HttpServerResponse.stream(fromWebStream(flightStream), {
         contentType: `${FlightMediaType};charset=utf-8`,
+        status: options.status,
       });
     }
 
     const htmlRenderer = yield* HtmlRenderer;
-    const htmlStream = yield* htmlRenderer.render({ flightStream, formState });
+    const htmlStream = yield* htmlRenderer.render({
+      flightStream,
+      formState: options.formState,
+    });
 
     return HttpServerResponse.stream(fromWebStream(htmlStream), {
       contentType: 'text/html;charset=utf-8',
+      status: options.status,
     });
   });
 
   const RequestLayer = Layer.mergeAll(RenderersLayer, application.servicesLayer);
-  const UiRoutesLayer = Layer.effectDiscard(
+  const ApplicationRoutesLayer = Layer.effectDiscard(
     Effect.gen(function* () {
       const router = yield* HttpRouter.HttpRouter;
 
       for (const pathname of application.paths) {
-        yield* router.add('GET', pathname, (request) => render(request, pathname));
+        yield* router.add('GET', pathname, (request) =>
+          render(request, pathname, {
+            formState: null,
+            serverFnResult: null,
+            status: 200,
+          }),
+        );
+        yield* router.add('POST', pathname, (request) =>
+          handleServerFnRequest<Services>(request).pipe(
+            Effect.flatMap((result) => render(request, pathname, result)),
+            Effect.catchTag('ServerFnRequestError', (error: ServerFnRequestError) =>
+              Effect.succeed(
+                HttpServerResponse.text(error.message, {
+                  status: error.status,
+                }),
+              ),
+            ),
+          ),
+        );
       }
     }),
   );
 
-  return Layer.mergeAll(UiRoutesLayer, StaticAssetsLayer).pipe(
+  return Layer.mergeAll(ApplicationRoutesLayer, StaticAssetsLayer).pipe(
     HttpRouter.provideRequest(RequestLayer),
   );
 };

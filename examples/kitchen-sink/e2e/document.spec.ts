@@ -1,0 +1,50 @@
+// oxlint-disable effecttsgo/async-function -- Playwright owns this Promise-based application-test boundary.
+import { expect, test } from '@playwright/test';
+
+import { getText } from './support/http';
+
+const readRenderTimestamp = (html: string, attribute: string) => {
+  const value = html.match(new RegExp(`${attribute}="(\\d+)"`))?.[1];
+  expect(value, `rendered document should contain ${attribute}`).toBeDefined();
+
+  return Number(value);
+};
+
+test('streams a complete React document with its hydration payload', async ({ request }) => {
+  const { body: html, response } = await getText(request, '/');
+
+  expect(response.status()).toBe(200);
+  expect(response.headers()['content-type']).toBe('text/html;charset=utf-8');
+  expect(html.startsWith('<!DOCTYPE html>')).toBe(true);
+  expect(html).toMatch(/<html[^>]* lang="en"[^>]*>/);
+  expect(html).toContain('<title>Converge 2026 — Conference schedule</title>');
+  expect(html).toContain('Loading conference schedule...');
+  expect(html).toMatch(/<h1[^>]*>Saturday schedule<\/h1>/);
+  expect(html).toContain('self.__FLIGHT_DATA');
+  expect(html).not.toContain('effective-rsc-root');
+});
+
+test('reveals the loading UI before the suspended schedule', async ({ page }) => {
+  await page.goto('/', { waitUntil: 'commit' });
+
+  await expect(page.getByText('Loading conference schedule...')).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Saturday schedule' })).toBeVisible();
+});
+
+test('starts independent route concerns concurrently', async ({ request }) => {
+  const { body: html } = await getText(request, '/');
+  const latestStart = Math.max(
+    readRenderTimestamp(html, 'data-conference-started-at'),
+    readRenderTimestamp(html, 'data-schedule-started-at'),
+    readRenderTimestamp(html, 'data-navigation-started-at'),
+    readRenderTimestamp(html, 'data-agenda-started-at'),
+  );
+  const earliestCompletion = Math.min(
+    readRenderTimestamp(html, 'data-conference-completed-at'),
+    readRenderTimestamp(html, 'data-schedule-completed-at'),
+    readRenderTimestamp(html, 'data-navigation-completed-at'),
+    readRenderTimestamp(html, 'data-agenda-completed-at'),
+  );
+
+  expect(latestStart).toBeLessThan(earliestCompletion);
+});

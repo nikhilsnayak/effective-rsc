@@ -3,7 +3,8 @@ import { Page } from 'effective-rsc';
 import { ArrowRight, CalendarDays, MapPin } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import {
   ConferenceRepository,
   type ConferenceDay,
@@ -53,18 +54,14 @@ const makeSchedulePage = (day: ConferenceDay) =>
           </section>
 
           <footer className='flex justify-end border-t pt-6'>
-            <Button
-              render={
-                <a
-                  aria-label={nextDay ? 'See Sunday' : 'Back to Saturday'}
-                  href={nextDay ? '/schedule/day-two' : '/'}
-                />
-              }
-              variant='outline'
+            <a
+              aria-label={nextDay ? 'See Sunday' : 'Back to Saturday'}
+              className={cn(buttonVariants({ variant: 'outline' }))}
+              href={nextDay ? '/schedule/day-two' : '/'}
             >
               {nextDay ? 'See Sunday' : 'Back to Saturday'}
               <ArrowRight aria-hidden='true' />
-            </Button>
+            </a>
           </footer>
         </main>
       );

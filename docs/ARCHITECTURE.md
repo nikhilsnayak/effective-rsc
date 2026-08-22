@@ -183,6 +183,56 @@ Navigation API event
 Navigation state and prefetch work have explicit lifetimes. The client router does not patch anchor
 clicks or the History API as a fallback.
 
+## Server Functions — Working
+
+Effective-rsc uses React's Server Function protocol for UI-coupled mutations. The framework owns
+the Effect execution boundary and whole-tree refresh, but React and RSDR continue to own server
+references, argument encoding, temporary references, form decoding, form state, and Flight.
+`unstable/RPC` does not replace this path.
+
+The current vertical slice has three distinct authoring shapes. Only the first is supported by the
+pinned, unmodified toolchain:
+
+| Authoring shape                                                                                              | Current evidence                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A named `ServerFn.make` export imported and bound by a Client Component                                      | Working for hydrated calls.                                                                                                                                                                                           |
+| A named `ServerFn.make` export imported by a Server Component, bound there, and passed to a Client Component | Blocked because the pinned Rspack server transform omits factory-created named exports from its server-layer action metadata. The upstream fix is [rspack#15298](https://github.com/web-infra-dev/rspack/pull/15298). |
+| An inline native Server Function with compiler-captured lexical values                                       | Blocked because the pinned Rspack transform imports `encryptActionBoundArgs` and `decryptActionBoundArgs`, while RSDR 0.1.0 exports the corresponding helpers with `Server` in their names.                           |
+
+Local default-export, compiler-alias, and RSDR-export-renaming workarounds are deliberately excluded.
+They made isolated demonstrations pass without proving the intended native contract. The blocked
+integration coverage should return only after compatible upstream releases make it pass unchanged.
+
+The working request path decodes the native reply or form action, loads the native server reference,
+executes its result inside the Effect HTTP request, rerenders the complete route, and returns native
+Flight. The browser callback uses a scoped `FiberSet.makeRuntimePromise` runner because RSDR's
+`callServer` boundary requires a Promise. That runner is owned by the browser runtime scope rather
+than detached from it.
+
+The progressive form path reaches and executes the same mutation before hydration, but the resulting
+full-document stream currently does not complete and Bun eventually times out the request. Its
+Playwright coverage remains an explicit `fixme`; progressive enhancement is not yet counted as a
+working Server Function capability.
+
+The Effect-to-Server-Function bridge itself remains unfinished:
+
+- `ServerFn.make` is publicly typed as returning a Promise because that is the client-reference
+  contract, but its server implementation currently returns an Effect behind a cast. Framework-owned
+  invocation works; direct or nested server-side invocation is not yet an honest native async
+  contract.
+- Its phantom Effect service requirement is not aggregated by `Application.make`, which currently
+  infers only Layout, Page, and Slot services. A service used exclusively by a Server Function can
+  therefore be missing at runtime without a type error.
+- Effect-returning handlers inherit request services and interruption. An arbitrary native Promise
+  can be awaited by the request fiber, but its underlying work cannot be cancelled unless that
+  Promise observes an abort signal.
+- Native Promise rejection must use `Effect.tryPromise`; interruption classification must distinguish
+  interruption-only causes; decoded argument counts need a limit before invocation; and concurrent
+  client responses need ordering in the future router action queue.
+- The provisional `serverFnResult` Flight field proves that one response can carry both a refreshed
+  tree and an imperative return value. Its final success and failure representation remains the open
+  payload decision recorded in `OPEN_QUESTIONS.md`.
+
 ## Effect boundaries — Accepted
 
 - Effect is the framework core's execution model, not only a wrapper around public APIs. Compiler,
@@ -210,8 +260,8 @@ clicks or the History API as a fallback.
 - `effect/unstable/http` is the mandatory HTTP and request-lifecycle substrate.
 - `unstable/HttpApi` owns schema-driven non-UI HTTP endpoints; they are not UI route-map concerns.
 - React Server Functions own UI-coupled mutations and form behavior.
-- `ServerFn.make` validates untrusted input, runs the implementation in the request Effect runtime,
-  preserves React's native protocol, and propagates interruption.
+- `ServerFn.make` is the additive Effect and Schema authoring boundary described by the Working
+  Server Functions section. It must not replace React's transport or narrow native authoring shapes.
 - `unstable/RPC` is excluded from v0. A future version may use it only for long-lived streams,
   subscriptions, actors, or background service calls that do not imply an RSC refresh.
 
@@ -235,11 +285,11 @@ imported by application source also remain application dependencies.
 
 React, React DOM, Effect, and `react-server-dom-rspack` are shared runtimes: application source
 declares them as dependencies, while `effective-rsc` declares exact peer versions. The framework
-does not vendor, alias, or re-export those packages. `react-server-dom-rspack` is not an application
-authoring API, but its peer placement lets Rspack resolve the protocol imports injected into the
-application graph without bypassing isolated dependency boundaries. Framework-only adapters and
-compiler plugins, including the Effect Bun and browser platforms and the official Rsbuild Tailwind
-plugin, remain ordinary framework dependencies.
+does not vendor, alias, or publicly re-export them.
+`react-server-dom-rspack` is not an application authoring API, but its peer placement lets Rspack
+resolve the protocol imports injected into the application graph without bypassing isolated
+dependency boundaries. Framework-only adapters and compiler plugins, including the Effect Bun and
+browser platforms and the official Rsbuild Tailwind plugin, remain ordinary framework dependencies.
 
 The public `effective-rsc` CLI is built with `effect/unstable/cli`. It owns build and start command
 parsing, supplies Bun platform services, and delegates compilation to the private `build` module

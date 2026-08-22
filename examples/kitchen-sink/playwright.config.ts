@@ -22,7 +22,7 @@ export default defineConfig({
   webServer: {
     command: 'ersc start',
     url: applicationOrigin,
-    reuseExistingServer: false,
+    reuseExistingServer: true,
     timeout: 30_000,
     gracefulShutdown: {
       signal: 'SIGINT',

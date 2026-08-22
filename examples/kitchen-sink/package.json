@@ -7,9 +7,7 @@
     "build": "ersc build",
     "dev": "ersc dev",
     "start": "ersc start",
-    "test": "vitest run tests",
-    "test:e2e": "playwright test",
-    "test:watch": "vitest tests"
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
@@ -24,12 +22,10 @@
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
-    "@effect/vitest": "catalog:",
     "@playwright/test": "1.61.1",
     "@types/bun": "catalog:",
     "@types/react": "catalog:",
     "tailwindcss": "4.3.3",
-    "typescript": "catalog:",
-    "vitest": "catalog:"
+    "typescript": "catalog:"
   }
 }

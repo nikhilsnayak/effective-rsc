@@ -15,6 +15,7 @@ it.effect('uses real framework entries and private aliases for application sourc
     expect(entries.application).toBe('/workspace/src/application.tsx');
     expect(entries.stylesheet).toBe('/workspace/src/styles.css');
     expect(entries.rsc.endsWith('/src/build/rsc-entry.ts')).toBe(true);
+    expect(entries.rsc).not.toContain('/.ersc/');
     expect(serverEnvironment?.source?.entry).toEqual({
       main: {
         html: false,
@@ -27,5 +28,11 @@ it.effect('uses real framework entries and private aliases for application sourc
       'effective-rsc/application-stylesheet': entries.stylesheet,
     });
     expect(clientEnvironment?.resolve).toBeUndefined();
+    expect(clientEnvironment?.output?.distPath).toMatchObject({
+      root: '/workspace/.ersc/client',
+    });
+    expect(serverEnvironment?.output?.distPath).toMatchObject({
+      root: '/workspace/.ersc/server',
+    });
   }).pipe(Effect.provide(Path.layer)),
 );

@@ -2,6 +2,7 @@ import { Clock3, MapPin } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { AgendaToggle } from '@/modules/agenda/components/agenda-toggle';
 import type { Session } from '@/modules/conference/conference-repository';
 
 export function SessionCard({ session }: { readonly session: Session }) {
@@ -33,6 +34,7 @@ export function SessionCard({ session }: { readonly session: Session }) {
             </span>
             <span className='text-muted-foreground'>{session.speakerRole}</span>
           </div>
+          <AgendaToggle isInAgenda={session.isInAgenda} sessionId={session.id} />
           <span className='sr-only'>
             <Clock3 aria-hidden='true' /> {session.startsAt} to {session.endsAt}
           </span>

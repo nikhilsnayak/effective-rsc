@@ -243,7 +243,7 @@ const make = <
 
       const SlotContent = slot.content;
       const SlotLoading = slot.loading;
-      const slotId = `slot:${slotName}:${pathname}`;
+      const slotId = `slot:${slotName}`;
       childNodes[slotName] = {
         key: slotId,
         data: {

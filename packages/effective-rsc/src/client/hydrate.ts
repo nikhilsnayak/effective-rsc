@@ -10,7 +10,9 @@ import { rscStream } from 'rsc-html-stream/client';
 
 import { FlightMediaType, ServerFnIdHeader, type FlightPayload } from '../rsc/flight';
 import { hydrateBrowserRoot } from './browser-root';
-import { requestFlight } from './flight-loader';
+import { loadFlight, requestFlight } from './flight-loader';
+import { listenForNavigation, navigationApiFromWindow } from './navigation-api';
+import { NavigationStateMachine } from './navigation-state';
 
 export class BrowserHydrationError extends Schema.TaggedError<BrowserHydrationError>()(
   'BrowserHydrationError',
@@ -91,10 +93,26 @@ export const hydrate = Effect.scoped(
       }
     });
     const runtime = yield* FiberSet.makeRuntimePromise<HttpClient.HttpClient | Scope.Scope>();
+    const navigationState = yield* NavigationStateMachine.make({
+      load: (destination: URL) =>
+        loadFlight(destination).pipe(
+          Effect.map(({ payload, release }) => ({ release, snapshot: payload })),
+        ),
+      scheduleRender: ({ revision, snapshot }) =>
+        browserRoot.schedule({
+          _tag: 'Navigation',
+          payload: snapshot,
+          revision,
+        }),
+    });
+    const navigation = yield* navigationApiFromWindow(window);
 
     yield* Effect.sync(() => {
       setServerCallback((id, args) => runtime(callServer(id, args)));
     });
+    yield* listenForNavigation(navigation, (destination, signal) =>
+      runtime(navigationState.navigate(destination), { signal }),
+    );
 
     return yield* Effect.never;
   }),

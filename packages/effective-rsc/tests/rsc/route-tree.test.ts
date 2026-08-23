@@ -21,7 +21,7 @@ const makeDestinationShell = (): RouteTree<string> => ({
     },
     modal: null,
     sidebar: {
-      key: 'slot:sidebar:/schedule/day-two',
+      key: 'slot:sidebar',
       data: 'conference tracks',
       hasLoadingBoundary: false,
       slots: {},
@@ -44,7 +44,7 @@ describe('RSC route-tree model', () => {
         },
         modal: null,
         sidebar: {
-          key: 'slot:sidebar:/schedule/day-two',
+          key: 'slot:sidebar',
           data: null,
           hasLoadingBoundary: false,
           slots: {},

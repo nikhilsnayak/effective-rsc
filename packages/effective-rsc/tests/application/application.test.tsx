@@ -119,7 +119,7 @@ describe('Application.make', () => {
     expect(page.props.runtime).toBe(runtime);
   });
 
-  it('compiles declared parallel slots into independent named route nodes', () => {
+  it('compiles declared parallel slots with stable outlet identities', () => {
     const ParallelLayout = Layout.make({
       slots: ['sidebar', 'modal'],
       render: Effect.fnUntraced(function* ({
@@ -151,9 +151,20 @@ describe('Application.make', () => {
             },
           },
         },
+        '/about': {
+          page: AboutPage,
+          slots: {
+            modal: null,
+            sidebar: {
+              content: Sidebar,
+              loading: SidebarLoading,
+            },
+          },
+        },
       },
     });
     const rootNode = asRouteTree(App.component({ pathname: '/', runtime }));
+    const aboutRootNode = asRouteTree(App.component({ pathname: '/about', runtime }));
     const root = asElement<{
       readonly children: ReactNode;
       readonly modal: ReactNode;
@@ -171,7 +182,11 @@ describe('Application.make', () => {
     expect(sidebarOutlet.props.name).toBe('sidebar');
     expect(modalOutlet.type).toBe(RouteOutlet);
     expect(modalOutlet.props.name).toBe('modal');
-    expect(sidebarNode.key).toBe('slot:sidebar:/');
+    expect(sidebarNode.key).toBe('slot:sidebar');
+    expect(getRequiredSlot(aboutRootNode, 'sidebar').key).toBe(sidebarNode.key);
+    expect(getRequiredSlot(aboutRootNode, 'children').key).not.toBe(
+      getRequiredSlot(rootNode, 'children').key,
+    );
     expect(sidebarNode.hasLoadingBoundary).toBe(true);
     expect(asElement(sidebarNode.data.loading).type).toBe(SidebarLoading);
     expect(sidebar.type).toBe(Sidebar);

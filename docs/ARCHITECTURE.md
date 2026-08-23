@@ -154,9 +154,11 @@ The shared route model is generic over its render data. Stable node keys, named 
 empty branches, and loading-boundary presence form the topology; Server Component content and
 Loading output are transient render data. A structure-only `RouteTree<null>` therefore cannot retain
 RSC values accidentally. A same-topology response overlay copies only its changed ancestor path and
-retains untouched parallel branches by reference. The current renderer still receives a complete
-tree in one native Flight response under D-005. This internal seam does not add a partial-route wire
-protocol, cache policy, or prefetch behavior.
+retains untouched parallel branches by reference. A Page key identifies its pathname, while a named
+slot key identifies its stable outlet in the inherited Layout. React can therefore reveal a new Page
+fallback without replacing or hiding already-revealed sibling slots during a transition. The current
+renderer still receives a complete tree in one native Flight response under D-005. This internal seam
+does not add a partial-route wire protocol, cache policy, or prefetch behavior.
 
 ## Initial document request — Accepted
 
@@ -210,8 +212,17 @@ Loading and waiting for React commit remain interruptible. An uninterruptible bo
 successful load installs response cancellation ownership atomically before entering the commit wait,
 so interruption cannot abandon a response between those phases. The navigation fiber owns that
 cancellation effect only while the render is pending: failure releases the response, while exact commit
-lets the self-finalizing stream continue independently. Navigation API interception remains a separate
-browser-boundary slice.
+lets the self-finalizing stream continue independently.
+
+The scoped browser boundary listens directly to `window.navigation`. It leaves non-interceptable
+destinations, hash-only changes, downloads, form submissions, and React's internal
+`info: "react-transition"` navigation untouched. Cancelable navigations run the state machine from a
+`precommitHandler`, so the URL and history entry do not update until the exact React layout commit.
+The Navigation API deliberately makes some traversals non-cancelable to prevent applications from
+trapping users; those unavoidable cases use its post-commit `handler` while retaining the same Effect
+cancellation and rendering path. The event's `AbortSignal` interrupts the callback fiber, and closing
+the browser Effect scope removes the listener. Native post-navigation focus and scroll behavior remain
+enabled.
 
 The browser root owns the React side of that boundary. It schedules both refresh and navigation
 payloads with `startTransition`. Every non-initial render is a discriminated transaction carrying its
@@ -221,7 +232,7 @@ result is the imperative scheduling boundary: subsequent payloads are passed bac
 initial layout commit and after unmount so it cannot abandon hydration or target a stale root.
 The browser root owns no HTTP response state: its render transactions carry only the decoded payload
 and exact commit Deferred. Ordering concurrent mutation responses remains part of the unfinished
-router action queue. The Navigation API listener is a later slice.
+router action queue.
 
 The browser Flight loader requests one destination URL with `Accept: text/x-component`, rejects
 non-success and non-Flight responses, and decodes the response through the native RSDR client. Its
@@ -230,8 +241,8 @@ when it reaches EOF, errors, or is cancelled, while browser-scope closure remain
 owner. Because RSDR starts consuming the stream eagerly, its reader keeps receiving nested Flight
 chunks after the root model resolves without React retaining a separate transport resource. A successful
 load returns an idempotent release effect only so pending navigation or Server Function work can cancel
-an abandoned response before commit. Cache lookup, partial response formats, and Navigation API
-interception remain separate later slices.
+an abandoned response before commit. Cache lookup and partial response formats remain separate later
+slices.
 
 ## Server Functions — Working
 

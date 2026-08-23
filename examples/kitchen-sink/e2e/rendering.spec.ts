@@ -12,6 +12,7 @@ test('renders and styles the conference schedule without browser errors', async 
   await expect(page.getByRole('heading', { level: 1, name: 'Saturday schedule' })).toBeVisible();
   await expect(page.getByRole('heading', { level: 2, name: 'Your agenda' })).toBeVisible();
   await expect(page.getByText('Server Components from first principles').first()).toBeVisible();
+  await expect(page.locator('html')).toHaveCSS('scrollbar-gutter', 'stable');
 
   const firstSession = page.locator('[data-slot="card"]').first();
   await expect(firstSession).toBeVisible();

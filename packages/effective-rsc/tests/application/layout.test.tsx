@@ -75,8 +75,10 @@ describe('Layout.make', () => {
       yield* Deferred.await(started);
       yield* Scope.close(scope, Exit.void);
 
-      expect(yield* Effect.promise(() => execution)).toBe('interrupted');
-      expect(yield* Ref.get(interrupted)).toBe(true);
+      const result = yield* Effect.promise(() => execution);
+      const wasInterrupted = yield* Ref.get(interrupted);
+      expect(result).toBe('interrupted');
+      expect(wasInterrupted).toBe(true);
     }),
   );
 });

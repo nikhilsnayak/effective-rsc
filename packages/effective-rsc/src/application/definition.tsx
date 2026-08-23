@@ -1,11 +1,12 @@
 import { Layer } from 'effect';
-import { Suspense, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
+import type { RouteTree as RouteTreeModel } from '../rsc/route-tree';
 import type { LayoutComponent, LayoutConcern, LayoutProps } from './layout';
 import type { LoadingComponent, LoadingConcern } from './loading';
 import type { PageComponent, PageConcern } from './page';
 import type { RenderRuntime } from './render-runtime';
-import { RouteOutlet, RouteTree, type RouteNode } from './route-tree';
+import { RouteOutlet, RouteTree, type RouteRenderData } from './route-tree';
 import type { SlotComponent, SlotConcern } from './slot';
 
 type StaticPath = `/${string}`;
@@ -213,20 +214,18 @@ const make = <
 
     const Page = route.page;
     const pageId = `page:${pathname}`;
-    const page = <Page key={pageId} runtime={runtime} />;
-    const pageElement = Loading ? (
-      <Suspense key={pageId} fallback={<Loading />}>
-        {page}
-      </Suspense>
-    ) : (
-      page
-    );
-    const pageNode: RouteNode = {
-      id: pageId,
-      element: pageElement,
+    const pageNode = {
+      key: pageId,
+      data: {
+        content: <Page key={pageId} runtime={runtime} />,
+        loading: Loading ? <Loading /> : null,
+      },
+      hasLoadingBoundary: Loading !== undefined,
       slots: {},
     };
-    const childNodes: Record<string, RouteNode | null> = { children: pageNode };
+    const childNodes: Record<string, RouteTreeModel<RouteRenderData> | null> = {
+      children: pageNode,
+    };
     const layoutProps: Record<string, ReactNode> = {
       children: <RouteOutlet name='children' />,
     };
@@ -245,29 +244,30 @@ const make = <
       const SlotContent = slot.content;
       const SlotLoading = slot.loading;
       const slotId = `slot:${slotName}:${pathname}`;
-      const content = <SlotContent key={slotId} runtime={runtime} />;
       childNodes[slotName] = {
-        id: slotId,
-        element: SlotLoading ? (
-          <Suspense key={slotId} fallback={<SlotLoading />}>
-            {content}
-          </Suspense>
-        ) : (
-          content
-        ),
+        key: slotId,
+        data: {
+          content: <SlotContent key={slotId} runtime={runtime} />,
+          loading: SlotLoading ? <SlotLoading /> : null,
+        },
+        hasLoadingBoundary: SlotLoading !== undefined,
         slots: {},
       };
     }
 
-    const rootNode: RouteNode = {
-      id: 'layout:root',
-      element: (
-        <Layout
-          key='layout:root'
-          runtime={runtime}
-          {...(layoutProps as LayoutProps<LayoutSlotNames<RootLayout>>)}
-        />
-      ),
+    const rootNode = {
+      key: 'layout:root',
+      data: {
+        content: (
+          <Layout
+            key='layout:root'
+            runtime={runtime}
+            {...(layoutProps as LayoutProps<LayoutSlotNames<RootLayout>>)}
+          />
+        ),
+        loading: null,
+      },
+      hasLoadingBoundary: false,
       slots: childNodes,
     };
 

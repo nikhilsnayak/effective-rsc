@@ -40,7 +40,7 @@ const toWebRequest = (request: IncomingMessage, signal: AbortSignal) => {
   return new Request(url, init);
 };
 
-const writeWebResponse = (webResponse: Response, response: ServerResponse): Promise<void> => {
+const writeWebResponse = (webResponse: Response, response: ServerResponse) => {
   response.statusCode = webResponse.status;
   if (webResponse.statusText.length > 0) {
     response.statusMessage = webResponse.statusText;
@@ -93,32 +93,22 @@ export const makeDevMiddleware =
     request.once('aborted', abortRequest);
     response.once('close', abortDisconnectedResponse);
 
-    let webRequest: Request;
-    try {
-      webRequest = toWebRequest(request, abortController.signal);
-    } catch (cause) {
-      stopWatchingCancellation();
-      next(cause);
-      return;
-    }
-
     const forwardFailure = (cause: unknown) => {
       if (!abortController.signal.aborted) {
         next(cause);
       }
     };
 
-    let handled: Promise<Response>;
     try {
-      handled = handler(webRequest);
+      const webRequest = toWebRequest(request, abortController.signal);
+      const handled = handler(webRequest);
+
+      void handled
+        .then((webResponse) => writeWebResponse(webResponse, response))
+        .catch(forwardFailure)
+        .finally(stopWatchingCancellation);
     } catch (cause) {
       stopWatchingCancellation();
       forwardFailure(cause);
-      return;
     }
-
-    void handled
-      .then((webResponse) => writeWebResponse(webResponse, response))
-      .catch(forwardFailure)
-      .finally(stopWatchingCancellation);
   };

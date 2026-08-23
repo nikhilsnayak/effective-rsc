@@ -5,7 +5,7 @@ import { HttpRouter } from 'effect/unstable/http';
 
 import { DefaultApplicationPort } from '../server/server-config';
 import { resolveApplicationBuild, type BuildOptions } from './build';
-import { decodeServerBundle, makeRunnableHttpLayer, type ServerBundle } from './compiled-server';
+import { decodeServerBundle, makeRunnableHttpLayer } from './compiled-server';
 import { type LoadServerBundle, makeDevConfig } from './config';
 import { makeDevMiddleware, type WebHandler } from './dev-middleware';
 import { Rsbuild } from './rsbuild';
@@ -51,7 +51,7 @@ const makeApplicationReloader = Effect.fnUntraced(function* (root: string) {
           cause,
         }),
     });
-    const bundle: ServerBundle = yield* decodeServerBundle(importedBundle).pipe(
+    const bundle = yield* decodeServerBundle(importedBundle).pipe(
       Effect.mapError(
         (cause) =>
           new DevServerError({

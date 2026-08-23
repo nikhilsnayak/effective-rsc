@@ -1,38 +1,46 @@
 import { describe, expect, it } from '@effect/vitest';
+import type { ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { RouteOutlet, RouteTree, type RouteNode } from '../../src/application/route-tree';
+import { RouteOutlet, RouteTree, type RouteRenderData } from '../../src/application/route-tree';
+import type { RouteTree as RouteTreeModel } from '../../src/rsc/route-tree';
+
+const renderData = (content: ReactNode): RouteRenderData => ({ content, loading: null });
 
 describe('RouteTree', () => {
   it('recursively stitches named sibling slots and preserves intentional empty slots', () => {
-    const details: RouteNode = {
-      id: 'details',
-      element: <p key='details'>Details</p>,
+    const details: RouteTreeModel<RouteRenderData> = {
+      key: 'details',
+      data: renderData(<p key='details'>Details</p>),
+      hasLoadingBoundary: false,
       slots: {},
     };
-    const main: RouteNode = {
-      id: 'main',
-      element: (
+    const main: RouteTreeModel<RouteRenderData> = {
+      key: 'main',
+      data: renderData(
         <main key='main'>
           <RouteOutlet name='details' />
-        </main>
+        </main>,
       ),
+      hasLoadingBoundary: false,
       slots: { details },
     };
-    const sidebar: RouteNode = {
-      id: 'sidebar',
-      element: <aside key='sidebar'>Sidebar</aside>,
+    const sidebar: RouteTreeModel<RouteRenderData> = {
+      key: 'sidebar',
+      data: renderData(<aside key='sidebar'>Sidebar</aside>),
+      hasLoadingBoundary: false,
       slots: {},
     };
-    const root: RouteNode = {
-      id: 'root',
-      element: (
+    const root: RouteTreeModel<RouteRenderData> = {
+      key: 'root',
+      data: renderData(
         <div key='root'>
           <RouteOutlet name='children' />
           <RouteOutlet name='sidebar' />
           <RouteOutlet name='modal' />
-        </div>
+        </div>,
       ),
+      hasLoadingBoundary: false,
       slots: {
         children: main,
         modal: null,
@@ -46,9 +54,10 @@ describe('RouteTree', () => {
   });
 
   it('rejects a slot that its route node does not declare', () => {
-    const root: RouteNode = {
-      id: 'root',
-      element: <RouteOutlet key='missing' name='missing' />,
+    const root: RouteTreeModel<RouteRenderData> = {
+      key: 'root',
+      data: renderData(<RouteOutlet key='missing' name='missing' />),
+      hasLoadingBoundary: false,
       slots: {},
     };
 

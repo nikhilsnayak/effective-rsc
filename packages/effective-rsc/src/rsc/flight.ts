@@ -8,7 +8,8 @@ export type FlightPayload = {
 };
 
 export type ServerFnResult =
-  | { readonly ok: true; readonly value: unknown }
-  | { readonly error: unknown; readonly ok: false };
+  | { readonly _tag: 'Success'; readonly value: unknown }
+  | { readonly _tag: 'Failure'; readonly error: unknown };
 
+export const FlightMediaType = 'text/x-component';
 export const ServerFnIdHeader = 'x-ersc-server-fn';

@@ -1,6 +1,6 @@
 import { Effect, Path, Schema } from 'effect';
 
-import { makeBuildConfig, type RsbuildEntries } from './config';
+import { makeBuildConfig } from './config';
 import { Rsbuild } from './rsbuild';
 
 export type BuildOptions = {
@@ -42,7 +42,7 @@ export const resolveApplicationBuild = Effect.fnUntraced(function* ({ root }: Bu
   const ssrEntry = yield* resolveFrameworkEntry(SsrEntryUrl);
   const stylesheetPath = path.resolve(applicationRoot, ApplicationStylesheetPath);
 
-  const entries: RsbuildEntries = {
+  const entries = {
     application: applicationPath,
     client: clientEntry,
     rsc: rscEntry,

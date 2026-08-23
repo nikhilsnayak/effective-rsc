@@ -150,6 +150,14 @@ the HTTP router's native empty `404` response. `/_ersc/assets` remains reserved 
 compiler output. Dynamic matching and nested route-specific concerns are later slices; their
 representation is already fixed as named branches of the same n-ary tree.
 
+The shared route model is generic over its render data. Stable node keys, named slots, intentional
+empty branches, and loading-boundary presence form the topology; Server Component content and
+Loading output are transient render data. A structure-only `RouteTree<null>` therefore cannot retain
+RSC values accidentally. A same-topology response overlay copies only its changed ancestor path and
+retains untouched parallel branches by reference. The current renderer still receives a complete
+tree in one native Flight response under D-005. This internal seam does not add a partial-route wire
+protocol, cache policy, or prefetch behavior.
+
 ## Initial document request — Accepted
 
 ```text
@@ -174,14 +182,56 @@ Effects.
 ```text
 Navigation API event
   -> interrupt superseded navigation
-  -> fetch whole-tree Flight response
-  -> decode React tree
-  -> React transition renders the nearest Loading boundary
-  -> commit UI, URL, scroll, and optional View Transition
+  -> reuse a destination snapshot or fetch one whole-tree Flight response
+  -> schedule an exact navigation revision in a React transition
+  -> render the destination tree or its nearest Loading boundary
+  -> resolve that render transaction's commit token from useLayoutEffect
+  -> commit URL, UI, scroll, and optional View Transition
 ```
 
 Navigation state and prefetch work have explicit lifetimes. The client router does not patch anchor
-clicks or the History API as a fallback.
+clicks or the History API as a fallback. React transitions schedule route rendering but do not own
+request ordering: the Effect navigation state machine interrupts superseded work and prevents stale
+responses from being scheduled. `useActionState` remains available to application forms and mutations,
+but its sequential queue is not the router scheduler. A Navigation API precommit promise is resolved
+only when `useLayoutEffect` commits the render transaction carrying the exact scheduled revision; a
+global transition-pending flag is not a commit token.
+
+The scoped internal `NavigationStateMachine` allocates monotonically increasing revisions and uses
+an Effect `FiberHandle` as the single owner of active navigation work. React scheduling and revision
+state changes are serialized so a completed superseded request cannot schedule a render. The lazy
+schedule Effect submits the render while that ordering permit is held, then returns a commit Effect
+backed by a private Effect `Deferred`; the permit is released before the navigation fiber awaits
+commit. `useLayoutEffect` completes that exact render's Deferred. There is no Promise bridge or second
+shared pending-commit record to synchronize. A later navigation interrupts the earlier fiber.
+Interrupting the navigation caller interrupts its exact loading fiber, which lets the later Navigation
+API boundary propagate `event.signal` without risking cancellation of a newer request.
+Loading and waiting for React commit remain interruptible. An uninterruptible boundary around the
+successful load installs response cancellation ownership atomically before entering the commit wait,
+so interruption cannot abandon a response between those phases. The navigation fiber owns that
+cancellation effect only while the render is pending: failure releases the response, while exact commit
+lets the self-finalizing stream continue independently. Navigation API interception remains a separate
+browser-boundary slice.
+
+The browser root owns the React side of that boundary. It schedules both refresh and navigation
+payloads with `startTransition`. Every non-initial render is a discriminated transaction carrying its
+own private Effect `Deferred`; navigation transactions additionally carry their revision. The `hydrateRoot`
+result is the imperative scheduling boundary: subsequent payloads are passed back to that root with
+`root.render` rather than exporting a component state setter. Scheduling is rejected before the
+initial layout commit and after unmount so it cannot abandon hydration or target a stale root.
+The browser root owns no HTTP response state: its render transactions carry only the decoded payload
+and exact commit Deferred. Ordering concurrent mutation responses remains part of the unfinished
+router action queue. The Navigation API listener is a later slice.
+
+The browser Flight loader requests one destination URL with `Accept: text/x-component`, rejects
+non-success and non-Flight responses, and decodes the response through the native RSDR client. Its
+HTTP request lives in a child of the browser Effect scope. The response stream closes that child scope
+when it reaches EOF, errors, or is cancelled, while browser-scope closure remains the final shutdown
+owner. Because RSDR starts consuming the stream eagerly, its reader keeps receiving nested Flight
+chunks after the root model resolves without React retaining a separate transport resource. A successful
+load returns an idempotent release effect only so pending navigation or Server Function work can cancel
+an abandoned response before commit. Cache lookup, partial response formats, and Navigation API
+interception remain separate later slices.
 
 ## Server Functions — Working
 
@@ -207,7 +257,11 @@ The working request path decodes the native reply or form action, loads the nati
 executes its result inside the Effect HTTP request, rerenders the complete route, and returns native
 Flight. The browser callback uses a scoped `FiberSet.makeRuntimePromise` runner because RSDR's
 `callServer` boundary requires a Promise. That runner is owned by the browser runtime scope rather
-than detached from it.
+than detached from it. The callback must return the imperative Server Function result without waiting
+for the scheduled refresh to commit; waiting creates a cycle with React's action completion. The
+post-schedule commit wait is therefore forked directly into the captured browser scope. Failure before
+commit cancels the response; success leaves its eager RSDR reader to finish and self-finalize the child
+response scope. Browser-scope closure interrupts pending waits and closes any unfinished responses.
 
 The progressive form path reaches and executes the same mutation before hydration, but the resulting
 full-document stream currently does not complete and Bun eventually times out the request. Its

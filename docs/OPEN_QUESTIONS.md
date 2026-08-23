@@ -58,7 +58,11 @@ parallel branches declared by `Layout.make`, and `null` records an intentionally
 Layout, Page, and Slot concerns are independent values in one native Flight model, and a
 framework-owned `RouteOutlet` Client Component recursively stitches each child node into its
 declared outlet. The whole matched tree still travels in one Flight response under D-005; partial
-segment requests remain a later decision.
+segment requests remain a later decision. The internal model no longer makes that later decision
+needlessly invasive: topology and rendered segment data are separate, loading-boundary presence is
+structural metadata, and a same-topology data overlay retains untouched parallel branches. The
+request format, cache entry lifecycle, eviction policy, and exact missing-segment representation
+remain open until the whole-tree navigation checkpoint supplies measurements.
 
 ## Later milestones
 

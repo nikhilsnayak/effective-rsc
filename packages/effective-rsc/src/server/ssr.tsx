@@ -15,7 +15,7 @@ const make = Effect.gen(function* () {
     render: Effect.fn('HtmlRenderer.render')(function* ({ flightStream, formState }) {
       const signal = yield* Effect.abortSignal;
       const [ssrFlightStream, browserFlightStream] = flightStream.tee();
-      let payload: PromiseLike<FlightPayload> | undefined;
+      let payload: PromiseLike<FlightPayload> | null = null;
 
       function SsrRoot() {
         return use((payload ??= createFromReadableStream<FlightPayload>(ssrFlightStream))).root;

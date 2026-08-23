@@ -52,8 +52,8 @@ const validateOrigin = (request: HttpServerRequest.HttpServerRequest) =>
     catch: (cause) => requestError('Rejected a cross-origin Server Function request.', 403, cause),
   });
 
-const readBody = Effect.fnUntraced(function* (request: Request, contentType: string | undefined) {
-  if (contentType?.toLowerCase().startsWith('multipart/form-data') === true) {
+const readBody = Effect.fnUntraced(function* (request: Request) {
+  if (request.headers.get('content-type')?.toLowerCase().startsWith('multipart/form-data')) {
     return yield* Effect.tryPromise({
       try: () => request.formData(),
       catch: (cause) =>
@@ -67,7 +67,7 @@ const readBody = Effect.fnUntraced(function* (request: Request, contentType: str
   });
 });
 
-const isEffectInvocation = (value: unknown): boolean => Effect.isEffect(value);
+const hasEffectRuntimeType = (value: unknown) => Boolean(Effect.isEffect(value));
 
 const invokeServerReference = <Services>(
   action: (...args: ReadonlyArray<unknown>) => unknown,
@@ -75,7 +75,7 @@ const invokeServerReference = <Services>(
 ) =>
   Effect.suspend(() => {
     const invocation = action(...args);
-    return isEffectInvocation(invocation)
+    return hasEffectRuntimeType(invocation)
       ? (invocation as Effect.Effect<unknown, never, Services>)
       : Effect.promise(() => Promise.resolve(invocation));
   }).pipe(
@@ -91,7 +91,7 @@ const runClientServerFn = Effect.fnUntraced(function* <Services>(
   actionId: string,
 ) {
   const temporaryReferences = createTemporaryReferenceSet();
-  const body = yield* readBody(request, request.headers.get('content-type') ?? undefined);
+  const body = yield* readBody(request);
   const args = yield* Effect.tryPromise({
     try: () => decodeReply(body, { temporaryReferences }),
     catch: (cause) => requestError('Failed to decode Server Function arguments.', 400, cause),
@@ -101,10 +101,11 @@ const runClientServerFn = Effect.fnUntraced(function* <Services>(
     catch: (cause) => requestError('The requested Server Function does not exist.', 400, cause),
   });
   const exit = yield* Effect.exit(invokeServerReference<Services>(action, args));
-  const serverFnResult: ServerFnResult =
+  const serverFnResult = (
     exit._tag === 'Success'
-      ? { ok: true, value: exit.value }
-      : { error: Cause.squash(exit.cause), ok: false };
+      ? { _tag: 'Success', value: exit.value }
+      : { _tag: 'Failure', error: Cause.squash(exit.cause) }
+  ) satisfies ServerFnResult;
 
   return {
     formState: null,
@@ -155,8 +156,10 @@ export const handleServerFnRequest = Effect.fnUntraced(function* <Services>(
   const signal = yield* Effect.abortSignal;
   const webRequest = yield* HttpServerRequest.toWeb(request, { signal });
   const actionId = request.headers[ServerFnIdHeader];
+  const handleRequest =
+    actionId === undefined
+      ? runProgressiveServerFn<Services>(webRequest)
+      : runClientServerFn<Services>(webRequest, actionId);
 
-  return actionId === undefined
-    ? yield* runProgressiveServerFn<Services>(webRequest)
-    : yield* runClientServerFn<Services>(webRequest, actionId);
+  return yield* handleRequest;
 });

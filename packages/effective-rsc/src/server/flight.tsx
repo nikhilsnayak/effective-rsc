@@ -25,11 +25,11 @@ export class FlightRenderer extends Context.Service<FlightRenderer>()(
       }) {
         const signal = yield* Effect.abortSignal;
         const runtime = yield* FiberSet.makeRuntimePromise<Services>();
-        const payload: FlightPayload = {
+        const payload = {
           formState,
           root: <RootComponent pathname={pathname} runtime={runtime} />,
           serverFnResult,
-        };
+        } satisfies FlightPayload;
 
         return renderToReadableStream(payload, { signal, temporaryReferences });
       }),

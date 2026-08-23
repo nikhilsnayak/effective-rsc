@@ -44,7 +44,8 @@ describe('ServerFn.make', () => {
         invocationEffect<void, Schema.SchemaError, never>(serverFn({ value: '' })),
       );
 
-      expect(yield* Ref.get(invoked)).toBe(false);
+      const invokedBeforeRender = yield* Ref.get(invoked);
+      expect(invokedBeforeRender).toBe(false);
     }),
   );
 
@@ -59,10 +60,12 @@ describe('ServerFn.make', () => {
       });
 
       const invocation = serverFn({ id: 'session' });
-      expect(yield* Ref.get(invoked)).toBe(false);
+      const invokedBeforeExecution = yield* Ref.get(invoked);
+      expect(invokedBeforeExecution).toBe(false);
 
       yield* invocationEffect<void, Schema.SchemaError, never>(invocation);
-      expect(yield* Ref.get(invoked)).toBe(true);
+      const invokedAfterExecution = yield* Ref.get(invoked);
+      expect(invokedAfterExecution).toBe(true);
     }),
   );
 });

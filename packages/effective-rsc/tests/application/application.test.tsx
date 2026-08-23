@@ -1,14 +1,15 @@
 import { describe, expect, it } from '@effect/vitest';
 import { Context, Effect, Layer } from 'effect';
-import { isValidElement, Suspense, type ReactElement, type ReactNode } from 'react';
+import { isValidElement, type ReactElement, type ReactNode } from 'react';
 
 import { Application, type ApplicationServices } from '../../src/application/definition';
 import { Layout, type LayoutProps } from '../../src/application/layout';
 import { Loading } from '../../src/application/loading';
 import { Page } from '../../src/application/page';
 import type { RenderRuntime } from '../../src/application/render-runtime';
-import { RouteOutlet, RouteTree, type RouteNode } from '../../src/application/route-tree';
+import { RouteOutlet, RouteTree, type RouteRenderData } from '../../src/application/route-tree';
 import { Slot } from '../../src/application/slot';
+import type { RouteTree as RouteTreeModel } from '../../src/rsc/route-tree';
 
 const asElement = <Props,>(node: ReactNode): ReactElement<Props> => {
   if (!isValidElement<Props>(node)) {
@@ -20,16 +21,19 @@ const asElement = <Props,>(node: ReactNode): ReactElement<Props> => {
 
 const runtime: RenderRuntime<never> = (effect) => Effect.runPromise(effect);
 
-const asRouteTree = (node: ReactNode): RouteNode => {
-  const tree = asElement<{ readonly root: RouteNode }>(node);
+const asRouteTree = (node: ReactNode): RouteTreeModel<RouteRenderData> => {
+  const tree = asElement<{ readonly root: RouteTreeModel<RouteRenderData> }>(node);
   expect(tree.type).toBe(RouteTree);
   return tree.props.root;
 };
 
-const getRequiredSlot = (node: RouteNode, name: string): RouteNode => {
+const getRequiredSlot = (
+  node: RouteTreeModel<RouteRenderData>,
+  name: string,
+): RouteTreeModel<RouteRenderData> => {
   const child = node.slots[name];
   if (child === null || child === undefined) {
-    throw new Error(`Expected route node "${node.id}" to contain slot "${name}".`);
+    throw new Error(`Expected route node "${node.key}" to contain slot "${name}".`);
   }
   return child;
 };
@@ -76,21 +80,21 @@ describe('Application.make', () => {
       },
     });
     const rootNode = asRouteTree(App.component({ pathname: '/', runtime }));
-    const root = asElement<{ readonly children: ReactNode }>(rootNode.element);
+    const root = asElement<{ readonly children: ReactNode }>(rootNode.data.content);
     const slot = asElement<{ readonly name: string }>(root.props.children);
     const pageNode = getRequiredSlot(rootNode, 'children');
-    const page = asElement<{ readonly runtime: RenderRuntime<never> }>(pageNode.element);
+    const page = asElement<{ readonly runtime: RenderRuntime<never> }>(pageNode.data.content);
 
-    expect(rootNode.id).toBe('layout:root');
+    expect(rootNode.key).toBe('layout:root');
     expect(root.type).toBe(RootLayout);
     expect(slot.type).toBe(RouteOutlet);
     expect(slot.props.name).toBe('children');
-    expect(pageNode.id).toBe('page:/');
+    expect(pageNode.key).toBe('page:/');
     expect(page.type).toBe(HomePage);
     expect(page.props.runtime).toBe(runtime);
   });
 
-  it('places the optional loading concern in a native Suspense boundary', () => {
+  it('records the optional loading concern on the page branch', () => {
     const App = Application.make({
       routes: {
         '/': {
@@ -102,18 +106,14 @@ describe('Application.make', () => {
       },
     });
     const rootNode = asRouteTree(App.component({ pathname: '/', runtime }));
-    const root = asElement<{ readonly children: ReactNode }>(rootNode.element);
+    const root = asElement<{ readonly children: ReactNode }>(rootNode.data.content);
     const slot = asElement<{ readonly name: string }>(root.props.children);
     const pageNode = getRequiredSlot(rootNode, 'children');
-    const suspense = asElement<{
-      readonly children: ReactNode;
-      readonly fallback: ReactNode;
-    }>(pageNode.element);
-    const fallback = asElement(suspense.props.fallback);
-    const page = asElement<{ readonly runtime: RenderRuntime<never> }>(suspense.props.children);
+    const fallback = asElement(pageNode.data.loading);
+    const page = asElement<{ readonly runtime: RenderRuntime<never> }>(pageNode.data.content);
 
     expect(slot.type).toBe(RouteOutlet);
-    expect(suspense.type).toBe(Suspense);
+    expect(pageNode.hasLoadingBoundary).toBe(true);
     expect(fallback.type).toBe(RootLoading);
     expect(page.type).toBe(HomePage);
     expect(page.props.runtime).toBe(runtime);
@@ -158,16 +158,12 @@ describe('Application.make', () => {
       readonly children: ReactNode;
       readonly modal: ReactNode;
       readonly sidebar: ReactNode;
-    }>(rootNode.element);
+    }>(rootNode.data.content);
     const childrenOutlet = asElement<{ readonly name: string }>(root.props.children);
     const sidebarOutlet = asElement<{ readonly name: string }>(root.props.sidebar);
     const modalOutlet = asElement<{ readonly name: string }>(root.props.modal);
     const sidebarNode = getRequiredSlot(rootNode, 'sidebar');
-    const suspense = asElement<{
-      readonly children: ReactNode;
-      readonly fallback: ReactNode;
-    }>(sidebarNode.element);
-    const sidebar = asElement<{ readonly runtime: RenderRuntime<never> }>(suspense.props.children);
+    const sidebar = asElement<{ readonly runtime: RenderRuntime<never> }>(sidebarNode.data.content);
 
     expect(childrenOutlet.type).toBe(RouteOutlet);
     expect(childrenOutlet.props.name).toBe('children');
@@ -175,9 +171,9 @@ describe('Application.make', () => {
     expect(sidebarOutlet.props.name).toBe('sidebar');
     expect(modalOutlet.type).toBe(RouteOutlet);
     expect(modalOutlet.props.name).toBe('modal');
-    expect(sidebarNode.id).toBe('slot:sidebar:/');
-    expect(suspense.type).toBe(Suspense);
-    expect(asElement(suspense.props.fallback).type).toBe(SidebarLoading);
+    expect(sidebarNode.key).toBe('slot:sidebar:/');
+    expect(sidebarNode.hasLoadingBoundary).toBe(true);
+    expect(asElement(sidebarNode.data.loading).type).toBe(SidebarLoading);
     expect(sidebar.type).toBe(Sidebar);
     expect(rootNode.slots['modal']).toBeNull();
   });
@@ -236,18 +232,15 @@ describe('Application.make', () => {
       },
     });
     const rootNode = asRouteTree(App.component({ pathname: '/about', runtime }));
-    const root = asElement<{ readonly children: ReactNode }>(rootNode.element);
+    const root = asElement<{ readonly children: ReactNode }>(rootNode.data.content);
     const pageNode = getRequiredSlot(rootNode, 'children');
-    const suspense = asElement<{
-      readonly children: ReactNode;
-      readonly fallback: ReactNode;
-    }>(pageNode.element);
-    const page = asElement<{ readonly runtime: RenderRuntime<never> }>(suspense.props.children);
+    const page = asElement<{ readonly runtime: RenderRuntime<never> }>(pageNode.data.content);
 
     expect(App.paths).toEqual(['/', '/about']);
     expect(root.type).toBe(RootLayout);
-    expect(pageNode.id).toBe('page:/about');
-    expect(suspense.type).toBe(Suspense);
+    expect(pageNode.key).toBe('page:/about');
+    expect(pageNode.hasLoadingBoundary).toBe(true);
+    expect(asElement(pageNode.data.loading).type).toBe(RootLoading);
     expect(page.type).toBe(AboutPage);
     expect(page.props.runtime).toBe(runtime);
   });

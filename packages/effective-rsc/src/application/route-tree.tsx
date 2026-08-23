@@ -1,30 +1,41 @@
 'use client';
 
-import { createContext, use, type ReactNode } from 'react';
+import { createContext, Suspense, use, type ReactNode } from 'react';
 
-export type RouteNode = {
-  readonly id: string;
-  readonly element: ReactNode;
-  readonly slots: Readonly<Record<string, RouteNode | null>>;
+import type { RouteTree as RouteTreeModel } from '../rsc/route-tree';
+
+export type RouteRenderData = {
+  readonly content: ReactNode;
+  readonly loading: ReactNode | null;
 };
 
+type RenderableRouteTree = RouteTreeModel<RouteRenderData>;
+
 type RouteNodeRendererProps = {
-  readonly node: RouteNode;
+  readonly node: RenderableRouteTree;
 };
 
 type RouteTreeProps = {
-  readonly root: RouteNode;
+  readonly root: RenderableRouteTree;
 };
 
 type RouteOutletProps = {
   readonly name: string;
 };
 
-const RouteNodeContext = createContext<RouteNode | null>(null);
+const RouteNodeContext = createContext<RenderableRouteTree | null>(null);
 
-const RouteNodeRenderer = ({ node }: RouteNodeRendererProps) => (
-  <RouteNodeContext value={node}>{node.element}</RouteNodeContext>
-);
+const RouteNodeRenderer = ({ node }: RouteNodeRendererProps) => {
+  const content = node.hasLoadingBoundary ? (
+    <Suspense key={node.key} fallback={node.data.loading}>
+      {node.data.content}
+    </Suspense>
+  ) : (
+    node.data.content
+  );
+
+  return <RouteNodeContext value={node}>{content}</RouteNodeContext>;
+};
 
 export const RouteTree = ({ root }: RouteTreeProps) => <RouteNodeRenderer node={root} />;
 
@@ -36,7 +47,7 @@ export const RouteOutlet = ({ name }: RouteOutletProps) => {
 
   const child = node.slots[name];
   if (child === undefined) {
-    throw new Error(`Route node "${node.id}" does not declare slot "${name}".`);
+    throw new Error(`Route node "${node.key}" does not declare slot "${name}".`);
   }
 
   return child === null ? null : <RouteNodeRenderer node={child} />;

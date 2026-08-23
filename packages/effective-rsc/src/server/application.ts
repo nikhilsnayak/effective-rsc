@@ -8,14 +8,12 @@ import {
 } from 'effect/unstable/http';
 
 import type { ApplicationDefinition } from '../application/definition';
-import type { FlightPayload } from '../rsc/flight';
+import { FlightMediaType, type FlightPayload } from '../rsc/flight';
 import { FlightRenderer } from './flight';
 import { HtmlRenderer } from './html-renderer';
 import { ServerConfig } from './server-config';
-import { handleServerFnRequest, ServerFnRequestError } from './server-fn';
+import { handleServerFnRequest } from './server-fn';
 import { HtmlRendererLayer } from './ssr';
-
-const FlightMediaType = 'text/x-component';
 
 const RenderersLayer = Layer.mergeAll(FlightRenderer.layer, HtmlRendererLayer);
 
@@ -101,7 +99,7 @@ const httpLayer = <Services, ApplicationError>(
         yield* router.add('POST', pathname, (request) =>
           handleServerFnRequest<Services>(request).pipe(
             Effect.flatMap((result) => render(request, pathname, result)),
-            Effect.catchTag('ServerFnRequestError', (error: ServerFnRequestError) =>
+            Effect.catchTag('ServerFnRequestError', (error) =>
               Effect.succeed(
                 HttpServerResponse.text(error.message, {
                   status: error.status,

@@ -1,21 +1,19 @@
 # effective-rsc documentation
 
-These documents own framework direction, accepted decisions, and unresolved design work. Read them
-before changing framework behavior.
+These files are the framework's source of truth. Read the relevant owners before changing behavior.
 
-## Status language
+## Status
 
-- **Accepted**: explicitly agreed and safe to implement.
-- **Working**: the current design to validate in the next vertical slice.
-- **Open**: unresolved; implementation must not silently choose an answer.
-- **Deferred**: intentionally outside the current milestone.
+- **Accepted**: agreed and safe to implement.
+- **Working**: current design awaiting validation.
+- **Open**: unresolved; do not choose silently.
+- **Deferred**: outside the current milestone.
 
-Each decision has one owning document. Other documents should link to it rather than restating a
-different version.
-
-## Documents
+## Ownership
 
 - [VISION.md](VISION.md): purpose, principles, and non-goals.
-- [ARCHITECTURE.md](ARCHITECTURE.md): runtime flow, application model, and module-graph boundaries.
-- [DECISIONS.md](DECISIONS.md): compact register of accepted and deferred decisions.
-- [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md): choices that need evidence from implementation.
+- [ARCHITECTURE.md](ARCHITECTURE.md): runtime flows, application model, and module boundaries.
+- [DECISIONS.md](DECISIONS.md): terse register of accepted and deferred choices.
+- [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md): unresolved choices and current evidence.
+
+Each decision has one owner. Other files should link or summarize only when needed for context.

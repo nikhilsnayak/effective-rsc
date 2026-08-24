@@ -9,6 +9,32 @@ export type RouteTreeModel = {
   readonly id: string;
 };
 
+const destinationId = (node: RouteTreeModel): string =>
+  node.child === null ? node.id : destinationId(node.child);
+
+/**
+ * Retains the revealed content for the common Layout prefix while publishing a different Page.
+ * Loading and Page nodes use the destination pathname as their identity, so the first changed id
+ * terminates reuse and lets the destination Loading boundary mount normally.
+ */
+export const retainSharedLayoutContent = (
+  current: RouteTreeModel,
+  destination: RouteTreeModel,
+): RouteTreeModel => {
+  if (destinationId(current) === destinationId(destination) || current.id !== destination.id) {
+    return destination;
+  }
+
+  return {
+    child:
+      current.child === null || destination.child === null
+        ? destination.child
+        : retainSharedLayoutContent(current.child, destination.child),
+    content: current.content,
+    id: destination.id,
+  };
+};
+
 type RouteNodeRendererProps = {
   readonly node: RouteTreeModel;
 };

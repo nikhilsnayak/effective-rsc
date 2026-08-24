@@ -79,7 +79,7 @@ export const listenForNavigation = Effect.fnUntraced(function* (
           });
           const reactCommitted = Promise.withResolvers<void>();
           browserRoot.render({
-            _tag: 'Update',
+            _tag: 'Navigation',
             onCommit: reactCommitted.resolve,
             routeTree: payload.routeTree,
           });

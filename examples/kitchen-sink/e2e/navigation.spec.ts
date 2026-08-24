@@ -30,11 +30,17 @@ test('moves between conference days through the composed schedule', async ({ pag
   await page
     .getByRole('link', { name: 'See Sunday' })
     .evaluate((element: HTMLAnchorElement) => element.click());
-  await expect(page.getByRole('main', { name: 'Loading schedule' })).toBeVisible();
+  // The destination page deliberately takes two seconds. Loading must commit from the streamed
+  // route shell rather than appearing only after the page row has resolved.
+  await expect(page.getByRole('main', { name: 'Loading schedule' })).toBeVisible({
+    timeout: 1_500,
+  });
+  await expect(page).toHaveURL('/schedule/day-two');
+  await expect(page.getByRole('heading', { level: 1, name: 'Saturday schedule' })).toBeHidden();
+  await expect(page.getByRole('heading', { level: 1, name: 'Sunday schedule' })).toBeHidden();
   expect(navigationFlightFinished).toBe(false);
   await flightRequest;
 
-  await expect(page).toHaveURL('/schedule/day-two');
   await expect(page.getByRole('heading', { level: 1, name: 'Sunday schedule' })).toBeVisible();
   await expect(page.getByText('Mutation protocols that compose').first()).toBeVisible();
   expect(await page.evaluate(() => Reflect.get(window, '__ersc_document_marker__'))).toBe(true);

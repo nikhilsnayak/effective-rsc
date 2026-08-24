@@ -35,7 +35,7 @@ export const installCallServer = Effect.fnUntraced(function* (browserRoot: Brows
     );
     const committed = Promise.withResolvers<void>();
     browserRoot.render({
-      _tag: 'Update',
+      _tag: 'ServerFunction',
       onCommit: committed.resolve,
       routeTree: resource.payload.routeTree,
     });

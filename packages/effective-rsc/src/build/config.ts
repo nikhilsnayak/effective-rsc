@@ -102,7 +102,7 @@ export const makeBuildConfig = (root: string, entries: RsbuildEntries): RsbuildC
   server: {
     publicDir: false,
   },
-  plugins: [pluginReact(), pluginTailwindcss(), makeRscPlugin(entries)],
+  plugins: [pluginReact({ reactCompiler: true }), pluginTailwindcss(), makeRscPlugin(entries)],
   environments: makeEnvironments(root, entries),
 });
 
@@ -160,7 +160,7 @@ export const makeDevConfig = (
       strictPort: true,
     },
     plugins: [
-      pluginReact(),
+      pluginReact({ reactCompiler: true }),
       pluginTailwindcss(),
       makeRscPlugin(entries),
       makeDevLifecyclePlugin(applicationMiddleware, onServerCompile),

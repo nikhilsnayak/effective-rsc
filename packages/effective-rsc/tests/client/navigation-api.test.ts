@@ -136,7 +136,7 @@ it.effect('holds a cancelable navigation in precommit until rendering completes'
         expect(requestedUrls).toEqual(['https://effective-rsc.test/schedule/day-two']);
         expect(renders).toHaveLength(1);
         const render = renders[0];
-        if (render?._tag !== 'Update') {
+        if (render?._tag !== 'Navigation') {
           return yield* Effect.die('Expected a navigation render.');
         }
         expect(render.routeTree.id).toBe('root');

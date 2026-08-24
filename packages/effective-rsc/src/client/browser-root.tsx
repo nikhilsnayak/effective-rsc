@@ -1,8 +1,12 @@
 import { Effect, Schema } from 'effect';
-import { useLayoutEffect, useState } from 'react';
+import { StrictMode, useLayoutEffect, useState } from 'react';
 import { hydrateRoot } from 'react-dom/client';
 
-import { RouteTree, type RouteTreeModel } from '../application/route-tree';
+import {
+  retainSharedLayoutContent,
+  RouteTree,
+  type RouteTreeModel,
+} from '../application/route-tree';
 import type { FlightPayload } from '../rsc/flight';
 
 export class BrowserRootHydrationError extends Schema.TaggedError<BrowserRootHydrationError>()(
@@ -11,7 +15,7 @@ export class BrowserRootHydrationError extends Schema.TaggedError<BrowserRootHyd
 ) {}
 
 export type BrowserRenderRequest = {
-  readonly _tag: 'Update';
+  readonly _tag: 'Navigation' | 'ServerFunction';
   readonly onCommit: () => void;
   readonly routeTree: RouteTreeModel;
 };
@@ -41,12 +45,19 @@ export const hydrateBrowserRoot = Effect.fnUntraced(function* (
 
     useLayoutEffect(() => {
       browserRootReady.resolve({
-        render: setRender,
+        render: (request) =>
+          setRender((current) => ({
+            ...request,
+            routeTree:
+              request._tag === 'Navigation'
+                ? retainSharedLayoutContent(current.routeTree, request.routeTree)
+                : request.routeTree,
+          })),
       });
     }, []);
 
     useLayoutEffect(() => {
-      if (render._tag !== 'Initial') {
+      if (render._tag === 'Navigation' || render._tag === 'ServerFunction') {
         render.onCommit();
       }
     }, [render]);
@@ -55,7 +66,14 @@ export const hydrateBrowserRoot = Effect.fnUntraced(function* (
   }
 
   yield* Effect.try({
-    try: () => hydrateRoot(container, <BrowserRoot />, { formState: initialPayload.formState }),
+    try: () =>
+      hydrateRoot(
+        container,
+        <StrictMode>
+          <BrowserRoot />
+        </StrictMode>,
+        { formState: initialPayload.formState },
+      ),
     catch: (cause) => new BrowserRootHydrationError({ cause }),
   });
   const browserRoot = yield* Effect.promise(() => browserRootReady.promise);

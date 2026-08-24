@@ -21,14 +21,15 @@ type WithClientResources = {
   readonly entryJsFiles: typeof ClientBootstrapScripts.Type;
 };
 
-const CompiledApplicationRoot = Schema.declare(
+const CompiledApplication = Schema.declare(
   (input): input is WithClientResources =>
-    typeof input === 'function' &&
+    typeof input === 'object' &&
+    input !== null &&
     'entryCssFiles' in input &&
     'entryJsFiles' in input &&
     isClientStylesheets(input.entryCssFiles) &&
     isClientBootstrapScripts(input.entryJsFiles),
-  { expected: "the compiled 'use server-entry' ApplicationRoot" },
+  { expected: "the compiled 'use server-entry' application" },
 );
 
 const CompiledServerLayer = Schema.declare(
@@ -48,7 +49,7 @@ const CompiledHttpLayer = Schema.declare(
 );
 
 const ServerBundle = Schema.Struct({
-  ApplicationRoot: CompiledApplicationRoot,
+  default: CompiledApplication,
   HttpLayer: CompiledHttpLayer,
   ServerLayer: CompiledServerLayer,
 });
@@ -72,8 +73,8 @@ const makeServerConfigLayer = Effect.fnUntraced(function* ({
     ServerConfig,
     ServerConfig.of({
       clientAssetsRoot: path.resolve(root, '.ersc/client'),
-      clientBootstrapScripts: bundle.ApplicationRoot.entryJsFiles,
-      clientStylesheets: bundle.ApplicationRoot.entryCssFiles,
+      clientBootstrapScripts: bundle.default.entryJsFiles,
+      clientStylesheets: bundle.default.entryCssFiles,
       hostname: 'localhost',
       port: applicationPort,
     }),

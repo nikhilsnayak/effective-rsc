@@ -5,12 +5,7 @@ import App from 'effective-rsc/application-entry';
 
 import { Application } from '../server/application';
 
-export const ApplicationRoot = App.component;
-const CompiledApplication = {
-  component: ApplicationRoot,
-  paths: App.paths,
-  servicesLayer: App.servicesLayer,
-};
+export default App;
 
-export const HttpLayer = Application.httpLayer(CompiledApplication);
-export const ServerLayer = Application.layer(CompiledApplication);
+export const HttpLayer = Application.httpLayer(App);
+export const ServerLayer = Application.layer(App);

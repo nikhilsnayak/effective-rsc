@@ -1,11 +1,11 @@
 import { Effect, Exit, Schema, Scope, Stream } from 'effect';
-import { HttpClient, HttpClientRequest, type HttpClientResponse } from 'effect/unstable/http';
+import { HttpBody, HttpClient, HttpClientRequest } from 'effect/unstable/http';
 import {
   createFromReadableStream,
   type TemporaryReferenceSet,
 } from 'react-server-dom-rspack/client.browser';
 
-import { FlightMediaType, type FlightPayload } from '../rsc/flight';
+import { FlightMediaType, ServerFnIdHeader, type FlightPayload } from '../rsc/flight';
 
 export class FlightLoadError extends Schema.TaggedError<FlightLoadError>()('FlightLoadError', {
   cause: Schema.Defect(),
@@ -15,83 +15,74 @@ export class FlightLoadError extends Schema.TaggedError<FlightLoadError>()('Flig
 type FlightRequest =
   | {
       readonly _tag: 'Navigation';
-      readonly request: HttpClientRequest.HttpClientRequest;
+      readonly destination: URL;
     }
   | {
       readonly _tag: 'ServerFunction';
-      readonly request: HttpClientRequest.HttpClientRequest;
+      readonly body: BodyInit;
+      readonly destination: URL;
+      readonly id: string;
       readonly temporaryReferences: TemporaryReferenceSet;
     };
 
-const hasFlightContentType = (response: HttpClientResponse.HttpClientResponse) =>
-  response.headers['content-type']?.split(';', 1)[0]?.trim().toLowerCase() === FlightMediaType;
-
-const loadFlightPayload = Effect.fnUntraced(function* ({
-  flightRequest,
-  responseScope,
-}: {
-  readonly flightRequest: FlightRequest;
-  readonly responseScope: Scope.Scope;
-}) {
-  const httpClient = yield* HttpClient.HttpClient;
-  const client = httpClient.pipe(HttpClient.filterStatusOk, HttpClient.withScope);
-  const response = yield* client.execute(flightRequest.request).pipe(
-    Scope.provide(responseScope),
-    Effect.mapError(
-      (cause) =>
-        new FlightLoadError({
-          cause,
-          reason: 'RequestFailed',
-        }),
-    ),
-  );
-
-  if (!hasFlightContentType(response)) {
-    return yield* new FlightLoadError({
-      cause: new Error(
-        `Expected a ${FlightMediaType} response, received ${response.headers['content-type'] ?? 'no content type'}.`,
-      ),
-      reason: 'UnexpectedResponse',
-    });
-  }
-
-  const responseBody = yield* Stream.toReadableStreamEffect(
-    response.stream.pipe(Stream.ensuring(Scope.close(responseScope, Exit.void))),
-  );
-  return yield* Effect.tryPromise({
-    try: () => {
-      switch (flightRequest._tag) {
-        case 'Navigation':
-          return createFromReadableStream<FlightPayload>(responseBody);
-        case 'ServerFunction':
-          return createFromReadableStream<FlightPayload>(responseBody, {
-            temporaryReferences: flightRequest.temporaryReferences,
-          });
-      }
-    },
-    catch: (cause) =>
-      new FlightLoadError({
-        cause,
-        reason: 'DecodeFailed',
-      }),
-  });
-});
-
-export const requestFlight = Effect.fnUntraced(function* (flightRequest: FlightRequest) {
+export const loadFlight = Effect.fnUntraced(function* (flightRequest: FlightRequest) {
   const parentScope = yield* Effect.scope;
   const responseScope = yield* Scope.fork(parentScope);
   const release = Scope.close(responseScope, Exit.void);
-  const payload = yield* loadFlightPayload({ flightRequest, responseScope }).pipe(
-    Effect.onError(() => release),
-  );
 
-  return { payload, release };
+  return yield* Effect.gen(function* () {
+    const httpClient = yield* HttpClient.HttpClient;
+    const client = httpClient.pipe(HttpClient.filterStatusOk, HttpClient.withScope);
+    const request =
+      flightRequest._tag === 'Navigation'
+        ? HttpClientRequest.get(flightRequest.destination).pipe(
+            HttpClientRequest.setHeader('accept', FlightMediaType),
+          )
+        : HttpClientRequest.post(flightRequest.destination).pipe(
+            HttpClientRequest.setHeaders({
+              accept: FlightMediaType,
+              [ServerFnIdHeader]: flightRequest.id,
+            }),
+            HttpClientRequest.setBody(HttpBody.raw(flightRequest.body)),
+          );
+    const response = yield* client.execute(request).pipe(
+      Scope.provide(responseScope),
+      Effect.mapError(
+        (cause) =>
+          new FlightLoadError({
+            cause,
+            reason: 'RequestFailed',
+          }),
+      ),
+    );
+    const contentType = response.headers['content-type']?.split(';', 1)[0]?.trim().toLowerCase();
+    if (contentType !== FlightMediaType) {
+      return yield* new FlightLoadError({
+        cause: new Error(
+          `Expected a ${FlightMediaType} response, received ${response.headers['content-type'] ?? 'no content type'}.`,
+        ),
+        reason: 'UnexpectedResponse',
+      });
+    }
+
+    const responseBody = yield* Stream.toReadableStreamEffect(
+      response.stream.pipe(Stream.ensuring(release)),
+    );
+    const payload = yield* Effect.tryPromise({
+      try: () =>
+        createFromReadableStream<FlightPayload>(
+          responseBody,
+          flightRequest._tag === 'ServerFunction'
+            ? { temporaryReferences: flightRequest.temporaryReferences }
+            : undefined,
+        ),
+      catch: (cause) =>
+        new FlightLoadError({
+          cause,
+          reason: 'DecodeFailed',
+        }),
+    });
+
+    return { payload, release };
+  }).pipe(Effect.onError(() => release));
 });
-
-export const loadFlight = (destination: URL) =>
-  requestFlight({
-    _tag: 'Navigation',
-    request: HttpClientRequest.get(destination).pipe(
-      HttpClientRequest.setHeader('accept', FlightMediaType),
-    ),
-  });

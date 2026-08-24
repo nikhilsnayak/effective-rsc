@@ -1,108 +1,64 @@
-import { Deferred, Effect, Schema } from 'effect';
-import { createElement, startTransition, useLayoutEffect } from 'react';
+import { Effect, Schema } from 'effect';
+import { useLayoutEffect, useState } from 'react';
 import { hydrateRoot } from 'react-dom/client';
 
+import { RouteTree, type RouteTreeModel } from '../application/route-tree';
 import type { FlightPayload } from '../rsc/flight';
-import type { NavigationRevision } from './navigation-state';
 
 export class BrowserRootHydrationError extends Schema.TaggedError<BrowserRootHydrationError>()(
   'BrowserRootHydrationError',
   { cause: Schema.Defect() },
 ) {}
 
-export class BrowserRootUnavailableError extends Schema.TaggedError<BrowserRootUnavailableError>()(
-  'BrowserRootUnavailableError',
-  { lifecycle: Schema.Literals(['Hydrating', 'Unmounted']) },
-) {}
-
-export class BrowserRootRenderError extends Schema.TaggedError<BrowserRootRenderError>()(
-  'BrowserRootRenderError',
-  { cause: Schema.Defect() },
-) {}
-
-export type BrowserUpdate =
-  | {
-      readonly _tag: 'Navigation';
-      readonly payload: FlightPayload;
-      readonly revision: NavigationRevision;
-    }
-  | {
-      readonly _tag: 'ServerFunction';
-      readonly payload: FlightPayload;
-    };
+export type BrowserRenderRequest = {
+  readonly _tag: 'Update';
+  readonly onCommit: () => void;
+  readonly routeTree: RouteTreeModel;
+};
 
 type BrowserRender =
   | {
       readonly _tag: 'Initial';
-      readonly payload: FlightPayload;
+      readonly routeTree: RouteTreeModel;
     }
-  | (BrowserUpdate & { readonly committed: Deferred.Deferred<void> });
+  | BrowserRenderRequest;
 
-type BrowserRootProps = {
-  readonly render: BrowserRender;
+export type BrowserRootController = {
+  readonly render: (request: BrowserRenderRequest) => void;
 };
 
 export const hydrateBrowserRoot = Effect.fnUntraced(function* (
   container: Element | Document,
   initialPayload: FlightPayload,
 ) {
-  let lifecycle: 'Hydrating' | 'Mounted' | 'Unmounted' = 'Hydrating';
+  const browserRootReady = Promise.withResolvers<BrowserRootController>();
 
-  function BrowserRoot({ render }: BrowserRootProps) {
+  function BrowserRoot() {
+    const [render, setRender] = useState<BrowserRender>({
+      _tag: 'Initial',
+      routeTree: initialPayload.routeTree,
+    });
+
     useLayoutEffect(() => {
-      lifecycle = 'Mounted';
-
-      return () => {
-        lifecycle = 'Unmounted';
-      };
+      browserRootReady.resolve({
+        render: setRender,
+      });
     }, []);
 
     useLayoutEffect(() => {
-      switch (render._tag) {
-        case 'Initial':
-          break;
-        case 'Navigation':
-        case 'ServerFunction':
-          void Deferred.doneUnsafe(render.committed, Effect.void);
+      if (render._tag !== 'Initial') {
+        render.onCommit();
       }
     }, [render]);
 
-    return render.payload.root;
+    return <RouteTree root={render.routeTree} />;
   }
 
-  const root = yield* Effect.try({
-    try: () =>
-      hydrateRoot(
-        container,
-        createElement(BrowserRoot, {
-          render: { _tag: 'Initial', payload: initialPayload },
-        }),
-        { formState: initialPayload.formState },
-      ),
+  yield* Effect.try({
+    try: () => hydrateRoot(container, <BrowserRoot />, { formState: initialPayload.formState }),
     catch: (cause) => new BrowserRootHydrationError({ cause }),
   });
+  const browserRoot = yield* Effect.promise(() => browserRootReady.promise);
 
-  const schedule = Effect.fnUntraced(function* (update: BrowserUpdate) {
-    if (lifecycle !== 'Mounted') {
-      return yield* new BrowserRootUnavailableError({
-        lifecycle,
-      });
-    }
-
-    const committed = yield* Deferred.make<void>();
-    const render = { ...update, committed };
-    yield* Effect.try({
-      try: () =>
-        startTransition(() => {
-          root.render(createElement(BrowserRoot, { render }));
-        }),
-      catch: (cause) => new BrowserRootRenderError({ cause }),
-    });
-
-    return {
-      committed: Deferred.await(committed),
-    };
-  });
-
-  return { schedule };
+  return browserRoot;
 });

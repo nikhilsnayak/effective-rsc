@@ -57,7 +57,7 @@ const httpLayer = <Services, ApplicationError>(
   ) {
     const flightRenderer = yield* FlightRenderer;
     const flightStream = yield* flightRenderer.render({
-      component: application.component,
+      renderRouteTree: application.renderRouteTree,
       formState: options.formState,
       pathname,
       serverFnResult: options.serverFnResult,

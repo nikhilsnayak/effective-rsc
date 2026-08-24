@@ -1,6 +1,13 @@
-import { Effect, Schema } from 'effect';
+import { Effect, FiberSet, Schema, Scope } from 'effect';
+import { HttpClient } from 'effect/unstable/http';
+import { startTransition } from 'react';
+
+import type { BrowserRootController } from './browser-root';
+import { loadFlight } from './flight-loader';
 
 type NavigationInterceptHandler = () => Promise<void>;
+
+export type NavigationType = 'push' | 'reload' | 'replace' | 'traverse';
 
 export type NavigationInterceptOptions = {
   readonly handler?: NavigationInterceptHandler;
@@ -15,6 +22,7 @@ export type NavigationApiEvent = {
   readonly formData: FormData | null;
   readonly hashChange: boolean;
   readonly info: unknown;
+  readonly navigationType: NavigationType;
   readonly signal: AbortSignal;
   readonly intercept: (options: NavigationInterceptOptions) => void;
 };
@@ -42,28 +50,51 @@ const shouldIntercept = (event: NavigationApiEvent) =>
   !event.hashChange &&
   event.downloadRequest === null &&
   event.formData === null &&
-  event.info !== ReactTransitionNavigationInfo;
+  event.info !== ReactTransitionNavigationInfo &&
+  event.navigationType !== 'reload';
 
-export const navigationApiFromWindow = Effect.fnUntraced(function* (browserWindow: Window) {
-  const navigation = (browserWindow as NavigationWindow).navigation;
+export const listenForNavigation = Effect.fnUntraced(function* (
+  browserRoot: BrowserRootController,
+) {
+  const navigation = (window as NavigationWindow).navigation;
   if (navigation === undefined) {
     return yield* new NavigationApiUnavailableError();
   }
+  const run = yield* FiberSet.makeRuntimePromise<HttpClient.HttpClient | Scope.Scope>();
 
-  return navigation;
-});
-
-export const listenForNavigation = Effect.fnUntraced(function* (
-  navigation: NavigationApi,
-  runNavigation: (destination: URL, signal: AbortSignal) => Promise<void>,
-) {
   const onNavigate = (event: NavigationApiEvent) => {
     if (!shouldIntercept(event)) {
       return;
     }
 
     const destination = new URL(event.destination.url);
-    const handler = () => runNavigation(destination, event.signal);
+    const handler = () => {
+      const navigation = Promise.withResolvers<void>();
+
+      // oxlint-disable-next-line effecttsgo/async-function -- React Transition Actions are a native Promise boundary.
+      startTransition(async () => {
+        try {
+          const { payload, release } = await run(loadFlight({ _tag: 'Navigation', destination }), {
+            signal: event.signal,
+          });
+          const reactCommitted = Promise.withResolvers<void>();
+          browserRoot.render({
+            _tag: 'Update',
+            onCommit: reactCommitted.resolve,
+            routeTree: payload.routeTree,
+          });
+          await run(
+            Effect.promise(() => reactCommitted.promise).pipe(Effect.onInterrupt(() => release)),
+            { signal: event.signal },
+          );
+          navigation.resolve();
+        } catch (cause) {
+          navigation.reject(cause);
+        }
+      });
+
+      return navigation.promise;
+    };
 
     event.intercept(
       event.cancelable

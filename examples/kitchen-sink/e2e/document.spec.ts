@@ -36,13 +36,11 @@ test('starts independent route concerns concurrently', async ({ request }) => {
   const latestStart = Math.max(
     readRenderTimestamp(html, 'data-conference-started-at'),
     readRenderTimestamp(html, 'data-schedule-started-at'),
-    readRenderTimestamp(html, 'data-navigation-started-at'),
     readRenderTimestamp(html, 'data-agenda-started-at'),
   );
   const earliestCompletion = Math.min(
     readRenderTimestamp(html, 'data-conference-completed-at'),
     readRenderTimestamp(html, 'data-schedule-completed-at'),
-    readRenderTimestamp(html, 'data-navigation-completed-at'),
     readRenderTimestamp(html, 'data-agenda-completed-at'),
   );
 

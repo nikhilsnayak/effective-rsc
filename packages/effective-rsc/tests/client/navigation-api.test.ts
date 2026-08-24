@@ -1,9 +1,29 @@
-import { expect, it } from '@effect/vitest';
+import { afterEach, expect, it } from '@effect/vitest';
 import { Effect, Exit, Scope } from 'effect';
+import { HttpClient, HttpClientResponse } from 'effect/unstable/http';
+import { vi } from 'vitest';
 
+vi.mock('react-server-dom-rspack/client.browser', () => ({
+  createFromReadableStream: vi.fn((stream: ReadableStream<Uint8Array>) => {
+    const reader = stream.getReader();
+    return reader.read().then(() => {
+      void reader.read().catch(() => undefined);
+      return {
+        formState: null,
+        routeTree: {
+          child: null,
+          content: null,
+          id: 'root',
+        },
+        serverFnResult: null,
+      };
+    });
+  }),
+}));
+
+import type { BrowserRenderRequest, BrowserRootController } from '../../src/client/browser-root';
 import {
   listenForNavigation,
-  navigationApiFromWindow,
   NavigationApiUnavailableError,
   type NavigationApi,
   type NavigationApiEvent,
@@ -45,6 +65,7 @@ const makeNavigationEvent = (overrides: Partial<NavigationApiEvent> = {}) => {
     intercept: (options) => {
       interception = options;
     },
+    navigationType: 'push',
     signal: new AbortController().signal,
     ...overrides,
   };
@@ -55,16 +76,50 @@ const makeNavigationEvent = (overrides: Partial<NavigationApiEvent> = {}) => {
   };
 };
 
+const makeHttpClient = (requestedUrls: Array<string> = [], contentType = 'text/x-component') =>
+  HttpClient.make((request) =>
+    Effect.sync(() => {
+      requestedUrls.push(request.url);
+      return HttpClientResponse.fromWeb(
+        request,
+        new Response(new Uint8Array(), {
+          headers: { 'content-type': contentType },
+        }),
+      );
+    }),
+  );
+
+const makeBrowserRoot = (renders: Array<BrowserRenderRequest> = []) =>
+  ({
+    render: (request) => {
+      renders.push(request);
+      request.onCommit();
+    },
+  }) satisfies BrowserRootController;
+
+const listen = (
+  navigation: NavigationApi,
+  browserRoot: BrowserRootController = makeBrowserRoot(),
+  httpClient = makeHttpClient(),
+) => {
+  vi.stubGlobal('window', { navigation });
+  return listenForNavigation(browserRoot).pipe(
+    Effect.provideService(HttpClient.HttpClient, httpClient),
+  );
+};
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 it.effect('holds a cancelable navigation in precommit until rendering completes', () =>
   Effect.gen(function* () {
     const navigation = new TestNavigationApi();
-    const observed: Array<{ readonly destination: URL; readonly signal: AbortSignal }> = [];
+    const requestedUrls: Array<string> = [];
+    const renders: Array<BrowserRenderRequest> = [];
     yield* Effect.scoped(
       Effect.gen(function* () {
-        yield* listenForNavigation(navigation, (destination, signal) => {
-          observed.push({ destination, signal });
-          return Promise.resolve();
-        });
+        yield* listen(navigation, makeBrowserRoot(renders), makeHttpClient(requestedUrls));
         const pendingNavigation = makeNavigationEvent();
 
         navigation.dispatch(pendingNavigation.event);
@@ -78,12 +133,13 @@ it.effect('holds a cancelable navigation in precommit until rendering completes'
 
         yield* Effect.promise(interception.precommitHandler);
 
-        expect(observed).toEqual([
-          {
-            destination: new URL('https://effective-rsc.test/schedule/day-two'),
-            signal: pendingNavigation.event.signal,
-          },
-        ]);
+        expect(requestedUrls).toEqual(['https://effective-rsc.test/schedule/day-two']);
+        expect(renders).toHaveLength(1);
+        const render = renders[0];
+        if (render?._tag !== 'Update') {
+          return yield* Effect.die('Expected a navigation render.');
+        }
+        expect(render.routeTree.id).toBe('root');
       }),
     );
   }),
@@ -93,12 +149,12 @@ it.effect('uses a post-commit handler for a non-cancelable traversal', () =>
   Effect.scoped(
     Effect.gen(function* () {
       const navigation = new TestNavigationApi();
-      let destination: URL | null = null;
-      yield* listenForNavigation(navigation, (nextDestination) => {
-        destination = nextDestination;
-        return Promise.resolve();
+      const requestedUrls: Array<string> = [];
+      yield* listen(navigation, makeBrowserRoot(), makeHttpClient(requestedUrls));
+      const pendingNavigation = makeNavigationEvent({
+        cancelable: false,
+        navigationType: 'traverse',
       });
-      const pendingNavigation = makeNavigationEvent({ cancelable: false });
 
       navigation.dispatch(pendingNavigation.event);
 
@@ -111,33 +167,103 @@ it.effect('uses a post-commit handler for a non-cancelable traversal', () =>
 
       yield* Effect.promise(interception.handler);
 
-      expect(destination).toEqual(new URL('https://effective-rsc.test/schedule/day-two'));
+      expect(requestedUrls).toEqual(['https://effective-rsc.test/schedule/day-two']);
     }),
   ),
 );
+
+it.effect('rejects the intercepted navigation when Flight loading fails', () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const navigation = new TestNavigationApi();
+      yield* listen(navigation, makeBrowserRoot(), makeHttpClient([], 'text/html'));
+      const pendingNavigation = makeNavigationEvent();
+
+      navigation.dispatch(pendingNavigation.event);
+
+      const interception = pendingNavigation.interception();
+      if (interception?.precommitHandler === undefined) {
+        return yield* Effect.die('Expected a precommit handler.');
+      }
+      const exit = yield* Effect.promise(interception.precommitHandler).pipe(Effect.exit);
+
+      expect(Exit.isFailure(exit)).toBe(true);
+    }),
+  ),
+);
+
+it.effect('cancels a streaming Flight response abandoned before React commits', () => {
+  const navigationAbort = new AbortController();
+  return Effect.scoped(
+    Effect.gen(function* () {
+      const navigation = new TestNavigationApi();
+      const renderStarted = Promise.withResolvers<void>();
+      let responseSignal: AbortSignal | undefined;
+      const browserRoot = {
+        render: () => renderStarted.resolve(),
+      } satisfies BrowserRootController;
+      const httpClient = HttpClient.make((request, _url, signal) =>
+        Effect.sync(() => {
+          responseSignal = signal;
+          return HttpClientResponse.fromWeb(
+            request,
+            new Response(
+              new ReadableStream<Uint8Array>({
+                start(controller) {
+                  controller.enqueue(new Uint8Array([1]));
+                  signal.addEventListener('abort', () => controller.error(signal.reason), {
+                    once: true,
+                  });
+                },
+              }),
+              { headers: { 'content-type': 'text/x-component' } },
+            ),
+          );
+        }),
+      );
+      yield* listen(navigation, browserRoot, httpClient);
+      const pendingNavigation = makeNavigationEvent({ signal: navigationAbort.signal });
+
+      navigation.dispatch(pendingNavigation.event);
+
+      const interception = pendingNavigation.interception();
+      if (interception?.precommitHandler === undefined) {
+        return yield* Effect.die('Expected a precommit handler.');
+      }
+      const navigationFinished = interception.precommitHandler();
+      yield* Effect.promise(() => renderStarted.promise);
+
+      expect(responseSignal?.aborted).toBe(false);
+
+      navigationAbort.abort();
+      const exit = yield* Effect.promise(() => navigationFinished).pipe(Effect.exit);
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect(responseSignal?.aborted).toBe(true);
+    }),
+  );
+});
 
 it.effect('leaves navigations outside the router boundary to the browser', () =>
   Effect.scoped(
     Effect.gen(function* () {
       const navigation = new TestNavigationApi();
-      let handled = false;
-      yield* listenForNavigation(navigation, () => {
-        handled = true;
-        return Promise.resolve();
-      });
+      const requestedUrls: Array<string> = [];
+      yield* listen(navigation, makeBrowserRoot(), makeHttpClient(requestedUrls));
       const nativeNavigations = [
         makeNavigationEvent({ canIntercept: false }),
         makeNavigationEvent({ hashChange: true }),
         makeNavigationEvent({ downloadRequest: '' }),
         makeNavigationEvent({ formData: new FormData() }),
         makeNavigationEvent({ info: 'react-transition' }),
+        makeNavigationEvent({ navigationType: 'reload' }),
       ];
 
       for (const navigationEvent of nativeNavigations) {
         navigation.dispatch(navigationEvent.event);
         expect(navigationEvent.interception()).toBeNull();
       }
-      expect(handled).toBe(false);
+      expect(requestedUrls).toEqual([]);
     }),
   ),
 );
@@ -146,7 +272,7 @@ it.effect('removes the listener when its Effect scope closes', () =>
   Effect.gen(function* () {
     const navigation = new TestNavigationApi();
     const scope = yield* Scope.make();
-    yield* listenForNavigation(navigation, () => Promise.resolve()).pipe(Scope.provide(scope));
+    yield* listen(navigation).pipe(Scope.provide(scope));
 
     expect(navigation.isListening).toBe(true);
 
@@ -157,7 +283,9 @@ it.effect('removes the listener when its Effect scope closes', () =>
 );
 
 it.effect('fails explicitly when the browser does not provide the Navigation API', () =>
-  navigationApiFromWindow({} as Window).pipe(
+  Effect.sync(() => vi.stubGlobal('window', {})).pipe(
+    Effect.andThen(listenForNavigation(makeBrowserRoot())),
+    Effect.provideService(HttpClient.HttpClient, makeHttpClient()),
     Effect.flip,
     Effect.map((error) => {
       expect(error).toBeInstanceOf(NavigationApiUnavailableError);

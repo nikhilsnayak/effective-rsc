@@ -41,13 +41,6 @@ export type AgendaItem = Pick<Session, 'endsAt' | 'id' | 'room' | 'startsAt' | '
   readonly dayLabel: string;
 };
 
-export type NavigationItem = {
-  readonly day: ConferenceDay;
-  readonly href: string;
-  readonly label: string;
-  readonly shortDate: string;
-};
-
 export type ObservedQuery<Value> = {
   readonly completedAt: number;
   readonly data: Value;
@@ -177,11 +170,6 @@ const schedules = {
   },
 } as const satisfies Record<ConferenceDay, ScheduleDefinition>;
 
-const navigation = [
-  { day: 'saturday', href: '/', label: 'Saturday', shortDate: '22 Aug' },
-  { day: 'sunday', href: '/schedule/day-two', label: 'Sunday', shortDate: '23 Aug' },
-] as const satisfies ReadonlyArray<NavigationItem>;
-
 const initialAgenda = new Set([
   'server-components-from-first-principles',
   'mutation-protocols-that-compose',
@@ -223,7 +211,6 @@ export class ConferenceRepository extends Context.Service<ConferenceRepository>(
         }),
       ),
       conference: query({ latency: '80 millis', value: conference }),
-      navigation: query({ latency: '90 millis', value: navigation }),
       schedule: Effect.fn('ConferenceRepository.schedule')(function* (day: ConferenceDay) {
         const selectedIds = MutableRef.get(selectedSessionIds);
         const definition = schedules[day];
@@ -235,7 +222,7 @@ export class ConferenceRepository extends Context.Service<ConferenceRepository>(
           })),
         };
 
-        return yield* query({ latency: '220 millis', value });
+        return yield* query({ latency: '2 seconds', value });
       }),
       toggleAgenda: Effect.fn('ConferenceRepository.toggleAgenda')(function* (sessionId: string) {
         if (!sessionById.has(sessionId)) {

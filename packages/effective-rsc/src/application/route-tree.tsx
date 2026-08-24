@@ -1,54 +1,35 @@
 'use client';
 
-import { createContext, Suspense, use, type ReactNode } from 'react';
+import { createContext, use } from 'react';
+import type { ReactNode } from 'react';
 
-import type { RouteTree as RouteTreeModel } from '../rsc/route-tree';
-
-export type RouteRenderData = {
+export type RouteTreeModel = {
+  readonly child: RouteTreeModel | null;
   readonly content: ReactNode;
-  readonly loading: ReactNode | null;
+  readonly id: string;
 };
 
-type RenderableRouteTree = RouteTreeModel<RouteRenderData>;
-
 type RouteNodeRendererProps = {
-  readonly node: RenderableRouteTree;
+  readonly node: RouteTreeModel;
 };
 
 type RouteTreeProps = {
-  readonly root: RenderableRouteTree;
+  readonly root: RouteTreeModel;
 };
 
-type RouteOutletProps = {
-  readonly name: string;
-};
+const RouteNodeContext = createContext<RouteTreeModel | null>(null);
 
-const RouteNodeContext = createContext<RenderableRouteTree | null>(null);
-
-const RouteNodeRenderer = ({ node }: RouteNodeRendererProps) => {
-  const content = node.hasLoadingBoundary ? (
-    <Suspense key={node.key} fallback={node.data.loading}>
-      {node.data.content}
-    </Suspense>
-  ) : (
-    node.data.content
-  );
-
-  return <RouteNodeContext value={node}>{content}</RouteNodeContext>;
-};
+const RouteNodeRenderer = ({ node }: RouteNodeRendererProps) => (
+  <RouteNodeContext value={node}>{node.content}</RouteNodeContext>
+);
 
 export const RouteTree = ({ root }: RouteTreeProps) => <RouteNodeRenderer node={root} />;
 
-export const RouteOutlet = ({ name }: RouteOutletProps) => {
+export const RouteOutlet = () => {
   const node = use(RouteNodeContext);
   if (node === null) {
-    throw new Error(`Route slot "${name}" rendered outside its route node.`);
+    throw new Error('RouteOutlet rendered outside its route node.');
   }
 
-  const child = node.slots[name];
-  if (child === undefined) {
-    throw new Error(`Route node "${node.key}" does not declare slot "${name}".`);
-  }
-
-  return child === null ? null : <RouteNodeRenderer node={child} />;
+  return node.child === null ? null : <RouteNodeRenderer key={node.child.id} node={node.child} />;
 };

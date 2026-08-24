@@ -2,11 +2,15 @@ import { beforeEach, expect, it, vi } from '@effect/vitest';
 import { Effect, Fiber } from 'effect';
 import { HttpClient, HttpClientRequest, HttpClientResponse } from 'effect/unstable/http';
 
-import type { FlightPayload } from '../../src/rsc/flight';
+import { ServerFnIdHeader, type FlightPayload } from '../../src/rsc/flight';
 
 const decodedPayload = {
   formState: null,
-  root: 'destination',
+  routeTree: {
+    child: null,
+    content: null,
+    id: 'root',
+  },
   serverFnResult: null,
 } satisfies FlightPayload;
 const decodeFlight = vi.fn(
@@ -18,8 +22,7 @@ vi.doMock('react-server-dom-rspack/client.browser', () => ({
   createFromReadableStream: decodeFlight,
 }));
 
-const { FlightLoadError, loadFlight, requestFlight } =
-  await import('../../src/client/flight-loader');
+const { FlightLoadError, loadFlight } = await import('../../src/client/flight-loader');
 
 beforeEach(() => {
   decodeFlight.mockReset();
@@ -53,9 +56,10 @@ it.effect('requests and decodes a whole-tree Flight response', () =>
       });
     });
 
-    const response = yield* loadFlight(new URL('https://effective-rsc.test/schedule/day-two')).pipe(
-      Effect.provideService(HttpClient.HttpClient, client),
-    );
+    const response = yield* loadFlight({
+      _tag: 'Navigation',
+      destination: new URL('https://effective-rsc.test/schedule/day-two'),
+    }).pipe(Effect.provideService(HttpClient.HttpClient, client));
 
     expect(response.payload).toBe(decodedPayload);
     expect(observedRequest?.method).toBe('GET');
@@ -82,9 +86,10 @@ it.effect('keeps streamed chunks cancellable after the root payload resolves', (
       requestSignal = signal;
       return makePendingFlightResponse(signal);
     });
-    const response = yield* loadFlight(new URL('https://effective-rsc.test/schedule/day-two')).pipe(
-      Effect.provideService(HttpClient.HttpClient, client),
-    );
+    const response = yield* loadFlight({
+      _tag: 'Navigation',
+      destination: new URL('https://effective-rsc.test/schedule/day-two'),
+    }).pipe(Effect.provideService(HttpClient.HttpClient, client));
 
     yield* response.release;
     yield* Effect.promise(() => responseConsumptionStopped.promise);
@@ -108,9 +113,10 @@ it.effect('closes the response scope when the Flight stream reaches EOF', () =>
       });
     });
 
-    const response = yield* loadFlight(new URL('https://effective-rsc.test/schedule/day-two')).pipe(
-      Effect.provideService(HttpClient.HttpClient, client),
-    );
+    const response = yield* loadFlight({
+      _tag: 'Navigation',
+      destination: new URL('https://effective-rsc.test/schedule/day-two'),
+    }).pipe(Effect.provideService(HttpClient.HttpClient, client));
 
     expect(response.payload).toBe(decodedPayload);
     expect(requestSignal?.aborted).toBe(true);
@@ -134,9 +140,10 @@ it.effect('cancels an unfinished decoded stream when the browser scope closes', 
     });
 
     yield* Effect.scoped(
-      loadFlight(new URL('https://effective-rsc.test/schedule/day-two')).pipe(
-        Effect.provideService(HttpClient.HttpClient, client),
-      ),
+      loadFlight({
+        _tag: 'Navigation',
+        destination: new URL('https://effective-rsc.test/schedule/day-two'),
+      }).pipe(Effect.provideService(HttpClient.HttpClient, client)),
     );
     yield* Effect.promise(() => responseConsumptionStopped.promise);
 
@@ -145,7 +152,10 @@ it.effect('cancels an unfinished decoded stream when the browser scope closes', 
 );
 
 it.effect('rejects a successful response that is not Flight', () =>
-  loadFlight(new URL('https://effective-rsc.test/schedule/day-two')).pipe(
+  loadFlight({
+    _tag: 'Navigation',
+    destination: new URL('https://effective-rsc.test/schedule/day-two'),
+  }).pipe(
     Effect.provideService(
       HttpClient.HttpClient,
       makeClient(
@@ -167,25 +177,29 @@ it.effect('rejects a successful response that is not Flight', () =>
 it.effect('decodes a Server Function response with its temporary references', () =>
   Effect.gen(function* () {
     const temporaryReferences = {};
-    const request = HttpClientRequest.post('https://effective-rsc.test/').pipe(
-      HttpClientRequest.setHeader('accept', 'text/x-component'),
-    );
-    const response = yield* requestFlight({
+    let observedRequest: HttpClientRequest.HttpClientRequest | undefined;
+    const response = yield* loadFlight({
       _tag: 'ServerFunction',
-      request,
+      body: 'encoded-arguments',
+      destination: new URL('https://effective-rsc.test/'),
+      id: 'server-function-id',
       temporaryReferences,
     }).pipe(
       Effect.provideService(
         HttpClient.HttpClient,
-        makeClient(
-          () =>
-            new Response(new Uint8Array(), {
-              headers: { 'content-type': 'text/x-component' },
-            }),
-        ),
+        makeClient((request) => {
+          observedRequest = request;
+          return new Response(new Uint8Array(), {
+            headers: { 'content-type': 'text/x-component' },
+          });
+        }),
       ),
     );
 
+    expect(observedRequest?.method).toBe('POST');
+    expect(observedRequest?.url).toBe('https://effective-rsc.test/');
+    expect(observedRequest?.headers['accept']).toBe('text/x-component');
+    expect(observedRequest?.headers[ServerFnIdHeader]).toBe('server-function-id');
     expect(decodeFlight).toHaveBeenCalledWith(expect.any(ReadableStream), {
       temporaryReferences,
     });
@@ -214,9 +228,10 @@ it.effect('cancels Flight response consumption when loading is interrupted', () 
       requestSignal = signal;
       return makePendingFlightResponse(signal);
     });
-    const loadingFiber = yield* loadFlight(
-      new URL('https://effective-rsc.test/schedule/day-two'),
-    ).pipe(Effect.provideService(HttpClient.HttpClient, client), Effect.forkChild);
+    const loadingFiber = yield* loadFlight({
+      _tag: 'Navigation',
+      destination: new URL('https://effective-rsc.test/schedule/day-two'),
+    }).pipe(Effect.provideService(HttpClient.HttpClient, client), Effect.forkChild);
 
     yield* Effect.promise(() => decodingStarted.promise);
     yield* Fiber.interrupt(loadingFiber);

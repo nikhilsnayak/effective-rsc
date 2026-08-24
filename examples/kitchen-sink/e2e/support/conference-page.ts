@@ -8,6 +8,7 @@ export const setAgendaSelection = async (page: Page, title: string, selected: bo
   const session = sessionCard(page, title);
   const add = session.getByRole('button', { name: 'Add to your agenda' });
   const remove = session.getByRole('button', { name: 'Remove from your agenda' });
+  await add.or(remove).first().waitFor();
 
   if (selected) {
     if (await add.isVisible()) {

@@ -1,74 +1,58 @@
 import { describe, expect, it } from '@effect/vitest';
-import type { ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { RouteOutlet, RouteTree, type RouteRenderData } from '../../src/application/route-tree';
-import type { RouteTree as RouteTreeModel } from '../../src/rsc/route-tree';
-
-const renderData = (content: ReactNode): RouteRenderData => ({ content, loading: null });
+import { RouteOutlet, RouteTree, type RouteTreeModel } from '../../src/application/route-tree';
 
 describe('RouteTree', () => {
-  it('recursively stitches named sibling slots and preserves intentional empty slots', () => {
-    const details: RouteTreeModel<RouteRenderData> = {
-      key: 'details',
-      data: renderData(<p key='details'>Details</p>),
-      hasLoadingBoundary: false,
-      slots: {},
+  it('recursively renders a unary Layout ancestry', () => {
+    const page: RouteTreeModel = {
+      child: null,
+      content: <h1>Schedule</h1>,
+      id: '/schedule/day-two',
     };
-    const main: RouteTreeModel<RouteRenderData> = {
-      key: 'main',
-      data: renderData(
-        <main key='main'>
-          <RouteOutlet name='details' />
-        </main>,
+    const schedule: RouteTreeModel = {
+      child: page,
+      content: (
+        <section>
+          <aside>Schedule navigation</aside>
+          <RouteOutlet />
+        </section>
       ),
-      hasLoadingBoundary: false,
-      slots: { details },
+      id: '/schedule',
     };
-    const sidebar: RouteTreeModel<RouteRenderData> = {
-      key: 'sidebar',
-      data: renderData(<aside key='sidebar'>Sidebar</aside>),
-      hasLoadingBoundary: false,
-      slots: {},
-    };
-    const root: RouteTreeModel<RouteRenderData> = {
-      key: 'root',
-      data: renderData(
-        <div key='root'>
-          <RouteOutlet name='children' />
-          <RouteOutlet name='sidebar' />
-          <RouteOutlet name='modal' />
-        </div>,
+    const root: RouteTreeModel = {
+      child: schedule,
+      content: (
+        <main>
+          <header>Conference</header>
+          <RouteOutlet />
+        </main>
       ),
-      hasLoadingBoundary: false,
-      slots: {
-        children: main,
-        modal: null,
-        sidebar,
-      },
+      id: '/',
     };
 
     expect(renderToStaticMarkup(<RouteTree root={root} />)).toBe(
-      '<div><main><p>Details</p></main><aside>Sidebar</aside></div>',
+      '<main><header>Conference</header><section><aside>Schedule navigation</aside><h1>Schedule</h1></section></main>',
     );
   });
 
-  it('rejects a slot that its route node does not declare', () => {
-    const root: RouteTreeModel<RouteRenderData> = {
-      key: 'root',
-      data: renderData(<RouteOutlet key='missing' name='missing' />),
-      hasLoadingBoundary: false,
-      slots: {},
+  it('renders an intentionally empty child as null', () => {
+    const root: RouteTreeModel = {
+      child: null,
+      content: (
+        <main>
+          <RouteOutlet />
+        </main>
+      ),
+      id: '/',
     };
 
-    expect(() => renderToStaticMarkup(<RouteTree root={root} />)).toThrowError(
-      'Route node "root" does not declare slot "missing".',
-    );
+    expect(renderToStaticMarkup(<RouteTree root={root} />)).toBe('<main></main>');
   });
 
-  it('rejects a slot rendered outside a route node', () => {
-    expect(() => renderToStaticMarkup(<RouteOutlet name='children' />)).toThrowError(
-      'Route slot "children" rendered outside its route node.',
+  it('rejects an outlet rendered outside a route node', () => {
+    expect(() => renderToStaticMarkup(<RouteOutlet />)).toThrowError(
+      'RouteOutlet rendered outside its route node.',
     );
   });
 });

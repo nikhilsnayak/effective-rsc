@@ -6,7 +6,9 @@ import { getText } from './support/http';
 const requestFlight = (request: APIRequestContext, pathname = '/') =>
   getText(request, pathname, { accept: 'text/x-component' });
 
-test('serves the application root through the native Flight protocol', async ({ request }) => {
+test('serves the complete application route tree through the native Flight protocol', async ({
+  request,
+}) => {
   const { body: flight, response } = await requestFlight(request);
 
   expect(response.status()).toBe(200);
@@ -15,7 +17,7 @@ test('serves the application root through the native Flight protocol', async ({ 
   expect(flight).toContain('Server Components from first principles');
   expect(flight).toContain('Your agenda');
   expect(flight).toContain('"formState":null');
-  expect(flight).toContain('"root"');
+  expect(flight).toContain('"routeTree"');
   expect(flight).toContain('"html"');
   expect(flight).toContain('"body"');
 });
@@ -28,6 +30,5 @@ test('serializes Client Components as native module references', async ({ reques
     .map((row) => row.slice(row.indexOf(':I') + 2));
 
   expect(moduleReferences.length).toBeGreaterThan(0);
-  expect(moduleReferences.some((reference) => reference.includes('RouteTree'))).toBe(true);
   expect(moduleReferences.some((reference) => reference.includes('RouteOutlet'))).toBe(true);
 });

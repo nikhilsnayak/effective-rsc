@@ -1,52 +1,52 @@
 import { describe, expect, it } from '@effect/vitest';
 import { Context, Effect, Layer } from 'effect';
-import { isValidElement, type ReactElement, type ReactNode } from 'react';
+import { isValidElement, Suspense, type ReactElement, type ReactNode } from 'react';
 
 import { Application, type ApplicationServices } from '../../src/application/definition';
 import { Layout, type LayoutProps } from '../../src/application/layout';
 import { Loading } from '../../src/application/loading';
 import { Page } from '../../src/application/page';
 import type { RenderRuntime } from '../../src/application/render-runtime';
-import { RouteOutlet, RouteTree, type RouteRenderData } from '../../src/application/route-tree';
-import { Slot } from '../../src/application/slot';
-import type { RouteTree as RouteTreeModel } from '../../src/rsc/route-tree';
+import { RouteOutlet, type RouteTreeModel } from '../../src/application/route-tree';
+import { Routes } from '../../src/application/routes';
 
 const asElement = <Props,>(node: ReactNode): ReactElement<Props> => {
   if (!isValidElement<Props>(node)) {
     throw new Error('Expected a React element.');
   }
-
   return node;
+};
+
+const requiredChild = (node: RouteTreeModel) => {
+  if (node.child === null) {
+    throw new Error(`Expected route node "${node.id}" to contain a child.`);
+  }
+  return node.child;
 };
 
 const runtime: RenderRuntime<never> = (effect) => Effect.runPromise(effect);
 
-const asRouteTree = (node: ReactNode): RouteTreeModel<RouteRenderData> => {
-  const tree = asElement<{ readonly root: RouteTreeModel<RouteRenderData> }>(node);
-  expect(tree.type).toBe(RouteTree);
-  return tree.props.root;
-};
-
-const getRequiredSlot = (
-  node: RouteTreeModel<RouteRenderData>,
-  name: string,
-): RouteTreeModel<RouteRenderData> => {
-  const child = node.slots[name];
-  if (child === null || child === undefined) {
-    throw new Error(`Expected route node "${node.key}" to contain slot "${name}".`);
-  }
-  return child;
-};
-
 const RootLayout = Layout.make({
-  slots: [],
-  render: Effect.fnUntraced(function* ({ children }: LayoutProps) {
-    return yield* Effect.succeed(<main>{children}</main>);
-  }),
+  render: ({ children }: LayoutProps) =>
+    Effect.succeed(
+      <html lang='en'>
+        <body>{children}</body>
+      </html>,
+    ),
 });
-const RootLoading = Loading.make(() => <p>Loading...</p>);
+const ScheduleLayout = Layout.make({
+  render: ({ children }: LayoutProps) =>
+    Effect.succeed(
+      <section>
+        <aside>Schedule navigation</aside>
+        {children}
+      </section>,
+    ),
+});
+const ScheduleLoading = Loading.make(() => <p>Loading schedule...</p>);
 const HomePage = Page.make(() => Effect.succeed(<h1>Home</h1>));
-const AboutPage = Page.make(() => Effect.succeed(<h1>About</h1>));
+const SaturdayPage = Page.make(() => Effect.succeed(<h1>Saturday</h1>));
+const SundayPage = Page.make(() => Effect.succeed(<h1>Sunday</h1>));
 
 class LayoutService extends Context.Service<LayoutService, object>()(
   'effective-rsc/tests/application/LayoutService',
@@ -56,12 +56,8 @@ class PageService extends Context.Service<PageService, object>()(
   'effective-rsc/tests/application/PageService',
 ) {}
 
-class AboutPageService extends Context.Service<AboutPageService, object>()(
-  'effective-rsc/tests/application/AboutPageService',
-) {}
-
-class SlotService extends Context.Service<SlotService, object>()(
-  'effective-rsc/tests/application/SlotService',
+class NestedPageService extends Context.Service<NestedPageService, object>()(
+  'effective-rsc/tests/application/NestedPageService',
 ) {}
 
 class LayerDependency extends Context.Service<LayerDependency, object>()(
@@ -69,338 +65,118 @@ class LayerDependency extends Context.Service<LayerDependency, object>()(
 ) {}
 
 describe('Application.make', () => {
-  it('composes the explicit root layout and page', () => {
+  it('renders a root Layout around its exact Page', () => {
     const App = Application.make({
-      routes: {
-        '/': {
-          layout: RootLayout,
-          page: HomePage,
-          slots: {},
-        },
-      },
+      routes: Routes.make({ layout: RootLayout }).page('/', HomePage),
     });
-    const rootNode = asRouteTree(App.component({ pathname: '/', runtime }));
-    const root = asElement<{ readonly children: ReactNode }>(rootNode.data.content);
-    const slot = asElement<{ readonly name: string }>(root.props.children);
-    const pageNode = getRequiredSlot(rootNode, 'children');
-    const page = asElement<{ readonly runtime: RenderRuntime<never> }>(pageNode.data.content);
+    const rootNode = App.renderRouteTree({ pathname: '/', runtime });
+    const root = asElement<{ readonly children: ReactNode }>(rootNode.content);
+    const pageNode = requiredChild(rootNode);
 
-    expect(rootNode.key).toBe('layout:root');
+    expect(rootNode.id).toBe('/');
     expect(root.type).toBe(RootLayout);
-    expect(slot.type).toBe(RouteOutlet);
-    expect(slot.props.name).toBe('children');
-    expect(pageNode.key).toBe('page:/');
-    expect(page.type).toBe(HomePage);
-    expect(page.props.runtime).toBe(runtime);
+    expect(asElement(root.props.children).type).toBe(RouteOutlet);
+    expect(pageNode.id).toBe('/');
+    expect(asElement(pageNode.content).type).toBe(HomePage);
+    expect(App.paths).toEqual(['/']);
   });
 
-  it('records the optional loading concern on the page branch', () => {
+  it('preserves Layout ancestry and places Loading below its owning Layout', () => {
+    const scheduleRoutes = Routes.make({
+      layout: ScheduleLayout,
+      loading: ScheduleLoading,
+    })
+      .page('/', SaturdayPage)
+      .page('/day-two', SundayPage);
     const App = Application.make({
-      routes: {
-        '/': {
-          layout: RootLayout,
-          loading: RootLoading,
-          page: HomePage,
-          slots: {},
-        },
-      },
+      routes: Routes.make({ layout: RootLayout })
+        .page('/', HomePage)
+        .mount('/schedule', scheduleRoutes),
     });
-    const rootNode = asRouteTree(App.component({ pathname: '/', runtime }));
-    const root = asElement<{ readonly children: ReactNode }>(rootNode.data.content);
-    const slot = asElement<{ readonly name: string }>(root.props.children);
-    const pageNode = getRequiredSlot(rootNode, 'children');
-    const fallback = asElement(pageNode.data.loading);
-    const page = asElement<{ readonly runtime: RenderRuntime<never> }>(pageNode.data.content);
-
-    expect(slot.type).toBe(RouteOutlet);
-    expect(pageNode.hasLoadingBoundary).toBe(true);
-    expect(fallback.type).toBe(RootLoading);
-    expect(page.type).toBe(HomePage);
-    expect(page.props.runtime).toBe(runtime);
-  });
-
-  it('compiles declared parallel slots with stable outlet identities', () => {
-    const ParallelLayout = Layout.make({
-      slots: ['sidebar', 'modal'],
-      render: Effect.fnUntraced(function* ({
-        children,
-        modal,
-        sidebar,
-      }: LayoutProps<'sidebar' | 'modal'>) {
-        return yield* Effect.succeed(
-          <main>
-            {children}
-            {sidebar}
-            {modal}
-          </main>,
-        );
-      }),
-    });
-    const SidebarLoading = Loading.make(() => <p>Loading sidebar...</p>);
-    const Sidebar = Slot.make(() => Effect.succeed(<aside>Sidebar</aside>));
-    const App = Application.make({
-      routes: {
-        '/': {
-          layout: ParallelLayout,
-          page: HomePage,
-          slots: {
-            modal: null,
-            sidebar: {
-              content: Sidebar,
-              loading: SidebarLoading,
-            },
-          },
-        },
-        '/about': {
-          page: AboutPage,
-          slots: {
-            modal: null,
-            sidebar: {
-              content: Sidebar,
-              loading: SidebarLoading,
-            },
-          },
-        },
-      },
-    });
-    const rootNode = asRouteTree(App.component({ pathname: '/', runtime }));
-    const aboutRootNode = asRouteTree(App.component({ pathname: '/about', runtime }));
-    const root = asElement<{
+    const sundayRootNode = App.renderRouteTree({ pathname: '/schedule/day-two', runtime });
+    const saturdayRootNode = App.renderRouteTree({ pathname: '/schedule', runtime });
+    const scheduleLayoutNode = requiredChild(sundayRootNode);
+    const saturdayScheduleLayoutNode = requiredChild(saturdayRootNode);
+    const loadingNode = requiredChild(scheduleLayoutNode);
+    const saturdayLoadingNode = requiredChild(saturdayScheduleLayoutNode);
+    const pageNode = requiredChild(loadingNode);
+    const loadingBoundary = asElement<{
       readonly children: ReactNode;
-      readonly modal: ReactNode;
-      readonly sidebar: ReactNode;
-    }>(rootNode.data.content);
-    const childrenOutlet = asElement<{ readonly name: string }>(root.props.children);
-    const sidebarOutlet = asElement<{ readonly name: string }>(root.props.sidebar);
-    const modalOutlet = asElement<{ readonly name: string }>(root.props.modal);
-    const sidebarNode = getRequiredSlot(rootNode, 'sidebar');
-    const sidebar = asElement<{ readonly runtime: RenderRuntime<never> }>(sidebarNode.data.content);
+      readonly fallback: ReactNode;
+    }>(loadingNode.content);
 
-    expect(childrenOutlet.type).toBe(RouteOutlet);
-    expect(childrenOutlet.props.name).toBe('children');
-    expect(sidebarOutlet.type).toBe(RouteOutlet);
-    expect(sidebarOutlet.props.name).toBe('sidebar');
-    expect(modalOutlet.type).toBe(RouteOutlet);
-    expect(modalOutlet.props.name).toBe('modal');
-    expect(sidebarNode.key).toBe('slot:sidebar');
-    expect(getRequiredSlot(aboutRootNode, 'sidebar').key).toBe(sidebarNode.key);
-    expect(getRequiredSlot(aboutRootNode, 'children').key).not.toBe(
-      getRequiredSlot(rootNode, 'children').key,
-    );
-    expect(sidebarNode.hasLoadingBoundary).toBe(true);
-    expect(asElement(sidebarNode.data.loading).type).toBe(SidebarLoading);
-    expect(sidebar.type).toBe(Sidebar);
-    expect(rootNode.slots['modal']).toBeNull();
+    expect(App.paths).toEqual(['/', '/schedule', '/schedule/day-two']);
+    expect(asElement(sundayRootNode.content).type).toBe(RootLayout);
+    expect(scheduleLayoutNode.id).toBe('/schedule');
+    expect(saturdayScheduleLayoutNode.id).toBe('/schedule');
+    expect(asElement(scheduleLayoutNode.content).type).toBe(ScheduleLayout);
+    expect(loadingNode.id).toBe('/schedule/day-two');
+    expect(saturdayLoadingNode.id).toBe('/schedule');
+    expect(loadingBoundary.type).toBe(Suspense);
+    expect(asElement(loadingBoundary.props.fallback).type).toBe(ScheduleLoading);
+    expect(asElement(loadingBoundary.props.children).type).toBe(RouteOutlet);
+    expect(pageNode.id).toBe('/schedule/day-two');
+    expect(asElement(pageNode.content).type).toBe(SundayPage);
   });
 
-  it('requires every route to satisfy the root layout slot contract', () => {
-    const ParallelLayout = Layout.make({
-      slots: ['sidebar', 'modal'],
-      render: () => Effect.succeed(<main />),
-    });
-    const Sidebar = Slot.make(() => Effect.succeed(<aside>Sidebar</aside>));
-
-    expect(() =>
-      Application.make({
-        routes: {
-          '/': {
-            layout: ParallelLayout,
-            page: HomePage,
-            // @ts-expect-error The modal slot declared by the Layout is required on every route.
-            slots: { sidebar: { content: Sidebar } },
-          },
-        },
-      }),
-    ).toThrowError('Static route "/" does not define slot "modal".');
-
-    expect(() =>
-      Application.make({
-        routes: {
-          '/': {
-            layout: ParallelLayout,
-            page: HomePage,
-            slots: {
-              modal: null,
-              sidebar: { content: Sidebar },
-              // @ts-expect-error Layouts reject slots that they did not declare.
-              toolbar: { content: Sidebar },
-            },
-          },
-        },
-      }),
-    ).toThrowError('Static route "/" defines undeclared layout slot "toolbar".');
-  });
-
-  it('renders a static child page inside the inherited root concerns', () => {
+  it('lets layoutless Routes group paths without adding a rendered node', () => {
+    const groupedRoutes = Routes.make().page('/', SaturdayPage).page('/day-two', SundayPage);
     const App = Application.make({
-      routes: {
-        '/': {
-          layout: RootLayout,
-          loading: RootLoading,
-          page: HomePage,
-          slots: {},
-        },
-        '/about': {
-          page: AboutPage,
-          slots: {},
-        },
-      },
+      routes: Routes.make({ layout: RootLayout }).mount('/schedule', groupedRoutes),
     });
-    const rootNode = asRouteTree(App.component({ pathname: '/about', runtime }));
-    const root = asElement<{ readonly children: ReactNode }>(rootNode.data.content);
-    const pageNode = getRequiredSlot(rootNode, 'children');
-    const page = asElement<{ readonly runtime: RenderRuntime<never> }>(pageNode.data.content);
+    const rootNode = App.renderRouteTree({ pathname: '/schedule/day-two', runtime });
+    const pageNode = requiredChild(rootNode);
 
-    expect(App.paths).toEqual(['/', '/about']);
-    expect(root.type).toBe(RootLayout);
-    expect(pageNode.key).toBe('page:/about');
-    expect(pageNode.hasLoadingBoundary).toBe(true);
-    expect(asElement(pageNode.data.loading).type).toBe(RootLoading);
-    expect(page.type).toBe(AboutPage);
-    expect(page.props.runtime).toBe(runtime);
+    expect(pageNode.id).toBe('/schedule/day-two');
+    expect(asElement(pageNode.content).type).toBe(SundayPage);
   });
 
-  it('rejects dynamic route syntax during the static-route checkpoint', () => {
-    expect(() =>
-      Application.make({
-        routes: {
-          '/': {
-            layout: RootLayout,
-            page: HomePage,
-            slots: {},
-          },
-          '/users/:userId': {
-            page: AboutPage,
-            slots: {},
-          },
-        },
-      }),
-    ).toThrowError('Invalid static route path "/users/:userId"');
+  it('supports a Loading scope without requiring a nested Layout', () => {
+    const groupedRoutes = Routes.make({ loading: ScheduleLoading }).page('/', SaturdayPage);
+    const App = Application.make({
+      routes: Routes.make({ layout: RootLayout }).mount('/schedule', groupedRoutes),
+    });
+    const rootNode = App.renderRouteTree({ pathname: '/schedule', runtime });
+    const loadingNode = requiredChild(rootNode);
+    const pageNode = requiredChild(loadingNode);
+
+    expect(asElement(loadingNode.content).type).toBe(Suspense);
+    expect(asElement(pageNode.content).type).toBe(SaturdayPage);
   });
 
-  it('rejects nested concerns during the root-inheritance checkpoint', () => {
-    expect(() =>
-      Application.make({
-        routes: {
-          '/': {
-            layout: RootLayout,
-            page: HomePage,
-            slots: {},
-          },
-          '/about': {
-            layout: RootLayout,
-            page: AboutPage,
-            slots: {},
-          },
-        },
-      }),
-    ).toThrowError(
-      'Static route "/about" cannot define the "layout" concern. Only the root route can define layout and loading concerns.',
-    );
-  });
-
-  it('reserves the framework asset namespace', () => {
-    expect(() =>
-      Application.make({
-        routes: {
-          '/': {
-            layout: RootLayout,
-            page: HomePage,
-            slots: {},
-          },
-          '/_ersc/assets/example': {
-            page: AboutPage,
-            slots: {},
-          },
-        },
-      }),
-    ).toThrowError(
-      'Static route "/_ersc/assets/example" uses the framework-reserved "/_ersc/assets" namespace.',
-    );
-  });
-
-  it('combines layout, page, and slot service requirements', () => {
+  it('infers services through nested Layouts and Pages', () => {
     const ServiceLayout = Layout.make({
-      slots: ['sidebar'],
-      render: Effect.fnUntraced(function* ({ children }: LayoutProps<'sidebar'>) {
+      render: Effect.fnUntraced(function* ({ children }: LayoutProps) {
         yield* LayoutService;
-        return children;
+        return <>{children}</>;
       }),
     });
-    const ServicePage = Page.make(
-      Effect.fnUntraced(function* () {
-        yield* PageService;
-        return <h1>Services</h1>;
-      }),
-    );
-    const ServiceSlot = Slot.make(
-      Effect.fnUntraced(function* () {
-        yield* SlotService;
-        return <aside>Services</aside>;
-      }),
-    );
-    const ApplicationLayer = Layer.mergeAll(
-      Layer.succeed(LayoutService, LayoutService.of({})),
-      Layer.succeed(PageService, PageService.of({})),
-      Layer.succeed(SlotService, SlotService.of({})),
-    );
-    const App = Application.make({
-      routes: {
-        '/': {
-          layout: ServiceLayout,
-          page: ServicePage,
-          slots: {
-            sidebar: { content: ServiceSlot },
-          },
-        },
-      },
-      servicesLayer: ApplicationLayer,
-    });
-    type Services = ApplicationServices<typeof App>;
-    const servicesAreCombined: [Services] extends [LayoutService | PageService | SlotService]
-      ? [LayoutService | PageService | SlotService] extends [Services]
-        ? true
-        : false
-      : false = true;
-
-    expect(servicesAreCombined).toBe(true);
-    expect(App.servicesLayer).toBe(ApplicationLayer);
-  });
-
-  it('combines service requirements from every static page', () => {
     const ServicePage = Page.make(
       Effect.fnUntraced(function* () {
         yield* PageService;
         return <h1>Home</h1>;
       }),
     );
-    const ServiceAboutPage = Page.make(
+    const ServiceNestedPage = Page.make(
       Effect.fnUntraced(function* () {
-        yield* AboutPageService;
-        return <h1>About</h1>;
+        yield* NestedPageService;
+        return <h1>Nested</h1>;
       }),
     );
     const ApplicationLayer = Layer.mergeAll(
+      Layer.succeed(LayoutService, LayoutService.of({})),
       Layer.succeed(PageService, PageService.of({})),
-      Layer.succeed(AboutPageService, AboutPageService.of({})),
+      Layer.succeed(NestedPageService, NestedPageService.of({})),
     );
     const App = Application.make({
-      routes: {
-        '/': {
-          layout: RootLayout,
-          page: ServicePage,
-          slots: {},
-        },
-        '/about': {
-          page: ServiceAboutPage,
-          slots: {},
-        },
-      },
+      routes: Routes.make({ layout: ServiceLayout })
+        .page('/', ServicePage)
+        .mount('/nested', Routes.make().page('/', ServiceNestedPage)),
       servicesLayer: ApplicationLayer,
     });
     type Services = ApplicationServices<typeof App>;
-    const servicesAreCombined: [Services] extends [PageService | AboutPageService]
-      ? [PageService | AboutPageService] extends [Services]
+    const servicesAreCombined: [Services] extends [LayoutService | PageService | NestedPageService]
+      ? [LayoutService | PageService | NestedPageService] extends [Services]
         ? true
         : false
       : false = true;
@@ -409,77 +185,56 @@ describe('Application.make', () => {
     expect(App.servicesLayer).toBe(ApplicationLayer);
   });
 
-  it('requires a closed application Layer for route services', () => {
+  it('requires a root Layout, a reachable Page, and a closed services Layer', () => {
     const ServicePage = Page.make(
       Effect.fnUntraced(function* () {
         yield* PageService;
         return <h1>Services</h1>;
       }),
     );
-    const routes = {
-      '/': {
-        layout: RootLayout,
-        page: ServicePage,
-        slots: {},
-      },
-    };
-
-    // @ts-expect-error Every inferred route service must be supplied by the application Layer.
-    Application.make({ routes });
-
+    const serviceRoutes = Routes.make({ layout: RootLayout }).page('/', ServicePage);
     const IncompleteApplicationLayer = Layer.effect(
       PageService,
       Effect.as(LayerDependency, PageService.of({})),
     );
+    const typecheckInvalidApplications = () => {
+      Application.make({
+        // @ts-expect-error The application root must define a Layout.
+        routes: Routes.make().page('/', HomePage),
+      });
+      Application.make({
+        // @ts-expect-error The application must contain at least one reachable Page.
+        routes: Routes.make({ layout: RootLayout }),
+      });
+      // @ts-expect-error Every inferred route service must be supplied by the application Layer.
+      Application.make({ routes: serviceRoutes });
+      Application.make({
+        routes: serviceRoutes,
+        // @ts-expect-error The application Layer must have no remaining service requirements.
+        servicesLayer: IncompleteApplicationLayer, // oxlint-disable-line effecttsgo/missing-layer-context -- intentional invalid Layer fixture
+      });
+    };
 
-    Application.make({
-      routes,
-      // @ts-expect-error The application Layer must have no remaining service requirements.
-      servicesLayer: IncompleteApplicationLayer, // oxlint-disable-line effecttsgo/missing-layer-context -- intentional invalid Layer fixture
-    });
-
-    expect(true).toBe(true);
+    expect(typecheckInvalidApplications).toBeTypeOf('function');
+    expect(() =>
+      Application.make({ routes: Routes.make().page('/', HomePage) as never }),
+    ).toThrowError('must define a Layout');
+    expect(() =>
+      Application.make({ routes: Routes.make({ layout: RootLayout }) as never }),
+    ).toThrowError('must contain a Page');
   });
 
-  it('requires factory-created route concerns', () => {
-    const ArbitraryLayout = ({ children }: { readonly children: ReactNode }) => (
-      <main>{children}</main>
-    );
+  it('requires factory-created concerns', () => {
+    const ArbitraryLayout = ({ children }: LayoutProps) => <main>{children}</main>;
     const ArbitraryLoading = () => <p>Loading...</p>;
     const ArbitraryPage = () => <h1>Home</h1>;
-
     const typecheckInvalidConcerns = () => {
-      Application.make({
-        routes: {
-          '/': {
-            // @ts-expect-error Layout concerns must be created with Layout.make.
-            layout: ArbitraryLayout,
-            page: HomePage,
-            slots: {},
-          },
-        },
-      });
-      Application.make({
-        routes: {
-          '/': {
-            layout: RootLayout,
-            // @ts-expect-error Loading concerns must be created with Loading.make.
-            loading: ArbitraryLoading,
-            page: HomePage,
-            slots: {},
-          },
-        },
-      });
-      Application.make({
-        routes: {
-          '/': {
-            layout: RootLayout,
-            // @ts-expect-error Page concerns must be created with Page.make.
-            page: ArbitraryPage,
-            slots: {},
-          },
-        },
-      });
+      // @ts-expect-error Layout concerns must be created with Layout.make.
+      Routes.make({ layout: ArbitraryLayout });
+      // @ts-expect-error Loading concerns must be created with Loading.make.
+      Routes.make({ loading: ArbitraryLoading });
+      // @ts-expect-error Page concerns must be created with Page.make.
+      Routes.make().page('/', ArbitraryPage);
     };
 
     expect(typecheckInvalidConcerns).toBeTypeOf('function');

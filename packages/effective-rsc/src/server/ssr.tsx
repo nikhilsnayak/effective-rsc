@@ -4,6 +4,7 @@ import { renderToReadableStream } from 'react-dom/server.bun';
 import { createFromReadableStream } from 'react-server-dom-rspack/client';
 import { injectRSCPayload } from 'rsc-html-stream/server';
 
+import { RouteTree } from '../application/route-tree';
 import type { FlightPayload } from '../rsc/flight';
 import { HtmlRenderError, HtmlRenderer } from './html-renderer';
 import { ServerConfig } from './server-config';
@@ -18,7 +19,10 @@ const make = Effect.gen(function* () {
       let payload: PromiseLike<FlightPayload> | null = null;
 
       function SsrRoot() {
-        return use((payload ??= createFromReadableStream<FlightPayload>(ssrFlightStream))).root;
+        const { routeTree } = use(
+          (payload ??= createFromReadableStream<FlightPayload>(ssrFlightStream)),
+        );
+        return <RouteTree root={routeTree} />;
       }
 
       const htmlStream = yield* Effect.tryPromise({

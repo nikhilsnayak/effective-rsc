@@ -5,13 +5,7 @@ import { MapPin } from 'lucide-react';
 import { ConferenceRepository } from '@/modules/conference/conference-repository';
 
 export default Layout.make({
-  slots: ['navigation', 'agenda', 'modal'],
-  render: Effect.fn('ConferenceShell')(function* ({
-    agenda,
-    children,
-    modal,
-    navigation,
-  }: LayoutProps<'navigation' | 'agenda' | 'modal'>) {
+  render: Effect.fn('ConferenceShell')(function* ({ children }: LayoutProps) {
     const repository = yield* ConferenceRepository;
     const conference = yield* repository.conference;
 
@@ -46,15 +40,7 @@ export default Layout.make({
             </div>
           </header>
 
-          <div className='mx-auto grid max-w-7xl px-5 sm:px-8 lg:grid-cols-[11rem_minmax(0,1fr)_17rem] lg:gap-8'>
-            <aside className='border-b py-5 lg:border-r lg:border-b-0 lg:py-10 lg:pr-8'>
-              {navigation}
-            </aside>
-            {children}
-            <aside className='border-t py-7 lg:border-t-0 lg:border-l lg:py-10 lg:pl-8'>
-              {agenda}
-            </aside>
-          </div>
+          {children}
 
           <footer className='border-t'>
             <div className='text-muted-foreground mx-auto flex max-w-7xl flex-col gap-1 px-5 py-6 text-xs sm:px-8 lg:flex-row lg:justify-between'>
@@ -62,7 +48,6 @@ export default Layout.make({
               <span>{conference.data.venue}</span>
             </div>
           </footer>
-          {modal}
         </body>
       </html>
     );

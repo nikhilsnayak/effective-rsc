@@ -14,7 +14,15 @@ let renderOptions: RenderToReadableStreamOptions | undefined;
 let renderedRoot: ReactNode;
 
 const decodeFlight = vi.fn((_stream: ReadableStream<Uint8Array>) =>
-  Promise.resolve({ formState: null, root: null, serverFnResult: null } satisfies FlightPayload),
+  Promise.resolve({
+    formState: null,
+    routeTree: {
+      child: null,
+      content: null,
+      id: 'root',
+    },
+    serverFnResult: null,
+  } satisfies FlightPayload),
 );
 const renderDocument = vi.fn((root: ReactNode, options?: RenderToReadableStreamOptions) => {
   renderedRoot = root;

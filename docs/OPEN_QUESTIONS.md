@@ -32,7 +32,7 @@ This package-publication question is separate from application output. D-019 fix
 application artifacts and bundles under `.ersc/`.
 
 The initial hydration checkpoint embeds the same native Flight bytes consumed by SSR. D-017 adds a
-small serialized model containing the complete document root and React's opaque form state because
+small serialized model containing the complete document route tree and React's opaque form state because
 Fizz and `hydrateRoot` both need that state after a progressively enhanced form submission. This is
 a value carried by React Flight, not a replacement transport. Additional navigation or Server
 Function metadata remains open.
@@ -47,22 +47,21 @@ are not evidence and are not retained. Independently of those upstream blockers,
 Promise-versus-Effect contract and action-only service inference in questions 5 and 6 must be
 resolved before `ServerFn.make` is considered complete.
 
-The static-route checkpoint registers every declared literal path directly with Effect's HTTP
-router and renders its Page plus exact named Slot record through the inherited root Layout. Service
-requirements are inferred across the Layout, every Page, and every non-empty Slot. This establishes
-multiple HTML and Flight destinations without choosing the still-open dynamic-parameter schema.
+The static nested-route checkpoint composes immutable `Routes` values through `page` and `mount`,
+compiles every final literal path directly into Effect's HTTP router, and renders its ordered Layout,
+Loading, and Page ancestry as one unary Flight tree. Service requirements are inferred through every
+mount. This establishes modular route ownership, nested persistent Layouts, and multiple HTML and
+Flight destinations without choosing the still-open dynamic-parameter schema.
 
-The parallel-rendering checkpoint resolves the nested representation as an n-ary tree with named
-slots. The primary Page is the implicit `children` branch; `Slot.make` defines additional named
-parallel branches declared by `Layout.make`, and `null` records an intentionally empty branch.
-Layout, Page, and Slot concerns are independent values in one native Flight model, and a
-framework-owned `RouteOutlet` Client Component recursively stitches each child node into its
-declared outlet. The whole matched tree still travels in one Flight response under D-005; partial
-segment requests remain a later decision. The internal model no longer makes that later decision
-needlessly invasive: topology and rendered segment data are separate, loading-boundary presence is
-structural metadata, and a same-topology data overlay retains untouched parallel branches. The
-request format, cache entry lifecycle, eviction policy, and exact missing-segment representation
-remain open until the whole-tree navigation checkpoint supplies measurements.
+Named parallel outlets are deferred. They must eventually extend rather than replace the accepted
+nested Layout model, and should be introduced together with evidence for their ownership and partial
+request semantics. The current whole-tree checkpoint deliberately retains no unused patch model and
+has no cache: every intercepted navigation fetches fresh Flight. Its React boundary is fixed as one
+authoritative root-model update inside the user navigation transition, canceled through the owning
+`NavigateEvent.signal` and paired with an exact layout-commit signal. Back/Forward reuse, prefetch
+ownership, eviction and invalidation policy, React Activity retention, parallel outlets, partial
+request format, and the exact missing-subtree representation remain one unresolved router design
+rather than independent features that can be chosen safely in isolation.
 
 ## Later milestones
 

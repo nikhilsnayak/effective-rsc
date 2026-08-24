@@ -6,69 +6,34 @@ import type { RenderRuntime } from './render-runtime';
 declare const LayoutTypeId: unique symbol;
 declare const LayoutServicesTypeId: unique symbol;
 
-export type LayoutConcern<SlotName extends string = never> = {
-  readonly [LayoutTypeId]: SlotName;
+export type LayoutConcern = {
+  readonly [LayoutTypeId]: typeof LayoutTypeId;
 };
 
-export type LayoutProps<SlotName extends string = never> = {
+export type LayoutProps = {
   readonly children: ReactNode;
-} & {
-  readonly [Name in SlotName]: ReactNode;
 };
 
-type LayoutComponentProps<Services, SlotName extends string> = LayoutProps<SlotName> & {
+type LayoutComponentProps<Services> = LayoutProps & {
   readonly runtime: RenderRuntime<Services>;
 };
 
-export type LayoutComponent<Services, SlotName extends string = never> = LayoutConcern<SlotName> & {
+export type LayoutComponent<Services> = LayoutConcern & {
   readonly [LayoutServicesTypeId]: Services;
-  (props: LayoutComponentProps<Services, SlotName>): ReactNode;
-  readonly slots: ReadonlyArray<SlotName>;
+  (props: LayoutComponentProps<Services>): ReactNode;
 };
 
-type LayoutOptions<SlotNames extends ReadonlyArray<string>, Output, Error, Services> = {
-  readonly slots: SlotNames;
-  readonly render: (
-    props: LayoutProps<SlotNames[number]>,
-  ) => Effect.Effect<Output, Error, Services>;
+type LayoutOptions<Output extends Awaited<ReactNode>, Error, Services> = {
+  readonly render: (props: LayoutProps) => Effect.Effect<Output, Error, Services>;
 };
 
-const make = <
-  const SlotNames extends ReadonlyArray<string>,
-  Output extends ReactNode,
-  Error,
-  Services,
->({
-  slots,
+const make = <Output extends Awaited<ReactNode>, Error, Services>({
   render,
-}: LayoutOptions<SlotNames, Output, Error, Services>): LayoutComponent<
-  Services,
-  SlotNames[number]
-> => {
-  const declaredSlots = new Set<string>();
-  for (const slot of slots) {
-    if (slot === 'children') {
-      throw new TypeError(
-        'Layout slot "children" is implicit and must not be declared as a parallel slot.',
-      );
-    }
-    if (declaredSlots.has(slot)) {
-      throw new TypeError(`Layout slot "${slot}" is declared more than once.`);
-    }
-    declaredSlots.add(slot);
-  }
+}: LayoutOptions<Output, Error, Services>): LayoutComponent<Services> => {
+  const LayoutComponent = ({ runtime, ...props }: LayoutComponentProps<Services>) =>
+    runtime(render(props));
 
-  const LayoutComponent = ({
-    runtime,
-    ...props
-  }: LayoutComponentProps<Services, SlotNames[number]>) =>
-    runtime(render(props as LayoutProps<SlotNames[number]>));
-
-  Object.defineProperty(LayoutComponent, 'slots', {
-    value: Object.freeze([...slots]),
-  });
-
-  return LayoutComponent as unknown as LayoutComponent<Services, SlotNames[number]>;
+  return LayoutComponent as unknown as LayoutComponent<Services>;
 };
 
 export const Layout = { make } as const;

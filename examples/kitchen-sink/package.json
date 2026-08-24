@@ -15,14 +15,14 @@
     "clsx": "^2.1.1",
     "effect": "catalog:",
     "effective-rsc": "workspace:*",
-    "lucide-react": "^1.33.0",
+    "lucide-react": "^1.34.0",
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-server-dom-rspack": "catalog:",
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
-    "@playwright/test": "1.61.1",
+    "@playwright/test": "1.62.1",
     "@types/bun": "catalog:",
     "@types/react": "catalog:",
     "tailwindcss": "4.3.3",

@@ -20,7 +20,6 @@ import { DevelopmentBuild } from "./build/build/development.js";
 import { ActionRequest } from "./runtime/action-request.js";
 import { injectResolver } from "./monkey-patch.js";
 import { partition } from "./utils/partition.js";
-import { pathMatches } from "./runtime/helpers/routing.js";
 import { invariant } from "./utils/invariant.js";
 import { readStream } from "./steams/read-stream.js";
 import { combineBatch, createBatchStream } from "./steams/batch-stream.js";
@@ -61,9 +60,9 @@ export class Runtime {
     );
 
     let api =
-      staticApis.find((api) => pathMatches(api.path, realPath)) ??
-      dynamicApisInOrder.find((api) => pathMatches(api.path, realPath)) ??
-      catchAllApis.find((api) => pathMatches(api.path, realPath));
+      staticApis.find((api) => api.routePath.matches(realPath)) ??
+      dynamicApisInOrder.find((api) => api.routePath.matches(realPath)) ??
+      catchAllApis.find((api) => api.routePath.matches(realPath));
 
     if (api) {
       return new APIRequest({ api, request, runtime: this });
@@ -130,6 +129,10 @@ export class Runtime {
   }
 
   // renders
+
+  createFlightStream(data: unknown) {
+    return renderToReadableStream(data, {});
+  }
 
   async renderRSCStream(
     data: any,
@@ -254,7 +257,7 @@ export class Runtime {
       // this can happen async, we just want to signal that we no longer
       // are interested
       if (rscReader) {
-        rscReader.cancel();
+        void rscReader.cancel();
       }
     }
 
@@ -309,7 +312,7 @@ export class Runtime {
         } else if (data.status === "DONE") {
           finish();
         } else {
-          cancel();
+          void cancel();
         }
       } else if (data instanceof Uint8Array) {
         if (isHtmlStreamActive && htmlController) {
@@ -320,7 +323,7 @@ export class Runtime {
           }
         }
       } else {
-        cancel();
+        void cancel();
       }
     }
 

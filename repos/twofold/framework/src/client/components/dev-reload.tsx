@@ -13,7 +13,11 @@ declare global {
   }
 }
 
-export default function DevReload() {
+export default function DevReload({
+  initialBuildKey,
+}: {
+  initialBuildKey: string;
+}) {
   let [cssToCleanup, setCSSToCleanup] = useState<string[]>([]);
 
   let { refresh } = useRouter();
@@ -22,12 +26,12 @@ export default function DevReload() {
     cssToCleanup.forEach((file) => removeCSSFile(file));
     if (cssToCleanup.length > 0) {
       // i really need to find a better way to express this...
-      // oxlint-disable-next-line react/react-compiler
+      // oxlint-disable-next-line react/set-state-in-effect
       setCSSToCleanup([]);
     }
   }, [cssToCleanup]);
 
-  useDevReload(async (message) => {
+  useDevReload(initialBuildKey, async (message) => {
     if (message.type === "error") {
       startTransition(async () => {
         refresh();

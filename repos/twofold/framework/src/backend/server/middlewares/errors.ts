@@ -1,16 +1,16 @@
 import { RouteHandler } from "@hattip/router";
 import { serializeError } from "serialize-error";
-import { Build } from "../../build/build/build.js";
 import { readFile } from "fs/promises";
 import { appCompiledDir } from "../../files.js";
 import { parseHeaderValue } from "@hattip/headers";
-import {
-  renderToReadableStream,
-  // @ts-expect-error: TypeScript cannot find type declarations for this module
-} from "react-server-dom-webpack/server.edge";
+import type { Runtime } from "../../runtime.js";
 
-export function errors(build: Build): RouteHandler {
+export function errors(runtime: Runtime): RouteHandler {
+  let build = runtime.build;
+
   return async (ctx) => {
+    let requestBuildKey = build.key;
+
     ctx.handleError = async (e: unknown) => {
       let request = ctx.request;
 
@@ -28,18 +28,15 @@ export function errors(build: Build): RouteHandler {
           : 500;
 
       if (isRSCFetch) {
-        // maybe let the runtime own this?
-        let stream = renderToReadableStream(
-          {
-            stack: [
-              {
-                type: "error",
-                error: error,
-              },
-            ],
-          },
-          {},
-        );
+        let stream = runtime.createFlightStream({
+          stack: [
+            {
+              type: "error",
+              error: error,
+            },
+          ],
+        });
+
         return new Response(stream, {
           status,
           headers: {
@@ -47,7 +44,7 @@ export function errors(build: Build): RouteHandler {
           },
         });
       } else if (isHTMLFetch) {
-        let html = await errorPage(error);
+        let html = await errorPage({ error, buildKey: requestBuildKey });
         return new Response(html, {
           status,
           headers: {
@@ -100,7 +97,13 @@ export function errors(build: Build): RouteHandler {
   };
 }
 
-export async function errorPage(error: Error) {
+async function errorPage({
+  error,
+  buildKey,
+}: {
+  error: Error;
+  buildKey: string;
+}) {
   let htmlFile = new URL("./server-files/error.html", appCompiledDir);
   let contents = await readFile(htmlFile, "utf-8");
 
@@ -118,6 +121,7 @@ export async function errorPage(error: Error) {
       : "";
 
   let html = contents
+    .replace("$build-key", buildKey)
     .replace("$error", serializedError)
     .replace("$message", message)
     .replace("$stack", stack)

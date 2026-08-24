@@ -1,15 +1,22 @@
 {
   "name": "@twofold/oxlint-config",
-  "version": "0.0.81",
+  "version": "0.0.82",
   "description": "Shared Oxlint configuration for Twofold applications",
   "type": "module",
   "exports": {
-    ".": "./index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
   },
   "files": [
-    "index.ts",
+    "dist",
     "README.md"
   ],
+  "scripts": {
+    "compile": "tsc",
+    "prepack": "pnpm compile"
+  },
   "keywords": [
     "oxlint",
     "twofold"
@@ -23,9 +30,12 @@
     "access": "public"
   },
   "peerDependencies": {
-    "oxlint": "catalog:"
+    "oxlint": "catalog:",
+    "oxlint-tsgolint": "^7.0.2001"
   },
   "devDependencies": {
-    "oxlint": "catalog:"
+    "oxlint": "catalog:",
+    "oxlint-tsgolint": "^7.0.2001",
+    "typescript": "catalog:"
   }
 }

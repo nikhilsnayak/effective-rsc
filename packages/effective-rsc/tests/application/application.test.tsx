@@ -144,6 +144,49 @@ describe('Application.make', () => {
     expect(asElement(pageNode.content).type).toBe(SaturdayPage);
   });
 
+  it('compiles one Routes value mounted at more than one prefix', () => {
+    const sharedRoutes = Routes.make({ layout: ScheduleLayout })
+      .page('/', SaturdayPage)
+      .page('/day-two', SundayPage);
+    const App = Application.make({
+      routes: Routes.make({ layout: RootLayout })
+        .page('/', HomePage)
+        .mount('/saturday', sharedRoutes)
+        .mount('/sunday', sharedRoutes),
+    });
+    const saturdayLayoutNode = requiredChild(
+      App.renderRouteTree({ pathname: '/saturday/day-two', runtime }),
+    );
+    const sundayLayoutNode = requiredChild(
+      App.renderRouteTree({ pathname: '/sunday/day-two', runtime }),
+    );
+
+    expect(App.paths).toEqual([
+      '/',
+      '/saturday',
+      '/saturday/day-two',
+      '/sunday',
+      '/sunday/day-two',
+    ]);
+    expect(saturdayLayoutNode.id).toBe('/saturday');
+    expect(sundayLayoutNode.id).toBe('/sunday');
+    expect(requiredChild(saturdayLayoutNode).id).toBe('/saturday/day-two');
+    expect(requiredChild(sundayLayoutNode).id).toBe('/sunday/day-two');
+  });
+
+  it('rejects rendering a pathname that is not a compiled destination', () => {
+    const App = Application.make({
+      routes: Routes.make({ layout: RootLayout })
+        .page('/', HomePage)
+        .mount('/schedule', Routes.make().page('/', SaturdayPage)),
+    });
+
+    expect(App.paths).toEqual(['/', '/schedule']);
+    expect(() => App.renderRouteTree({ pathname: '/schedule/day-two', runtime })).toThrowError(
+      'No static route is registered for "/schedule/day-two".',
+    );
+  });
+
   it('infers services through nested Layouts and Pages', () => {
     const ServiceLayout = Layout.make({
       render: Effect.fnUntraced(function* ({ children }: LayoutProps) {

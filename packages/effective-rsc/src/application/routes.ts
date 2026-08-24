@@ -1,6 +1,13 @@
 import type { LayoutComponent } from './layout';
 import type { LoadingComponent } from './loading';
 import type { PageComponent } from './page';
+import {
+  joinRoutePaths,
+  type JoinPath,
+  type StaticPath,
+  validateStaticPath,
+  type ValidStaticPath,
+} from './route-path';
 
 declare const RoutesTypeId: unique symbol;
 
@@ -15,18 +22,6 @@ export type Present<Value> = {
 
 type LayoutState = Absent | Present<LayoutComponent<unknown>>;
 type LoadingState = Absent | Present<LoadingComponent>;
-
-type StaticPath = `/${string}`;
-type InvalidPathCharacter = ':' | '*' | '?' | '#';
-
-type ValidStaticPath<Path extends StaticPath> =
-  Path extends `${string}${InvalidPathCharacter}${string}` ? never : Path;
-
-type JoinPath<Prefix extends StaticPath, Path extends StaticPath> = Prefix extends '/'
-  ? Path
-  : Path extends '/'
-    ? Prefix
-    : `${Prefix}${Path}`;
 
 type MountedPaths<Prefix extends StaticPath, Child> =
   RoutesPaths<Child> extends infer Path extends StaticPath ? JoinPath<Prefix, Path> : never;
@@ -122,26 +117,6 @@ type LayoutServices<Options> = Options extends {
 }
   ? Services
   : never;
-
-const InvalidStaticPath = /[:*?#]/u;
-
-const validateStaticPath = (path: string) => {
-  if (!path.startsWith('/') || InvalidStaticPath.test(path)) {
-    throw new TypeError(
-      `Invalid static route path "${path}". Static routes must start with "/" and cannot contain ":", "*", "?", or "#".`,
-    );
-  }
-};
-
-export const joinRoutePaths = (prefix: StaticPath, path: StaticPath): StaticPath => {
-  if (prefix === '/') {
-    return path;
-  }
-  if (path === '/') {
-    return prefix;
-  }
-  return `${prefix}${path}`;
-};
 
 type RuntimeRoutesOptions = {
   readonly layout: LayoutComponent<unknown> | null;

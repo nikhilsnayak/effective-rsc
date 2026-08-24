@@ -2,21 +2,18 @@ import { Layer } from 'effect';
 import { Suspense } from 'react';
 
 import type { LayoutComponent } from './layout';
-import type { LoadingComponent } from './loading';
 import type { PageComponent } from './page';
 import type { RenderRuntime } from './render-runtime';
+import { compileRouteGraph } from './route-graph';
+import type { ReservedPath, StaticPath } from './route-path';
 import { RouteOutlet, type RouteTreeModel } from './route-tree';
 import {
   type AnyRoutes,
-  joinRoutePaths,
   type Present,
   type RoutesLayout,
   type RoutesPaths,
   type RoutesServices,
 } from './routes';
-
-type StaticPath = `/${string}`;
-type ReservedPath = '/_ersc/assets' | `/_ersc/assets/${string}`;
 
 type ApplicationComponentProps<Services> = {
   readonly pathname: StaticPath;
@@ -55,17 +52,6 @@ type ApplicationOptions<Definition extends AnyRoutes, ApplicationError> = {
   readonly routes: Definition & RootRoutes<Definition>;
 } & ServicesLayerOptions<RoutesServices<Definition>, ApplicationError>;
 
-type RouteScope = {
-  readonly id: StaticPath;
-  readonly layout: LayoutComponent<unknown> | null;
-  readonly loading: LoadingComponent | null;
-};
-
-type CompiledRoute = {
-  readonly page: PageComponent<unknown>;
-  readonly scopes: ReadonlyArray<RouteScope>;
-};
-
 function resolveServicesLayer<Services, ApplicationError>(
   servicesLayer:
     | Layer.Layer<Services, ApplicationError>
@@ -76,42 +62,6 @@ function resolveServicesLayer(servicesLayer: Layer.Any | undefined): Layer.Any {
   return servicesLayer ?? Layer.empty;
 }
 
-const compileRoutes = (
-  routes: AnyRoutes,
-  prefix: StaticPath,
-  inheritedScopes: ReadonlyArray<RouteScope>,
-  compiledRoutes: Map<StaticPath, CompiledRoute>,
-) => {
-  const scopes =
-    routes.layout === null && routes.loading === null
-      ? inheritedScopes
-      : [
-          ...inheritedScopes,
-          {
-            id: prefix,
-            layout: routes.layout,
-            loading: routes.loading,
-          },
-        ];
-
-  for (const route of routes.pages) {
-    const pathname = joinRoutePaths(prefix, route.path);
-    if (pathname === '/_ersc/assets' || pathname.startsWith('/_ersc/assets/')) {
-      throw new TypeError(
-        `Static route "${pathname}" uses the framework-reserved "/_ersc/assets" namespace.`,
-      );
-    }
-    if (compiledRoutes.has(pathname)) {
-      throw new TypeError(`Static route "${pathname}" is declared more than once.`);
-    }
-    compiledRoutes.set(pathname, { page: route.page, scopes });
-  }
-
-  for (const mount of routes.mounts) {
-    compileRoutes(mount.routes, joinRoutePaths(prefix, mount.path), scopes, compiledRoutes);
-  }
-};
-
 const make = <const Definition extends AnyRoutes, ApplicationError = never>({
   routes,
   servicesLayer,
@@ -119,21 +69,13 @@ const make = <const Definition extends AnyRoutes, ApplicationError = never>({
   RoutesServices<Definition>,
   ApplicationError
 > => {
-  if (routes.layout === null) {
-    throw new TypeError('The root Routes passed to Application.make must define a Layout.');
-  }
-
-  const compiledRoutes = new Map<StaticPath, CompiledRoute>();
-  compileRoutes(routes, '/', [], compiledRoutes);
-  if (compiledRoutes.size === 0) {
-    throw new TypeError('The root Routes passed to Application.make must contain a Page.');
-  }
+  const routeGraph = compileRouteGraph(routes);
 
   function renderRouteTree({
     pathname,
     runtime,
   }: ApplicationComponentProps<RoutesServices<Definition>>) {
-    const route = compiledRoutes.get(pathname);
+    const route = routeGraph.route(pathname);
     if (route === undefined) {
       throw new TypeError(`No static route is registered for "${pathname}".`);
     }
@@ -182,7 +124,7 @@ const make = <const Definition extends AnyRoutes, ApplicationError = never>({
   }
 
   return {
-    paths: Object.freeze([...compiledRoutes.keys()]),
+    paths: routeGraph.paths,
     renderRouteTree,
     servicesLayer: resolveServicesLayer<RoutesServices<Definition>, ApplicationError>(
       servicesLayer,

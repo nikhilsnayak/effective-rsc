@@ -60,9 +60,12 @@ export default Application.make({
   `unstable/HttpApi`, outside Routes.
 
 Construction derives exact paths, nested concern ancestry, and required Page/Layout services from
-the route graph. It rejects duplicate or invalid paths, empty mounts, invalid concern combinations,
-and the reserved `/_ersc/assets` namespace. Dynamic parameters and their Effect Schema API remain
-open.
+the route graph. Rules that hold for a single Routes value are rejected as it is composed: invalid
+path syntax, duplicate paths, and empty mounts. Rules that need root context are rejected when the
+application compiles the graph: a missing root Layout, a graph with no Page, invalid concern
+combinations, and the reserved `/_ersc/assets` namespace. Mounting prepends a prefix, so a relative
+path cannot be judged against that namespace before the root is known. Dynamic parameters and their
+Effect Schema API remain open.
 
 If Page or Layout requires services, `servicesLayer` must provide the complete inferred union with
 no remaining requirements. Service-free applications omit it. `Application.httpLayer` installs the
@@ -87,9 +90,11 @@ assets and stylesheets as React resources; assets are not Flight-model fields.
 The compiler uses real framework modules rather than generated proxy entries. Browser output lives
 in `.ersc/client/`, the Bun bundle in `.ersc/server/`, and no process shares generated source files.
 
-Application construction flattens each exact Page path and its ordered Layout/Loading ancestry.
-Each path registers directly with Effect HTTP; request dispatch adds no second matcher. A lookup
-builds one unary tree:
+Compiling the route graph flattens each exact Page path and its ordered Layout/Loading ancestry into
+one destination table, exposing the path list and a per-destination lookup. An immutable Routes value
+may be mounted at more than one prefix, so the authored graph is a DAG and each destination carries
+its own ancestry. Each path registers directly with Effect HTTP; request dispatch adds no second
+matcher. A lookup builds one unary tree:
 
 ```text
 Layout -> optional Loading -> nested scope -> ... -> Page

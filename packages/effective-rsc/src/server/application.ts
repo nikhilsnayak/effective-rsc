@@ -1,21 +1,18 @@
 import { BunHttpServer } from '@effect/platform-bun';
 import { Effect, Layer, Stream } from 'effect';
-import {
-  HttpRouter,
-  HttpServerRequest,
-  HttpServerResponse,
-  HttpStaticServer,
-} from 'effect/unstable/http';
+import { HttpRouter, HttpServerResponse, HttpStaticServer } from 'effect/unstable/http';
 
 import type { ApplicationDefinition } from '../application/definition';
-import { FlightMediaType, type FlightPayload } from '../rsc/flight';
-import { FlightRenderer } from './flight';
+import { FlightMediaType } from '../rsc/flight';
+import { FlightRendererLayer } from './flight';
+import { FlightRenderer } from './flight-renderer';
 import { HtmlRenderer } from './html-renderer';
+import type { RequestOutcome } from './request-outcome';
 import { ServerConfig } from './server-config';
 import { handleServerFnRequest } from './server-fn';
 import { HtmlRendererLayer } from './ssr';
 
-const RenderersLayer = Layer.mergeAll(FlightRenderer.layer, HtmlRendererLayer);
+const RenderersLayer = Layer.mergeAll(FlightRendererLayer, HtmlRendererLayer);
 
 const StaticAssetsLayer = Layer.unwrap(
   Effect.map(ServerConfig, ({ clientAssetsRoot }) =>
@@ -36,6 +33,11 @@ const BunServerLayer = Layer.unwrap(
   ),
 );
 
+type RenderOpts = RequestOutcome & {
+  readonly accept: string | undefined;
+  readonly pathname: `/${string}`;
+};
+
 const fromWebStream = (stream: ReadableStream<Uint8Array>) =>
   Stream.fromReadableStream({
     evaluate: () => stream,
@@ -45,41 +47,36 @@ const fromWebStream = (stream: ReadableStream<Uint8Array>) =>
 const httpLayer = <Services, ApplicationError>(
   application: ApplicationDefinition<Services, ApplicationError>,
 ) => {
-  const render = Effect.fnUntraced(function* (
-    request: HttpServerRequest.HttpServerRequest,
-    pathname: `/${string}`,
-    options: {
-      readonly formState: FlightPayload['formState'];
-      readonly serverFnResult: FlightPayload['serverFnResult'];
-      readonly status: number;
-      readonly temporaryReferences?: import('./flight').TemporaryReferenceSet;
-    },
-  ) {
+  const render = Effect.fnUntraced(function* ({
+    accept,
+    formState,
+    pathname,
+    serverFnResult,
+    status,
+    temporaryReferences,
+  }: RenderOpts) {
     const flightRenderer = yield* FlightRenderer;
     const flightStream = yield* flightRenderer.render({
       renderRouteTree: application.renderRouteTree,
-      formState: options.formState,
+      formState,
       pathname,
-      serverFnResult: options.serverFnResult,
-      temporaryReferences: options.temporaryReferences,
+      serverFnResult,
+      temporaryReferences,
     });
 
-    if (request.headers['accept']?.includes(FlightMediaType)) {
+    if (accept?.includes(FlightMediaType)) {
       return HttpServerResponse.stream(fromWebStream(flightStream), {
         contentType: `${FlightMediaType};charset=utf-8`,
-        status: options.status,
+        status,
       });
     }
 
     const htmlRenderer = yield* HtmlRenderer;
-    const htmlStream = yield* htmlRenderer.render({
-      flightStream,
-      formState: options.formState,
-    });
+    const htmlStream = yield* htmlRenderer.render({ flightStream, formState });
 
     return HttpServerResponse.stream(fromWebStream(htmlStream), {
       contentType: 'text/html;charset=utf-8',
-      status: options.status,
+      status,
     });
   });
 
@@ -90,15 +87,19 @@ const httpLayer = <Services, ApplicationError>(
 
       for (const pathname of application.paths) {
         yield* router.add('GET', pathname, (request) =>
-          render(request, pathname, {
+          render({
+            accept: request.headers['accept'],
             formState: null,
+            pathname,
             serverFnResult: null,
             status: 200,
           }),
         );
         yield* router.add('POST', pathname, (request) =>
           handleServerFnRequest<Services>(request).pipe(
-            Effect.flatMap((result) => render(request, pathname, result)),
+            Effect.flatMap((result) =>
+              render({ ...result, accept: request.headers['accept'], pathname }),
+            ),
             Effect.catchTag('ServerFnRequestError', (error) =>
               Effect.succeed(
                 HttpServerResponse.text(error.message, {

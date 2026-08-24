@@ -6,10 +6,10 @@ import {
   decodeFormState,
   decodeReply,
   loadServerAction,
-  type TemporaryReferenceSet,
 } from 'react-server-dom-rspack/server.node';
 
 import { ServerFnIdHeader, type FlightPayload, type ServerFnResult } from '../rsc/flight';
+import type { RequestOutcome } from './request-outcome';
 
 export class ServerFnRequestError extends Schema.TaggedError<ServerFnRequestError>()(
   'ServerFnRequestError',
@@ -24,13 +24,6 @@ class ServerFnExecutionError extends Schema.TaggedError<ServerFnExecutionError>(
   'ServerFnExecutionError',
   { cause: Schema.Defect() },
 ) {}
-
-export type ServerFnRequestResult = {
-  readonly formState: FlightPayload['formState'];
-  readonly serverFnResult: ServerFnResult | null;
-  readonly status: number;
-  readonly temporaryReferences?: TemporaryReferenceSet;
-};
 
 const requestError = (message: string, status: 400 | 403 | 500, cause: unknown) =>
   new ServerFnRequestError({ cause, message, status });
@@ -112,7 +105,7 @@ const runClientServerFn = Effect.fnUntraced(function* <Services>(
     serverFnResult,
     status: exit._tag === 'Success' ? 200 : 500,
     temporaryReferences,
-  } satisfies ServerFnRequestResult;
+  } satisfies RequestOutcome;
 });
 
 const runProgressiveServerFn = Effect.fnUntraced(function* <Services>(request: Request) {
@@ -146,7 +139,7 @@ const runProgressiveServerFn = Effect.fnUntraced(function* <Services>(request: R
     formState: (decodedFormState ?? null) as FlightPayload['formState'],
     serverFnResult: null,
     status: 200,
-  } satisfies ServerFnRequestResult;
+  } satisfies RequestOutcome;
 });
 
 export const handleServerFnRequest = Effect.fnUntraced(function* <Services>(

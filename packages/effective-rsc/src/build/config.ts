@@ -8,7 +8,16 @@ import { pluginReact } from '@rsbuild/plugin-react';
 import { pluginTailwindcss } from '@rsbuild/plugin-tailwindcss';
 import { Layers, pluginRSC } from 'rsbuild-plugin-rsc';
 
+import { FrameworkAssetPrefix } from '../application/route-path';
 import { DefaultApplicationPort } from '../server/server-config';
+import {
+  ClientEntryName,
+  ClientOutputDir,
+  CssFilenameTemplate,
+  JsFilenameTemplate,
+  ServerEntryName,
+  ServerOutputDir,
+} from './output';
 
 export type RsbuildEntries = {
   readonly application: string;
@@ -22,7 +31,6 @@ export type LoadServerBundle = () => Promise<unknown>;
 
 type DevServerCompile = (loadServerBundle: LoadServerBundle) => Promise<void>;
 
-const FrameworkAssetPrefix = '/_ersc/assets/';
 const ApplicationEntrySpecifier = 'effective-rsc/application-entry';
 const ApplicationStylesheetSpecifier = 'effective-rsc/application-stylesheet';
 
@@ -40,7 +48,7 @@ const makeEnvironments = (
   client: {
     source: {
       entry: {
-        main: {
+        [ClientEntryName]: {
           import: entries.client,
           html: false,
         },
@@ -49,14 +57,14 @@ const makeEnvironments = (
     output: {
       target: 'web',
       distPath: {
-        root: `${root}/.ersc/client`,
+        root: `${root}/${ClientOutputDir}`,
         css: '',
         js: '',
         jsAsync: '',
       },
       filename: {
-        css: '[name].css',
-        js: '[name].js',
+        css: CssFilenameTemplate,
+        js: JsFilenameTemplate,
       },
       assetPrefix: FrameworkAssetPrefix,
       cleanDistPath: true,
@@ -71,7 +79,7 @@ const makeEnvironments = (
     },
     source: {
       entry: {
-        main: {
+        [ServerEntryName]: {
           import: entries.rsc,
           layer: Layers.rsc,
           html: false,
@@ -81,14 +89,14 @@ const makeEnvironments = (
     output: {
       target: 'node',
       distPath: {
-        root: `${root}/.ersc/server`,
+        root: `${root}/${ServerOutputDir}`,
         css: '',
         js: '',
         jsAsync: '',
       },
       filename: {
-        css: '[name].css',
-        js: '[name].js',
+        css: CssFilenameTemplate,
+        js: JsFilenameTemplate,
       },
       module: true,
       cleanDistPath: true,
@@ -133,7 +141,7 @@ const makeDevLifecyclePlugin = (
         throw new Error('Rsbuild did not create the effective-rsc server environment.');
       }
 
-      return onServerCompile(() => serverEnvironment.loadBundle('main'));
+      return onServerCompile(() => serverEnvironment.loadBundle(ServerEntryName));
     });
   },
 });

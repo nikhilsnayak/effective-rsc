@@ -3,6 +3,7 @@ import { Effect, Layer, Stream } from 'effect';
 import { HttpRouter, HttpServerResponse, HttpStaticServer } from 'effect/unstable/http';
 
 import type { ApplicationDefinition } from '../application/definition';
+import { FrameworkAssetNamespace } from '../application/route-path';
 import { FlightMediaType } from '../rsc/flight';
 import { FlightRendererLayer } from './flight';
 import { FlightRenderer } from './flight-renderer';
@@ -18,7 +19,7 @@ const StaticAssetsLayer = Layer.unwrap(
   Effect.map(ServerConfig, ({ clientAssetsRoot }) =>
     HttpStaticServer.layer({
       cacheControl: 'no-store',
-      prefix: '/_ersc/assets',
+      prefix: FrameworkAssetNamespace,
       root: clientAssetsRoot,
     }),
   ),

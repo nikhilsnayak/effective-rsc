@@ -2,6 +2,7 @@ import { Effect, FileSystem, Layer, Path, Schema, Types } from 'effect';
 import { HttpRouter } from 'effect/unstable/http';
 
 import { ServerConfig } from '../server/server-config';
+import { ClientOutputDir, ServerBundlePath } from './output';
 
 export class CompiledServerError extends Schema.TaggedError<CompiledServerError>()(
   'CompiledServerError',
@@ -72,7 +73,7 @@ const makeServerConfigLayer = Effect.fnUntraced(function* ({
   return Layer.succeed(
     ServerConfig,
     ServerConfig.of({
-      clientAssetsRoot: path.resolve(root, '.ersc/client'),
+      clientAssetsRoot: path.resolve(root, ClientOutputDir),
       clientBootstrapScripts: bundle.default.entryJsFiles,
       clientStylesheets: bundle.default.entryCssFiles,
       hostname: 'localhost',
@@ -111,7 +112,7 @@ export const makeRunnableHttpLayer = Effect.fnUntraced(function* ({
 
 export const loadCompiledServer = Effect.fnUntraced(function* (root: string) {
   const path = yield* Path.Path;
-  const serverBundlePath = path.resolve(root, '.ersc/server/main.js');
+  const serverBundlePath = path.resolve(root, ServerBundlePath);
   const serverBundleUrl = yield* path.toFileUrl(serverBundlePath).pipe(
     Effect.mapError(
       (cause) =>

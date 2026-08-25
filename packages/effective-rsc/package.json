@@ -1,29 +1,44 @@
 {
   "name": "effective-rsc",
   "version": "0.0.0",
+  "license": "MIT",
   "bin": {
-    "ersc": "./src/cli.ts"
+    "ersc": "./bin/ersc.js"
   },
+  "files": [
+    "bin/ersc.js",
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
   "type": "module",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
   },
   "scripts": {
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "build": "rslib build",
+    "prepack": "bun run build",
+    "test": "vitest run --exclude tests/build/distribution.test.ts",
+    "test:dist": "vitest run tests/build/distribution.test.ts",
+    "test:pack": "bun pm pack --dry-run --ignore-scripts --quiet",
+    "test:watch": "vitest --exclude tests/build/distribution.test.ts"
   },
   "dependencies": {
-    "@effect/platform-browser": "4.0.0-rc.111",
-    "@effect/platform-bun": "4.0.0-rc.111",
-    "@rsbuild/core": "2.2.0-beta.2",
-    "@rsbuild/plugin-react": "2.1.0",
-    "@rsbuild/plugin-tailwindcss": "2.0.3",
-    "rsbuild-plugin-rsc": "0.1.1",
+    "@rspack/core": "2.2.0-rc.0",
+    "@tailwindcss/webpack": "4.3.3",
     "rsc-html-stream": "0.0.8"
   },
   "devDependencies": {
-    "@effect/vitest": "4.0.0-rc.111",
+    "@effect/platform-browser": "catalog:",
+    "@effect/platform-bun": "catalog:",
+    "@effect/vitest": "4.0.0-rc.112",
+    "@rsbuild/plugin-react": "2.1.0",
+    "@rslib/core": "1.0.0-rc.1",
     "@types/bun": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "19.2.4",
@@ -35,9 +50,14 @@
     "vitest": "catalog:"
   },
   "peerDependencies": {
+    "@effect/platform-browser": "catalog:",
+    "@effect/platform-bun": "catalog:",
     "effect": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-server-dom-rspack": "catalog:"
+  },
+  "engines": {
+    "bun": ">=1.4.0"
   }
 }

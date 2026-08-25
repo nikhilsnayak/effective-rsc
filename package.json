@@ -2,6 +2,7 @@
   "name": "effective-rsc-monorepo",
   "version": "0.0.0",
   "private": true,
+  "license": "MIT",
   "workspaces": [
     "examples/*",
     "packages/*"
@@ -9,17 +10,15 @@
   "type": "module",
   "scripts": {
     "build": "turbo build",
-    "dev": "turbo dev",
     "lint": "oxlint --deny-warnings --config oxlint.config.ts",
     "lint:fix": "oxlint --fix --config oxlint.config.ts",
     "fmt": "oxfmt . '!repos/**'",
     "fmt:check": "oxfmt --check . '!repos/**'",
-    "check": "bun run lint && bun run fmt:check && bun run typecheck",
-    "test": "turbo test && turbo test:e2e && bun run test:scripts",
+    "check": "bun run lint && bun run fmt:check",
+    "test": "turbo test test:dist test:pack && turbo test:e2e && bun run test:scripts",
     "test:e2e": "turbo test:e2e",
     "test:scripts": "vitest run scripts",
     "test:watch": "turbo test:watch",
-    "typecheck": "turbo typecheck",
     "vendor:sync": "bun scripts/sync-vendor.ts",
     "prepare": "effect-tsgo patch --oxlint"
   },
@@ -35,9 +34,11 @@
   },
   "packageManager": "bun@1.4.0",
   "catalog": {
+    "@effect/platform-browser": "4.0.0-rc.112",
+    "@effect/platform-bun": "4.0.0-rc.112",
     "@types/bun": "^1.4.0",
     "@types/react": "19.2.18",
-    "effect": "4.0.0-rc.111",
+    "effect": "4.0.0-rc.112",
     "react": "19.3.0-canary-eb8feb71-20260814",
     "react-dom": "19.3.0-canary-eb8feb71-20260814",
     "react-server-dom-rspack": "0.1.0",

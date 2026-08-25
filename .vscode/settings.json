@@ -4,14 +4,14 @@
     "source.removeUnusedImports": "always"
   },
   "files.readonlyInclude": {
-    "**/.effective/**": true
+    "**/.ersc/**": true
   },
   "files.watcherExclude": {
-    "**/.effective/**": true,
+    "**/.ersc/**": true,
     "repos/**": true
   },
   "search.exclude": {
-    "**/.effective/**": true,
+    "**/.ersc/**": true,
     "repos/**": true
   },
   "js/ts.preferences.autoImportFileExcludePatterns": ["repos/**"],

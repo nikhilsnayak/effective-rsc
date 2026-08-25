@@ -35,6 +35,7 @@ export type NavigationApi = {
 };
 
 type NavigationWindow = Window & {
+  readonly NavigationPrecommitController?: unknown;
   readonly navigation?: NavigationApi;
 };
 
@@ -42,6 +43,11 @@ const ReactTransitionNavigationInfo = 'react-transition';
 
 export class NavigationApiUnavailableError extends Schema.TaggedError<NavigationApiUnavailableError>()(
   'NavigationApiUnavailableError',
+  {},
+) {}
+
+export class NavigationPrecommitUnavailableError extends Schema.TaggedError<NavigationPrecommitUnavailableError>()(
+  'NavigationPrecommitUnavailableError',
   {},
 ) {}
 
@@ -56,9 +62,13 @@ const shouldIntercept = (event: NavigationApiEvent) =>
 export const listenForNavigation = Effect.fnUntraced(function* (
   browserRoot: BrowserRootController,
 ) {
-  const navigation = (window as NavigationWindow).navigation;
+  const navigationWindow = window as NavigationWindow;
+  const navigation = navigationWindow.navigation;
   if (navigation === undefined) {
     return yield* new NavigationApiUnavailableError();
+  }
+  if (navigationWindow.NavigationPrecommitController === undefined) {
+    return yield* new NavigationPrecommitUnavailableError();
   }
   const run = yield* FiberSet.makeRuntimePromise<HttpClient.HttpClient | Scope.Scope>();
 

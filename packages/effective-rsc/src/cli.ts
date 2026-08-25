@@ -2,14 +2,20 @@
 
 import * as BunRuntime from '@effect/platform-bun/BunRuntime';
 import * as BunServices from '@effect/platform-bun/BunServices';
-import { Effect, Layer } from 'effect';
+import { Effect, Layer, Schema } from 'effect';
 import * as Command from 'effect/unstable/cli/Command';
 
-import { build } from './build/build';
+import PackageJson from '../package.json' with { type: 'json' };
 import { loadCompiledServer, makeRunnableServerLayer } from './build/compiled-server';
-import { dev } from './build/dev';
-import { Rsbuild } from './build/rsbuild';
 import { DefaultApplicationPort } from './server/server-config';
+
+export class BuildModuleLoadError extends Schema.TaggedError<BuildModuleLoadError>()(
+  'BuildModuleLoadError',
+  {
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
 const start = Effect.fn('effective-rsc/cli/start')(function* (root: string) {
   const bundle = yield* loadCompiledServer(root);
@@ -23,20 +29,20 @@ const start = Effect.fn('effective-rsc/cli/start')(function* (root: string) {
 });
 
 const runBuild = Effect.fnUntraced(function* () {
-  yield* build({ root: process.cwd() }).pipe(Effect.scoped);
-});
+  const { buildApplication } = yield* Effect.tryPromise({
+    try: () => import('./build/build'),
+    catch: (cause) =>
+      new BuildModuleLoadError({
+        message: 'Failed to load the effective-rsc application compiler.',
+        cause,
+      }),
+  });
 
-const runDev = Effect.fnUntraced(function* () {
-  return yield* dev({ root: process.cwd() }).pipe(Effect.scoped);
+  yield* buildApplication({ root: process.cwd() });
 });
-
-const devCommand = Command.make('dev').pipe(
-  Command.withDescription('Run an effective-rsc application in development mode.'),
-  Command.withHandler(runDev),
-);
 
 const buildCommand = Command.make('build').pipe(
-  Command.withDescription('Compile an effective-rsc application with Rsbuild.'),
+  Command.withDescription('Compile an effective-rsc application with Rspack.'),
   Command.withHandler(runBuild),
 );
 
@@ -47,11 +53,11 @@ const startCommand = Command.make('start').pipe(
 
 const cli = Command.make('ersc').pipe(
   Command.withDescription('Build and run an effective-rsc application.'),
-  Command.withSubcommands([devCommand, buildCommand, startCommand]),
+  Command.withSubcommands([buildCommand, startCommand]),
 );
 
-const program = Command.run(cli, { version: '0.0.0' }).pipe(
-  Effect.provide(Layer.mergeAll(Rsbuild.layer, BunServices.layer)),
+const program = Command.run(cli, { version: PackageJson.version }).pipe(
+  Effect.provide(BunServices.layer),
 );
 
 BunRuntime.runMain(program);

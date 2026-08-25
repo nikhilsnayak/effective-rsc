@@ -25,6 +25,7 @@ import type { BrowserRenderRequest, BrowserRootController } from '../../src/clie
 import {
   listenForNavigation,
   NavigationApiUnavailableError,
+  NavigationPrecommitUnavailableError,
   type NavigationApi,
   type NavigationApiEvent,
   type NavigationInterceptOptions,
@@ -102,7 +103,7 @@ const listen = (
   browserRoot: BrowserRootController = makeBrowserRoot(),
   httpClient = makeHttpClient(),
 ) => {
-  vi.stubGlobal('window', { navigation });
+  vi.stubGlobal('window', { NavigationPrecommitController: class {}, navigation });
   return listenForNavigation(browserRoot).pipe(
     Effect.provideService(HttpClient.HttpClient, httpClient),
   );
@@ -293,6 +294,17 @@ it.effect('fails explicitly when the browser does not provide the Navigation API
     Effect.flip,
     Effect.map((error) => {
       expect(error).toBeInstanceOf(NavigationApiUnavailableError);
+    }),
+  ),
+);
+
+it.effect('fails explicitly when the browser does not provide navigation precommit', () =>
+  Effect.sync(() => vi.stubGlobal('window', { navigation: new TestNavigationApi() })).pipe(
+    Effect.andThen(listenForNavigation(makeBrowserRoot())),
+    Effect.provideService(HttpClient.HttpClient, makeHttpClient()),
+    Effect.flip,
+    Effect.map((error) => {
+      expect(error).toBeInstanceOf(NavigationPrecommitUnavailableError);
     }),
   ),
 );

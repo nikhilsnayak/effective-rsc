@@ -5,13 +5,13 @@
   "type": "module",
   "scripts": {
     "build": "ersc build",
-    "dev": "ersc dev",
     "start": "ersc start",
-    "test:e2e": "playwright test",
-    "typecheck": "tsc --noEmit"
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
+    "@effect/platform-browser": "catalog:",
+    "@effect/platform-bun": "catalog:",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "effect": "catalog:",

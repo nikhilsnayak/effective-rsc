@@ -1,19 +1,20 @@
 # effective-rsc documentation
 
-These files are the framework's source of truth. Read the relevant owners before changing behavior.
+Read this index before changing framework behavior.
 
 ## Status
 
-- **Accepted**: agreed and safe to implement.
-- **Working**: current design awaiting validation.
+- **Current**: implemented and authoritative.
+- **Planned**: accepted but not implemented.
+- **Deferred**: intentionally outside the current milestone.
 - **Open**: unresolved; do not choose silently.
-- **Deferred**: outside the current milestone.
 
-## Ownership
+## Owners
 
 - [VISION.md](VISION.md): purpose, principles, and non-goals.
-- [ARCHITECTURE.md](ARCHITECTURE.md): runtime flows, application model, and module boundaries.
-- [DECISIONS.md](DECISIONS.md): terse register of accepted and deferred choices.
-- [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md): unresolved choices and current evidence.
+- [ARCHITECTURE.md](ARCHITECTURE.md): current runtime flows and module boundaries.
+- [DECISIONS.md](DECISIONS.md): current, planned, and deferred choices.
+- [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md): unresolved choices and their evidence.
 
-Each decision has one owner. Other files should link or summarize only when needed for context.
+Only these files own framework behavior. Preserve historical investigation in Git history rather than
+as active agent context.

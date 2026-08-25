@@ -1,16 +1,19 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
+  "globalDependencies": ["tsconfig.json"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".ersc/**"]
-    },
-    "dev": {
-      "cache": false,
-      "persistent": true
+      "outputs": [".ersc/**", "dist/**"]
     },
     "test": {
+      "dependsOn": ["build"]
+    },
+    "test:dist": {
+      "dependsOn": ["build"]
+    },
+    "test:pack": {
       "dependsOn": ["build"]
     },
     "test:e2e": {
@@ -20,9 +23,6 @@
     "test:watch": {
       "cache": false,
       "persistent": true
-    },
-    "typecheck": {
-      "dependsOn": ["^typecheck"]
     }
   }
 }

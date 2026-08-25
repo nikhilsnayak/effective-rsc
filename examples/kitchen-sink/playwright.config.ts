@@ -1,6 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const applicationOrigin = 'http://localhost:18193';
+const applicationReadyUrl = `${applicationOrigin}/_ersc/assets/main.js`;
+// oxlint-disable-next-line effecttsgo/process-env -- Playwright configuration reads the CI process boundary.
+const isCi = process.env['CI'] !== undefined;
 
 export default defineConfig({
   testDir: './e2e',
@@ -21,8 +24,8 @@ export default defineConfig({
   ],
   webServer: {
     command: 'ersc start',
-    url: applicationOrigin,
-    reuseExistingServer: true,
+    url: applicationReadyUrl,
+    reuseExistingServer: !isCi,
     timeout: 30_000,
     gracefulShutdown: {
       signal: 'SIGINT',

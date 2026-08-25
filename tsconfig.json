@@ -4,6 +4,7 @@
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "jsx": "react-jsx",
     "noEmit": true,
     "skipLibCheck": true,
 
@@ -27,5 +28,6 @@
         "diagnostics": false
       }
     ]
-  }
+  },
+  "exclude": ["repos"]
 }

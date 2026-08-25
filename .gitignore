@@ -23,6 +23,7 @@ test-results
 
 # Framework output
 .ersc
+dist
 *.tgz
 
 # Debug

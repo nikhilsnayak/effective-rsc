@@ -1,10 +1,14 @@
 import { Effect, Path, Schema } from 'effect';
 
-import { makeBuildConfig } from './config';
-import { Rsbuild } from './rsbuild';
+import { Rspack } from './rspack';
+import { makeRspackBuildConfig } from './rspack-config';
 
 export type BuildOptions = {
   readonly root: string;
+};
+
+export type ResolveApplicationBuildOptions = BuildOptions & {
+  readonly buildModuleUrl?: URL;
 };
 
 const ApplicationEntryPath = 'src/application.tsx';
@@ -15,31 +19,39 @@ export class BuildEntryError extends Schema.TaggedError<BuildEntryError>()('Buil
   cause: Schema.Defect(),
 }) {}
 
-const ClientEntryUrl = new URL('../client/entry.ts', import.meta.url);
-const RscEntryUrl = new URL('./rsc-entry.ts', import.meta.url);
-const SsrEntryUrl = new URL('../server/ssr.tsx', import.meta.url);
+const ClientEntryPath = '../client/entry.js';
+const RscEntryPath = './rsc-entry.js';
+const SsrEntryPath = '../server/ssr.js';
 
-const resolveFrameworkEntry = Effect.fnUntraced(function* (url: URL) {
+const resolveFrameworkEntry = Effect.fnUntraced(function* (
+  buildModuleUrl: URL,
+  relativePath: string,
+) {
   const path = yield* Path.Path;
 
-  return yield* path.fromFileUrl(url).pipe(
+  const buildModulePath = yield* path.fromFileUrl(buildModuleUrl).pipe(
     Effect.mapError(
       (cause) =>
         new BuildEntryError({
-          message: `Failed to convert the framework entry ${url.href} to a file path.`,
+          message: `Failed to convert the framework build module ${buildModuleUrl.href} to a file path.`,
           cause,
         }),
     ),
   );
+
+  return path.resolve(path.dirname(buildModulePath), relativePath);
 });
 
-export const resolveApplicationBuild = Effect.fnUntraced(function* ({ root }: BuildOptions) {
+export const resolveApplicationBuild = Effect.fnUntraced(function* ({
+  root,
+  buildModuleUrl = new URL(import.meta.url),
+}: ResolveApplicationBuildOptions) {
   const path = yield* Path.Path;
   const applicationRoot = path.resolve(root);
   const applicationPath = path.resolve(applicationRoot, ApplicationEntryPath);
-  const clientEntry = yield* resolveFrameworkEntry(ClientEntryUrl);
-  const rscEntry = yield* resolveFrameworkEntry(RscEntryUrl);
-  const ssrEntry = yield* resolveFrameworkEntry(SsrEntryUrl);
+  const clientEntry = yield* resolveFrameworkEntry(buildModuleUrl, ClientEntryPath);
+  const rscEntry = yield* resolveFrameworkEntry(buildModuleUrl, RscEntryPath);
+  const ssrEntry = yield* resolveFrameworkEntry(buildModuleUrl, SsrEntryPath);
   const stylesheetPath = path.resolve(applicationRoot, ApplicationStylesheetPath);
 
   const entries = {
@@ -53,9 +65,15 @@ export const resolveApplicationBuild = Effect.fnUntraced(function* ({ root }: Bu
   return { applicationRoot, entries } as const;
 });
 
-export const build = Effect.fn('effective-rsc/rsbuild/build')(function* (options: BuildOptions) {
+export const build = Effect.fn('effective-rsc/rspack/build')(function* (options: BuildOptions) {
   const { applicationRoot, entries } = yield* resolveApplicationBuild(options);
-  const rsbuild = yield* Rsbuild;
+  const rspack = yield* Rspack;
 
-  yield* rsbuild.build(makeBuildConfig(applicationRoot, entries));
+  yield* rspack.build(makeRspackBuildConfig(applicationRoot, entries));
+});
+
+export const buildApplication = Effect.fn('effective-rsc/build/buildApplication')(function* (
+  options: BuildOptions,
+) {
+  yield* build(options).pipe(Effect.provide(Rspack.layer), Effect.scoped);
 });

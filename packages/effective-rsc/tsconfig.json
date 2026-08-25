@@ -1,8 +1,9 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "jsx": "react-jsx",
+    "isolatedModules": true,
+    "rootDir": "./src",
     "types": ["bun"]
   },
-  "include": ["src", "tests"]
+  "include": ["src"]
 }

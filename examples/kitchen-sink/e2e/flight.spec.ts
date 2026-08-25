@@ -32,3 +32,17 @@ test('serializes Client Components as native module references', async ({ reques
   expect(moduleReferences.length).toBeGreaterThan(0);
   expect(moduleReferences.some((reference) => reference.includes('RouteOutlet'))).toBe(true);
 });
+
+test('isolates ERSC runtimes across concurrent Flight requests', async ({ request }) => {
+  const [saturday, sunday] = await Promise.all([
+    requestFlight(request),
+    requestFlight(request, '/schedule/day-two'),
+  ]);
+
+  expect(saturday.response.status()).toBe(200);
+  expect(sunday.response.status()).toBe(200);
+  expect(saturday.body).toContain('Saturday schedule');
+  expect(saturday.body).toContain('Nikhil Nayak');
+  expect(sunday.body).toContain('Sunday schedule');
+  expect(sunday.body).toContain('Rohan Mehta');
+});

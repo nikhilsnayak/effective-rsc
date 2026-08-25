@@ -1,8 +1,3 @@
 /// <reference types="@rsbuild/core/types" />
 
-export { Application } from './application/definition';
-export { Layout, type LayoutProps } from './application/layout';
-export { Loading } from './application/loading';
-export { Page } from './application/page';
-export { Routes } from './application/routes';
-export { ServerFn, type ServerFunction } from './application/server-fn';
+export { Application } from './application/ersc';

@@ -1,6 +1,8 @@
-import type { LayoutComponent } from './layout';
-import type { LoadingComponent } from './loading';
-import type { PageComponent } from './page';
+import type { ERSCIdentity, ERSCMember } from './ersc-identity';
+import { ERSCIdentityTypeId } from './ersc-identity';
+import { isLayoutConcern, type LayoutComponent } from './layout';
+import { isLoadingConcern, type LoadingComponent } from './loading';
+import { isPageConcern, type PageComponent } from './page';
 import {
   joinRoutePaths,
   type JoinPath,
@@ -11,17 +13,12 @@ import {
 
 declare const RoutesTypeId: unique symbol;
 
-export type Absent = {
-  readonly kind: 'Absent';
-};
+export const RoutesScopeIdTypeId: unique symbol = Symbol('effective-rsc/RoutesScopeId');
 
-export type Present<Value> = {
-  readonly kind: 'Present';
-  readonly value: Value;
+type RoutesState<HasLayout extends boolean, Paths extends string> = {
+  readonly hasLayout: HasLayout;
+  readonly paths: Paths;
 };
-
-type LayoutState = Absent | Present<LayoutComponent<unknown>>;
-type LoadingState = Absent | Present<LoadingComponent>;
 
 type MountedPaths<Prefix extends StaticPath, Child> =
   RoutesPaths<Child> extends infer Path extends StaticPath ? JoinPath<Prefix, Path> : never;
@@ -34,174 +31,203 @@ type NoPathCollision<Current extends string, Added extends string> = [
 
 type NonEmptyRoutes<Definition> = [RoutesPaths<Definition>] extends [never] ? never : unknown;
 
-export type RoutesPage = {
-  readonly page: PageComponent<unknown>;
+export type RoutesPage<Services> = {
+  readonly page: PageComponent<Services>;
   readonly path: StaticPath;
 };
 
-export type RoutesMount = {
+export type RoutesMount<Services> = {
   readonly path: StaticPath;
-  readonly routes: AnyRoutes;
+  readonly routes: AnyRoutes<Services>;
 };
 
 export interface RoutesDefinition<
-  out Layout extends LayoutState,
-  out Loading extends LoadingState,
+  Services,
+  out HasLayout extends boolean,
   out Paths extends string,
-  out Services,
-> {
-  readonly [RoutesTypeId]: {
-    readonly layout: Layout;
-    readonly loading: Loading;
-    readonly paths: Paths;
-    readonly services: Services;
-  };
-  readonly layout: LayoutComponent<unknown> | null;
-  readonly loading: LoadingComponent | null;
-  readonly mounts: ReadonlyArray<RoutesMount>;
-  readonly pages: ReadonlyArray<RoutesPage>;
+> extends ERSCMember<Services> {
+  readonly [RoutesTypeId]: RoutesState<HasLayout, Paths>;
+  readonly [RoutesScopeIdTypeId]: number;
+  readonly layout: LayoutComponent<Services> | null;
+  readonly loading: LoadingComponent<Services> | null;
+  readonly mounts: ReadonlyArray<RoutesMount<Services>>;
+  readonly pages: ReadonlyArray<RoutesPage<Services>>;
   readonly paths: ReadonlyArray<StaticPath>;
 
-  page<const Path extends StaticPath, PageServices>(
+  page<const Path extends StaticPath>(
     path: Path & ValidStaticPath<Path> & NoPathCollision<Paths, Path>,
-    page: PageComponent<PageServices>,
-  ): RoutesDefinition<Layout, Loading, Paths | Path, Services | PageServices>;
+    page: PageComponent<Services>,
+  ): RoutesDefinition<Services, HasLayout, Paths | Path>;
 
-  mount<const Prefix extends StaticPath, const Child extends AnyRoutes>(
+  mount<const Prefix extends StaticPath, const Child extends AnyRoutes<Services>>(
     path: Prefix & ValidStaticPath<Prefix>,
     routes: Child & NonEmptyRoutes<Child> & NoPathCollision<Paths, MountedPaths<Prefix, Child>>,
-  ): RoutesDefinition<
-    Layout,
-    Loading,
-    Paths | MountedPaths<Prefix, Child>,
-    Services | RoutesServices<Child>
-  >;
+  ): RoutesDefinition<Services, HasLayout, Paths | MountedPaths<Prefix, Child>>;
 }
 
-export type AnyRoutes = RoutesDefinition<LayoutState, LoadingState, string, unknown>;
+export type AnyRoutes<Services> = RoutesDefinition<Services, boolean, string>;
 
-export type RoutesLayout<Definition> =
-  Definition extends RoutesDefinition<infer Layout, infer _Loading, infer _Paths, infer _Services>
-    ? Layout
-    : never;
-
-export type RoutesPaths<Definition> =
-  Definition extends RoutesDefinition<infer _Layout, infer _Loading, infer Paths, infer _Services>
-    ? Paths
-    : never;
-
-export type RoutesServices<Definition> =
-  Definition extends RoutesDefinition<infer _Layout, infer _Loading, infer _Paths, infer Services>
-    ? Services
-    : never;
-
-type RoutesOptions = {
-  readonly layout?: LayoutComponent<unknown>;
-  readonly loading?: LoadingComponent;
-};
-
-type LayoutFromOptions<Options> = Options extends {
-  readonly layout: infer Layout extends LayoutComponent<unknown>;
+export type RoutesHasLayout<Definition> = Definition extends {
+  readonly [RoutesTypeId]: RoutesState<infer HasLayout, string>;
 }
-  ? Present<Layout>
-  : Absent;
-
-type LoadingFromOptions<Options> = Options extends {
-  readonly loading: infer Loading extends LoadingComponent;
-}
-  ? Present<Loading>
-  : Absent;
-
-type LayoutServices<Options> = Options extends {
-  readonly layout: LayoutComponent<infer Services>;
-}
-  ? Services
+  ? HasLayout
   : never;
 
-type RuntimeRoutesOptions = {
-  readonly layout: LayoutComponent<unknown> | null;
-  readonly loading: LoadingComponent | null;
-  readonly mounts: ReadonlyArray<RoutesMount>;
-  readonly pages: ReadonlyArray<RoutesPage>;
+export type RoutesPaths<Definition> = Definition extends {
+  readonly [RoutesTypeId]: RoutesState<boolean, infer Paths>;
+}
+  ? Paths
+  : never;
+
+type RoutesOptions<Services> = {
+  readonly layout?: LayoutComponent<Services>;
+  readonly loading?: LoadingComponent<Services>;
+};
+
+type HasLayoutFromOptions<Options> = Options extends { readonly layout: unknown } ? true : false;
+
+type RuntimeRoutesOptions<Services> = {
+  readonly layout: LayoutComponent<Services> | null;
+  readonly loading: LoadingComponent<Services> | null;
+  readonly mounts: ReadonlyArray<RoutesMount<Services>>;
+  readonly pages: ReadonlyArray<RoutesPage<Services>>;
   readonly paths: ReadonlyArray<StaticPath>;
+  readonly scopeId: number;
 };
 
-const makeDefinition = <
-  Layout extends LayoutState,
-  Loading extends LoadingState,
-  Paths extends string,
+class RoutesDefinitionImpl<
   Services,
->({
-  layout,
-  loading,
-  mounts,
-  pages,
-  paths,
-}: RuntimeRoutesOptions) => {
-  const pathSet = new Set(paths);
+  HasLayout extends boolean,
+  Paths extends string,
+> implements RoutesDefinition<Services, HasLayout, Paths> {
+  declare readonly [RoutesTypeId]: RoutesState<HasLayout, Paths>;
 
-  const definition = {
-    layout,
-    loading,
-    mounts,
-    pages,
-    paths,
-    page(path: StaticPath, page: PageComponent<unknown>) {
-      validateStaticPath(path);
-      if (pathSet.has(path)) {
-        throw new TypeError(`Static route "${path}" is declared more than once.`);
-      }
+  readonly [ERSCIdentityTypeId]: ERSCIdentity<Services>;
+  readonly [RoutesScopeIdTypeId]: number;
+  readonly layout: LayoutComponent<Services> | null;
+  readonly loading: LoadingComponent<Services> | null;
+  readonly mounts: ReadonlyArray<RoutesMount<Services>>;
+  readonly pages: ReadonlyArray<RoutesPage<Services>>;
+  readonly paths: ReadonlyArray<StaticPath>;
+  readonly #pathSet: ReadonlySet<StaticPath>;
 
-      return makeDefinition({
-        layout,
-        loading,
-        mounts,
-        pages: Object.freeze([...pages, { page, path }]),
-        paths: Object.freeze([...paths, path]),
-      });
-    },
-    mount(path: StaticPath, routes: AnyRoutes) {
-      validateStaticPath(path);
-      if (routes.paths.length === 0) {
-        throw new TypeError(`Cannot mount empty Routes at "${path}".`);
-      }
+  constructor(
+    identity: ERSCIdentity<Services>,
+    { layout, loading, mounts, pages, paths, scopeId }: RuntimeRoutesOptions<Services>,
+  ) {
+    this[ERSCIdentityTypeId] = identity;
+    this[RoutesScopeIdTypeId] = scopeId;
+    this.layout = layout;
+    this.loading = loading;
+    this.mounts = mounts;
+    this.pages = pages;
+    this.paths = paths;
+    this.#pathSet = new Set(paths);
+    Object.freeze(this);
+  }
 
-      const mountedPaths = routes.paths.map((childPath) => joinRoutePaths(path, childPath));
-      const duplicatePath = mountedPaths.find((mountedPath) => pathSet.has(mountedPath));
-      if (duplicatePath !== undefined) {
-        throw new TypeError(`Static route "${duplicatePath}" is declared more than once.`);
-      }
+  page<const Path extends StaticPath>(
+    path: Path & ValidStaticPath<Path> & NoPathCollision<Paths, Path>,
+    page: PageComponent<Services>,
+  ): RoutesDefinitionImpl<Services, HasLayout, Paths | Path> {
+    validateStaticPath(path);
+    if (this.#pathSet.has(path)) {
+      throw new TypeError(`Static route "${path}" is declared more than once.`);
+    }
+    if (!isPageConcern(page)) {
+      throw new TypeError(`Page for "${path}" must be created with ERSC.Page.make.`);
+    }
+    if (page[ERSCIdentityTypeId] !== this[ERSCIdentityTypeId]) {
+      throw new TypeError(`Page for "${path}" was created by a different ERSC module.`);
+    }
 
-      return makeDefinition({
-        layout,
-        loading,
-        mounts: Object.freeze([...mounts, { path, routes }]),
-        pages,
-        paths: Object.freeze([...paths, ...mountedPaths]),
-      });
-    },
-  };
+    return new RoutesDefinitionImpl(this[ERSCIdentityTypeId], {
+      layout: this.layout,
+      loading: this.loading,
+      mounts: this.mounts,
+      pages: Object.freeze([...this.pages, { page, path }]),
+      paths: Object.freeze([...this.paths, path]),
+      scopeId: this[RoutesScopeIdTypeId],
+    });
+  }
 
-  return Object.freeze(definition) as unknown as RoutesDefinition<Layout, Loading, Paths, Services>;
-};
+  mount<const Prefix extends StaticPath, const Child extends AnyRoutes<Services>>(
+    path: Prefix & ValidStaticPath<Prefix>,
+    routes: Child & NonEmptyRoutes<Child> & NoPathCollision<Paths, MountedPaths<Prefix, Child>>,
+  ): RoutesDefinitionImpl<Services, HasLayout, Paths | MountedPaths<Prefix, Child>> {
+    validateStaticPath(path);
+    if (routes.paths.length === 0) {
+      throw new TypeError(`Cannot mount empty Routes at "${path}".`);
+    }
+    if (routes[ERSCIdentityTypeId] !== this[ERSCIdentityTypeId]) {
+      throw new TypeError(`Routes mounted at "${path}" were created by a different ERSC module.`);
+    }
 
-function make(): RoutesDefinition<Absent, Absent, never, never>;
-function make<const Options extends RoutesOptions>(
-  options: Options,
-): RoutesDefinition<
-  LayoutFromOptions<Options>,
-  LoadingFromOptions<Options>,
-  never,
-  LayoutServices<Options>
->;
-function make(options: RoutesOptions = {}) {
-  return makeDefinition({
-    layout: options.layout ?? null,
-    loading: options.loading ?? null,
-    mounts: Object.freeze([]),
-    pages: Object.freeze([]),
-    paths: Object.freeze([]),
-  });
+    const mountedPaths = routes.paths.map((childPath) => joinRoutePaths(path, childPath));
+    const duplicatePath = mountedPaths.find((mountedPath) => this.#pathSet.has(mountedPath));
+    if (duplicatePath !== undefined) {
+      throw new TypeError(`Static route "${duplicatePath}" is declared more than once.`);
+    }
+
+    return new RoutesDefinitionImpl(this[ERSCIdentityTypeId], {
+      layout: this.layout,
+      loading: this.loading,
+      mounts: Object.freeze([...this.mounts, { path, routes }]),
+      pages: this.pages,
+      paths: Object.freeze([...this.paths, ...mountedPaths]),
+      scopeId: this[RoutesScopeIdTypeId],
+    });
+  }
 }
 
-export const Routes = { make } as const;
+export type RoutesFactory<Services> = {
+  readonly make: {
+    (): RoutesDefinition<Services, false, never>;
+    <Options extends RoutesOptions<Services>>(
+      options: Options,
+    ): RoutesDefinition<Services, HasLayoutFromOptions<Options>, never>;
+  };
+};
+
+export const makeRoutesFactory = <Services>(
+  identity: ERSCIdentity<Services>,
+): RoutesFactory<Services> => {
+  let nextScopeId = 0;
+
+  function make(): RoutesDefinition<Services, false, never>;
+  function make<Options extends RoutesOptions<Services>>(
+    options: Options,
+  ): RoutesDefinition<Services, HasLayoutFromOptions<Options>, never>;
+  function make(options: RoutesOptions<Services> = {}): AnyRoutes<Services> {
+    if (options.layout !== undefined) {
+      if (!isLayoutConcern(options.layout)) {
+        throw new TypeError('Layout must be created with ERSC.Layout.make.');
+      }
+      if (options.layout[ERSCIdentityTypeId] !== identity) {
+        throw new TypeError('Layout was created by a different ERSC module.');
+      }
+    }
+    if (options.loading !== undefined) {
+      if (!isLoadingConcern(options.loading)) {
+        throw new TypeError('Loading must be created with ERSC.Loading.make.');
+      }
+      if (options.loading[ERSCIdentityTypeId] !== identity) {
+        throw new TypeError('Loading was created by a different ERSC module.');
+      }
+    }
+
+    const scopeId = nextScopeId;
+    nextScopeId += 1;
+
+    return new RoutesDefinitionImpl(identity, {
+      layout: options.layout ?? null,
+      loading: options.loading ?? null,
+      mounts: Object.freeze([]),
+      pages: Object.freeze([]),
+      paths: Object.freeze([]),
+      scopeId,
+    });
+  }
+
+  return { make };
+};

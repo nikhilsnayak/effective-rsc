@@ -10,18 +10,21 @@ const make = Effect.succeed(
       renderRouteTree,
       formState,
       pathname,
+      requestRuntime,
       serverFnResult,
       temporaryReferences,
     }: FlightRenderOptions<Services>) {
       const signal = yield* Effect.abortSignal;
       const runtime = yield* FiberSet.makeRuntimePromise<Services>();
-      const payload = {
-        formState,
-        routeTree: renderRouteTree({ pathname, runtime }),
-        serverFnResult,
-      } satisfies FlightPayload;
+      return requestRuntime.bind(runtime, () => {
+        const payload = {
+          formState,
+          routeTree: renderRouteTree({ pathname }),
+          serverFnResult,
+        } satisfies FlightPayload;
 
-      return renderToReadableStream(payload, { signal, temporaryReferences });
+        return renderToReadableStream(payload, { signal, temporaryReferences });
+      });
     }),
   }),
 );

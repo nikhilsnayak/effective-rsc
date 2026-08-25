@@ -13,9 +13,9 @@ const destinationId = (node: RouteTreeModel): string =>
   node.child === null ? node.id : destinationId(node.child);
 
 /**
- * Retains the revealed content for the common Layout prefix while publishing a different Page.
- * Loading and Page nodes use the destination pathname as their identity, so the first changed id
- * terminates reuse and lets the destination Loading boundary mount normally.
+ * Retains revealed content only for the same authored Layout scope while publishing a different
+ * Page. Role-qualified scope identities make the first different concern terminate reuse and let
+ * the destination Loading boundary mount normally.
  */
 export const retainSharedLayoutContent = (
   current: RouteTreeModel,

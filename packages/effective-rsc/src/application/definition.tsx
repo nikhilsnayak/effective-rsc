@@ -1,32 +1,22 @@
 import { Layer } from 'effect';
 import { Suspense } from 'react';
 
-import type { LayoutComponent } from './layout';
-import type { PageComponent } from './page';
-import type { RenderRuntime } from './render-runtime';
+import { type ERSCIdentity, ERSCIdentityTypeId } from './ersc-identity';
 import { compileRouteGraph } from './route-graph';
 import type { ReservedPath, StaticPath } from './route-path';
 import { RouteOutlet, type RouteTreeModel } from './route-tree';
-import {
-  type AnyRoutes,
-  type Present,
-  type RoutesLayout,
-  type RoutesPaths,
-  type RoutesServices,
-} from './routes';
+import { type AnyRoutes, type RoutesHasLayout, type RoutesPaths } from './routes';
 
-type ApplicationComponentProps<Services> = {
+type ApplicationComponentProps = {
   readonly pathname: StaticPath;
-  readonly runtime: RenderRuntime<Services>;
 };
 
-export type ApplicationRouteTreeRenderer<Services> = (
-  props: ApplicationComponentProps<Services>,
-) => RouteTreeModel;
+export type ApplicationRouteTreeRenderer = (props: ApplicationComponentProps) => RouteTreeModel;
 
 export type ApplicationDefinition<Services, ApplicationError = never> = {
+  readonly [ERSCIdentityTypeId]: ERSCIdentity<Services>;
   readonly paths: ReadonlyArray<StaticPath>;
-  readonly renderRouteTree: ApplicationRouteTreeRenderer<Services>;
+  readonly renderRouteTree: ApplicationRouteTreeRenderer;
   readonly servicesLayer: Layer.Layer<Services, ApplicationError>;
 };
 
@@ -35,22 +25,30 @@ export type ApplicationServices<Application> =
     ? Services
     : never;
 
+type ValidRootRoutes<Services, Definition extends AnyRoutes<Services>> =
+  RoutesHasLayout<Definition> extends true
+    ? [RoutesPaths<Definition>] extends [never]
+      ? never
+      : [Extract<RoutesPaths<Definition>, ReservedPath>] extends [never]
+        ? unknown
+        : never
+    : never;
+
 type ServicesLayerOptions<Services, ApplicationError> = [Services] extends [never]
   ? { readonly servicesLayer?: Layer.Layer<never, ApplicationError> }
   : { readonly servicesLayer: Layer.Layer<Services, ApplicationError> };
 
-type RootRoutes<Definition extends AnyRoutes> =
-  RoutesLayout<Definition> extends Present<LayoutComponent<unknown>>
-    ? [RoutesPaths<Definition>] extends [never]
-      ? never
-      : [Extract<RoutesPaths<Definition>, ReservedPath>] extends [never]
-        ? Definition
-        : never
-    : never;
+export type ERSCApplicationOptions<
+  Services,
+  Definition extends AnyRoutes<Services>,
+  ApplicationError,
+> = {
+  readonly routes: Definition & ValidRootRoutes<Services, Definition>;
+} & ServicesLayerOptions<Services, ApplicationError>;
 
-type ApplicationOptions<Definition extends AnyRoutes, ApplicationError> = {
-  readonly routes: Definition & RootRoutes<Definition>;
-} & ServicesLayerOptions<RoutesServices<Definition>, ApplicationError>;
+export type ERSCMake<Services> = <Definition extends AnyRoutes<Services>, ApplicationError = never>(
+  options: ERSCApplicationOptions<Services, Definition, ApplicationError>,
+) => ApplicationDefinition<Services, ApplicationError>;
 
 function resolveServicesLayer<Services, ApplicationError>(
   servicesLayer:
@@ -62,29 +60,37 @@ function resolveServicesLayer(servicesLayer: Layer.Any | undefined): Layer.Any {
   return servicesLayer ?? Layer.empty;
 }
 
-const make = <const Definition extends AnyRoutes, ApplicationError = never>({
-  routes,
-  servicesLayer,
-}: ApplicationOptions<Definition, ApplicationError>): ApplicationDefinition<
-  RoutesServices<Definition>,
-  ApplicationError
-> => {
+const layoutNodeId = (scopeId: string) => `layout:${scopeId}`;
+
+const loadingNodeId = (scopeId: string, pathname: StaticPath) => `loading:${scopeId}:${pathname}`;
+
+const pageNodeId = (pathname: StaticPath) => `page:${pathname}`;
+
+export const makeApplication = <
+  Services,
+  Definition extends AnyRoutes<Services>,
+  ApplicationError = never,
+>(
+  identity: ERSCIdentity<Services>,
+  { routes, servicesLayer }: ERSCApplicationOptions<Services, Definition, ApplicationError>,
+): ApplicationDefinition<Services, ApplicationError> => {
+  if (routes[ERSCIdentityTypeId] !== identity) {
+    throw new TypeError('Root Routes were created by a different ERSC module.');
+  }
+
   const routeGraph = compileRouteGraph(routes);
 
-  function renderRouteTree({
-    pathname,
-    runtime,
-  }: ApplicationComponentProps<RoutesServices<Definition>>) {
+  function renderRouteTree({ pathname }: ApplicationComponentProps) {
     const route = routeGraph.route(pathname);
     if (route === undefined) {
       throw new TypeError(`No static route is registered for "${pathname}".`);
     }
 
-    const Page = route.page as PageComponent<RoutesServices<Definition>>;
+    const Page = route.page;
     let tree: RouteTreeModel = {
       child: null,
-      content: <Page runtime={runtime} />,
-      id: pathname,
+      content: <Page />,
+      id: pageNodeId(pathname),
     };
 
     for (let index = route.scopes.length - 1; index >= 0; index--) {
@@ -102,20 +108,20 @@ const make = <const Definition extends AnyRoutes, ApplicationError = never>({
               <RouteOutlet />
             </Suspense>
           ),
-          id: pathname,
+          id: loadingNodeId(scope.id, pathname),
         };
       }
 
       if (scope.layout !== null) {
-        const Layout = scope.layout as LayoutComponent<RoutesServices<Definition>>;
+        const Layout = scope.layout;
         tree = {
           child: tree,
           content: (
-            <Layout runtime={runtime}>
+            <Layout>
               <RouteOutlet />
             </Layout>
           ),
-          id: scope.id,
+          id: layoutNodeId(scope.id),
         };
       }
     }
@@ -124,12 +130,9 @@ const make = <const Definition extends AnyRoutes, ApplicationError = never>({
   }
 
   return {
+    [ERSCIdentityTypeId]: identity,
     paths: routeGraph.paths,
     renderRouteTree,
-    servicesLayer: resolveServicesLayer<RoutesServices<Definition>, ApplicationError>(
-      servicesLayer,
-    ),
+    servicesLayer: resolveServicesLayer<Services, ApplicationError>(servicesLayer),
   };
 };
-
-export const Application = { make } as const;

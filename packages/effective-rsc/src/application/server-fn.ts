@@ -1,33 +1,97 @@
-import { Effect, Schema } from 'effect';
+import { Effect, Predicate, Schema } from 'effect';
 
-declare const ServerFnServicesTypeId: unique symbol;
+import { attachERSCIdentity, type ERSCIdentity, type ERSCMember } from './ersc-identity';
 
-export type ServerFunction<Input, Output, Services> = {
+const ServerFnInvocationTypeId: unique symbol = Symbol('effective-rsc/ServerFnInvocation');
+
+class ServerFnOperationError extends Schema.TaggedError<ServerFnOperationError>()(
+  'ServerFnOperationError',
+  { cause: Schema.Defect() },
+) {}
+
+abstract class ServerFnInvocationMetadataBase {
+  constructor(readonly identity: object) {}
+}
+
+class ServerFnInvocationMetadata<Output, Services> extends ServerFnInvocationMetadataBase {
+  constructor(
+    readonly effect: Effect.Effect<Output, ServerFnOperationError, Services>,
+    identity: ERSCIdentity<Services>,
+  ) {
+    super(identity);
+  }
+}
+
+type ServerFnInvocationMatch<Services> =
+  | { readonly _tag: 'Native' }
+  | { readonly _tag: 'IdentityMismatch' }
+  | {
+      readonly _tag: 'Match';
+      readonly effect: Effect.Effect<unknown, ServerFnOperationError, Services>;
+    };
+
+interface ServerFunction<Input, Output, Services> extends ERSCMember<Services> {
   (input: Input): Promise<Output>;
-  readonly [ServerFnServicesTypeId]?: Services;
-};
+}
 
 type ServerFnOptions<InputSchema extends Schema.Constraint, Output, Error, Services> = {
   readonly input: InputSchema;
   readonly handler: (input: InputSchema['Type']) => Effect.Effect<Output, Error, Services>;
 };
 
-const make = <InputSchema extends Schema.Constraint, Output, Error, Services>({
-  input,
-  handler,
-}: ServerFnOptions<InputSchema, Output, Error, Services>): ServerFunction<
-  InputSchema['Type'],
-  Output,
-  Services | InputSchema['DecodingServices']
-> => {
-  const decode = Schema.decodeUnknownEffect(input);
-
-  return ((untrustedInput: unknown) =>
-    decode(untrustedInput).pipe(Effect.flatMap(handler))) as unknown as ServerFunction<
-    InputSchema['Type'],
-    Output,
-    Services | InputSchema['DecodingServices']
-  >;
+export type ServerFnFactory<Services> = {
+  readonly make: <InputSchema extends Schema.ConstraintDecoder<unknown, Services>, Output, Error>(
+    options: ServerFnOptions<InputSchema, Output, Error, Services>,
+  ) => ServerFunction<InputSchema['Type'], Output, Services>;
 };
 
-export const ServerFn = { make } as const;
+const directInvocationError = () =>
+  new Error(
+    'An ERSC ServerFn is a framework intrinsic and cannot be invoked directly in the server graph.',
+  );
+
+const isServerFnInvocationMetadataFor = <Services>(
+  value: ServerFnInvocationMetadataBase,
+  identity: ERSCIdentity<Services>,
+): value is ServerFnInvocationMetadata<unknown, Services> => value.identity === identity;
+
+export const matchServerFnInvocation = <Services>(
+  value: unknown,
+  identity: ERSCIdentity<Services>,
+): ServerFnInvocationMatch<Services> => {
+  if (!Predicate.hasProperty(value, ServerFnInvocationTypeId)) {
+    return { _tag: 'Native' };
+  }
+
+  const metadata = value[ServerFnInvocationTypeId];
+  if (!(metadata instanceof ServerFnInvocationMetadataBase)) {
+    return { _tag: 'Native' };
+  }
+  if (!isServerFnInvocationMetadataFor(metadata, identity)) {
+    return { _tag: 'IdentityMismatch' };
+  }
+
+  return { _tag: 'Match', effect: metadata.effect };
+};
+
+export const makeServerFnFactory = <Services>(
+  identity: ERSCIdentity<Services>,
+): ServerFnFactory<Services> => ({
+  make: ({ input, handler }) => {
+    const decode = Schema.decodeUnknownEffect(input);
+    const serverFunction = (untrustedInput: typeof input.Type) => {
+      const effect = decode(untrustedInput).pipe(
+        Effect.flatMap(handler),
+        Effect.mapError((cause) => new ServerFnOperationError({ cause })),
+      );
+      const unavailable = Promise.reject<Effect.Success<typeof effect>>(directInvocationError());
+      void unavailable.catch(() => undefined);
+
+      return Object.assign(unavailable, {
+        [ServerFnInvocationTypeId]: new ServerFnInvocationMetadata(effect, identity),
+      });
+    };
+
+    return attachERSCIdentity(serverFunction, identity);
+  },
+});

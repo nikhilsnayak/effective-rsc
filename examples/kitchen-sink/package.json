@@ -7,7 +7,8 @@
     "build": "ersc build",
     "dev": "ersc dev",
     "start": "ersc start",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

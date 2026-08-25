@@ -1,8 +1,8 @@
 'use server';
 
 import { Effect, Schema } from 'effect';
-import { ServerFn } from 'effective-rsc';
 
+import { ERSC } from '@/ersc';
 import { ConferenceRepository } from '@/modules/conference/conference-repository';
 
 export type AgendaMutationState = {
@@ -15,7 +15,7 @@ const ToggleAgendaInput = Schema.Struct({
   sessionId: Schema.NonEmptyString,
 });
 
-export const toggleAgenda = ServerFn.make({
+export const toggleAgenda = ERSC.ServerFn.make({
   input: ToggleAgendaInput,
   handler: Effect.fn('toggleAgenda')(function* ({ sessionId }) {
     const repository = yield* ConferenceRepository;

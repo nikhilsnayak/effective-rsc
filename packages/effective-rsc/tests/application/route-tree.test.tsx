@@ -2,18 +2,13 @@ import { describe, expect, it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { Application } from '../../src/application/definition';
-import { Layout, type LayoutProps } from '../../src/application/layout';
-import { Loading } from '../../src/application/loading';
-import { Page } from '../../src/application/page';
-import type { RenderRuntime } from '../../src/application/render-runtime';
+import { Application } from '../../src/application/ersc';
 import {
   retainSharedLayoutContent,
   RouteOutlet,
   RouteTree,
   type RouteTreeModel,
 } from '../../src/application/route-tree';
-import { Routes } from '../../src/application/routes';
 
 describe('RouteTree', () => {
   it('recursively renders a unary Layout ancestry', () => {
@@ -63,14 +58,14 @@ describe('RouteTree', () => {
   });
 
   it('rejects an outlet rendered outside a route node', () => {
-    expect(() => renderToStaticMarkup(<RouteOutlet />)).toThrowError(
+    expect(() => renderToStaticMarkup(<RouteOutlet />)).toThrow(
       'RouteOutlet rendered outside its route node.',
     );
   });
 });
 
 describe('retainSharedLayoutContent', () => {
-  const runtime: RenderRuntime<never> = (effect) => Effect.runPromise(effect);
+  const ERSC = Application.ersc();
 
   const requiredChild = (node: RouteTreeModel) => {
     if (node.child === null) {
@@ -79,16 +74,16 @@ describe('retainSharedLayoutContent', () => {
     return node.child;
   };
 
-  const RootLayout = Layout.make({
-    render: ({ children }: LayoutProps) =>
+  const RootLayout = ERSC.Layout.make({
+    render: ({ children }) =>
       Effect.succeed(
         <html lang='en'>
           <body>{children}</body>
         </html>,
       ),
   });
-  const ScheduleLayout = Layout.make({
-    render: ({ children }: LayoutProps) =>
+  const ScheduleLayout = ERSC.Layout.make({
+    render: ({ children }) =>
       Effect.succeed(
         <section>
           <aside>Schedule navigation</aside>
@@ -96,24 +91,23 @@ describe('retainSharedLayoutContent', () => {
         </section>,
       ),
   });
-  const ScheduleLoading = Loading.make(() => <p>Loading schedule...</p>);
-  const HomePage = Page.make(() => Effect.succeed(<h1>Home</h1>));
-  const SaturdayPage = Page.make(() => Effect.succeed(<h1>Saturday</h1>));
-  const SundayPage = Page.make(() => Effect.succeed(<h1>Sunday</h1>));
+  const ScheduleLoading = ERSC.Loading.make({ render: () => <p>Loading schedule...</p> });
+  const HomePage = ERSC.Page.make({ render: () => Effect.succeed(<h1>Home</h1>) });
+  const SaturdayPage = ERSC.Page.make({ render: () => Effect.succeed(<h1>Saturday</h1>) });
+  const SundayPage = ERSC.Page.make({ render: () => Effect.succeed(<h1>Sunday</h1>) });
 
-  const ConferenceApp = Application.make({
-    routes: Routes.make({ layout: RootLayout })
+  const ConferenceApp = ERSC.make({
+    routes: ERSC.Routes.make({ layout: RootLayout })
       .page('/', HomePage)
       .mount(
         '/schedule',
-        Routes.make({ layout: ScheduleLayout, loading: ScheduleLoading })
+        ERSC.Routes.make({ layout: ScheduleLayout, loading: ScheduleLoading })
           .page('/', SaturdayPage)
           .page('/day-two', SundayPage),
       ),
   });
 
-  const renderDestination = (pathname: `/${string}`) =>
-    ConferenceApp.renderRouteTree({ pathname, runtime });
+  const renderDestination = (pathname: `/${string}`) => ConferenceApp.renderRouteTree({ pathname });
 
   it('retains shared Layout content while replacing destination Loading and Page nodes', () => {
     const current = renderDestination('/schedule');
@@ -134,12 +128,13 @@ describe('retainSharedLayoutContent', () => {
   it('reveals the destination Loading boundary beneath the retained Layouts', () => {
     const current = renderDestination('/schedule');
     const destination = renderDestination('/schedule/day-two');
+    const destinationLoading = requiredChild(requiredChild(destination));
 
     const retained = retainSharedLayoutContent(current, destination);
     const revealedLoading = requiredChild(requiredChild(retained));
 
-    expect(revealedLoading.id).toBe('/schedule/day-two');
-    expect(requiredChild(revealedLoading).id).toBe('/schedule/day-two');
+    expect(revealedLoading).toBe(destinationLoading);
+    expect(requiredChild(revealedLoading)).toBe(requiredChild(destinationLoading));
   });
 
   it('does not retain content when refreshing the same destination', () => {
@@ -157,5 +152,48 @@ describe('retainSharedLayoutContent', () => {
 
     expect(retained.content).toBe(current.content);
     expect(requiredChild(retained)).toBe(requiredChild(destination));
+  });
+
+  it('does not retain a Page as a Layout when both occupy the same pathname', () => {
+    const NestedLayout = ERSC.Layout.make({
+      render: ({ children }) => Effect.succeed(<section>{children}</section>),
+    });
+    const ParentPage = ERSC.Page.make({ render: () => Effect.succeed(<h1>Parent</h1>) });
+    const ChildPage = ERSC.Page.make({ render: () => Effect.succeed(<h1>Child</h1>) });
+    const App = ERSC.make({
+      routes: ERSC.Routes.make({ layout: RootLayout })
+        .mount('/parent', ERSC.Routes.make().page('/', ParentPage))
+        .mount('/parent', ERSC.Routes.make({ layout: NestedLayout }).page('/child', ChildPage)),
+    });
+    const current = App.renderRouteTree({ pathname: '/parent' });
+    const destination = App.renderRouteTree({ pathname: '/parent/child' });
+
+    const retained = retainSharedLayoutContent(current, destination);
+
+    expect(requiredChild(retained)).toBe(requiredChild(destination));
+    expect(requiredChild(retained).content).not.toBe(requiredChild(current).content);
+  });
+
+  it('does not retain a different Layout scope mounted at the same prefix', () => {
+    const FirstLayout = ERSC.Layout.make({
+      render: ({ children }) => Effect.succeed(<section data-layout='first'>{children}</section>),
+    });
+    const SecondLayout = ERSC.Layout.make({
+      render: ({ children }) => Effect.succeed(<section data-layout='second'>{children}</section>),
+    });
+    const FirstPage = ERSC.Page.make({ render: () => Effect.succeed(<h1>First</h1>) });
+    const SecondPage = ERSC.Page.make({ render: () => Effect.succeed(<h1>Second</h1>) });
+    const App = ERSC.make({
+      routes: ERSC.Routes.make({ layout: RootLayout })
+        .mount('/shared', ERSC.Routes.make({ layout: FirstLayout }).page('/first', FirstPage))
+        .mount('/shared', ERSC.Routes.make({ layout: SecondLayout }).page('/second', SecondPage)),
+    });
+    const current = App.renderRouteTree({ pathname: '/shared/first' });
+    const destination = App.renderRouteTree({ pathname: '/shared/second' });
+
+    const retained = retainSharedLayoutContent(current, destination);
+
+    expect(requiredChild(retained)).toBe(requiredChild(destination));
+    expect(requiredChild(retained).content).not.toBe(requiredChild(current).content);
   });
 });

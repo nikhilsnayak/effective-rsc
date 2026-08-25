@@ -1,9 +1,12 @@
 import { Clock3, MapPin } from 'lucide-react';
+import { Suspense } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { AgendaToggle } from '@/modules/agenda/components/agenda-toggle';
 import type { Session } from '@/modules/conference/conference-repository';
+import { SessionSpeaker } from '@/modules/schedule/components/session-speaker';
 
 export function SessionCard({ session }: { readonly session: Session }) {
   return (
@@ -27,13 +30,16 @@ export function SessionCard({ session }: { readonly session: Session }) {
           <p className='text-muted-foreground mt-2 max-w-2xl text-sm leading-6'>
             {session.description}
           </p>
-          <div className='mt-4 flex items-center gap-2 text-sm'>
-            <span className='font-medium'>{session.speaker}</span>
-            <span aria-hidden='true' className='text-border'>
-              /
-            </span>
-            <span className='text-muted-foreground'>{session.speakerRole}</span>
-          </div>
+          <Suspense
+            fallback={
+              <div className='mt-4 flex items-center gap-2' aria-label='Loading speaker'>
+                <Skeleton className='h-5 w-28' />
+                <Skeleton className='h-5 w-40' />
+              </div>
+            }
+          >
+            <SessionSpeaker speakerId={session.speakerId} />
+          </Suspense>
           <AgendaToggle isInAgenda={session.isInAgenda} sessionId={session.id} />
           <span className='sr-only'>
             <Clock3 aria-hidden='true' /> {session.startsAt} to {session.endsAt}

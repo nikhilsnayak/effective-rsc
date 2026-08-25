@@ -2,29 +2,29 @@ import type { LayoutComponent } from './layout';
 import type { LoadingComponent } from './loading';
 import type { PageComponent } from './page';
 import { joinRoutePaths, type StaticPath, validateUnreservedPath } from './route-path';
-import type { AnyRoutes } from './routes';
+import { type AnyRoutes, RoutesScopeIdTypeId } from './routes';
 
-export type RouteScope = {
-  readonly id: StaticPath;
-  readonly layout: LayoutComponent<unknown> | null;
-  readonly loading: LoadingComponent | null;
+export type RouteScope<Services> = {
+  readonly id: string;
+  readonly layout: LayoutComponent<Services> | null;
+  readonly loading: LoadingComponent<Services> | null;
 };
 
-export type CompiledRoute = {
-  readonly page: PageComponent<unknown>;
-  readonly scopes: ReadonlyArray<RouteScope>;
+export type CompiledRoute<Services> = {
+  readonly page: PageComponent<Services>;
+  readonly scopes: ReadonlyArray<RouteScope<Services>>;
 };
 
-export type CompiledRouteGraph = {
+export type CompiledRouteGraph<Services> = {
   readonly paths: ReadonlyArray<StaticPath>;
-  readonly route: (pathname: StaticPath) => CompiledRoute | undefined;
+  readonly route: (pathname: StaticPath) => CompiledRoute<Services> | undefined;
 };
 
-const flattenRouteGraph = (
-  routes: AnyRoutes,
+const flattenRouteGraph = <Services>(
+  routes: AnyRoutes<Services>,
   prefix: StaticPath,
-  inheritedScopes: ReadonlyArray<RouteScope>,
-  destinations: Map<StaticPath, CompiledRoute>,
+  inheritedScopes: ReadonlyArray<RouteScope<Services>>,
+  destinations: Map<StaticPath, CompiledRoute<Services>>,
 ) => {
   const scopes =
     routes.layout === null && routes.loading === null
@@ -32,7 +32,7 @@ const flattenRouteGraph = (
       : [
           ...inheritedScopes,
           {
-            id: prefix,
+            id: `${routes[RoutesScopeIdTypeId]}:${prefix}`,
             layout: routes.layout,
             loading: routes.loading,
           },
@@ -49,15 +49,17 @@ const flattenRouteGraph = (
   }
 };
 
-export const compileRouteGraph = (routes: AnyRoutes): CompiledRouteGraph => {
+export const compileRouteGraph = <Services>(
+  routes: AnyRoutes<Services>,
+): CompiledRouteGraph<Services> => {
   if (routes.layout === null) {
-    throw new TypeError('The root Routes passed to Application.make must define a Layout.');
+    throw new TypeError('The root Routes passed to ERSC.make must define a Layout.');
   }
 
-  const destinations = new Map<StaticPath, CompiledRoute>();
+  const destinations = new Map<StaticPath, CompiledRoute<Services>>();
   flattenRouteGraph(routes, '/', [], destinations);
   if (destinations.size === 0) {
-    throw new TypeError('The root Routes passed to Application.make must contain a Page.');
+    throw new TypeError('The root Routes passed to ERSC.make must contain a Page.');
   }
 
   return {

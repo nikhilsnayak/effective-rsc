@@ -1,11 +1,11 @@
 import { Effect } from 'effect';
-import { Layout, type LayoutProps } from 'effective-rsc';
 import { MapPin } from 'lucide-react';
 
+import { ERSC } from '@/ersc';
 import { ConferenceRepository } from '@/modules/conference/conference-repository';
 
-export default Layout.make({
-  render: Effect.fn('ConferenceShell')(function* ({ children }: LayoutProps) {
+export default ERSC.Layout.make({
+  render: Effect.fn('ConferenceShell')(function* ({ children }) {
     const repository = yield* ConferenceRepository;
     const conference = yield* repository.conference;
 

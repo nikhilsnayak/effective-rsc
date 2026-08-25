@@ -17,11 +17,16 @@ export type Session = {
   readonly id: string;
   readonly isInAgenda: boolean;
   readonly room: string;
-  readonly speaker: string;
-  readonly speakerRole: string;
+  readonly speakerId: string;
   readonly startsAt: string;
   readonly title: string;
   readonly track: 'Architecture' | 'Craft' | 'Platform';
+};
+
+export type Speaker = {
+  readonly id: string;
+  readonly name: string;
+  readonly role: string;
 };
 
 export type Schedule = {
@@ -81,8 +86,7 @@ const schedules = {
         endsAt: '10:15',
         id: 'server-components-from-first-principles',
         room: 'Auditorium',
-        speaker: 'Nikhil Nayak',
-        speakerRole: 'Creator, effective-rsc',
+        speakerId: 'nikhil-nayak',
         startsAt: '09:30',
         title: 'Server Components from first principles',
         track: 'Architecture',
@@ -93,8 +97,7 @@ const schedules = {
         endsAt: '11:30',
         id: 'effect-is-the-runtime',
         room: 'Auditorium',
-        speaker: 'Maya Iyer',
-        speakerRole: 'Runtime engineer',
+        speakerId: 'maya-iyer',
         startsAt: '10:45',
         title: 'Effect is the runtime, not a utility belt',
         track: 'Platform',
@@ -105,8 +108,7 @@ const schedules = {
         endsAt: '12:45',
         id: 'router-that-waits-for-ui',
         room: 'Studio',
-        speaker: 'Theo Martins',
-        speakerRole: 'Browser platform engineer',
+        speakerId: 'theo-martins',
         startsAt: '12:00',
         title: 'A router that waits for the UI',
         track: 'Platform',
@@ -117,8 +119,7 @@ const schedules = {
         endsAt: '15:15',
         id: 'designing-for-interruption',
         room: 'Studio',
-        speaker: 'Leena Shah',
-        speakerRole: 'Design engineer',
+        speakerId: 'leena-shah',
         startsAt: '14:30',
         title: 'Designing for interruption',
         track: 'Craft',
@@ -136,8 +137,7 @@ const schedules = {
         endsAt: '10:15',
         id: 'cache-the-work-not-the-page',
         room: 'Auditorium',
-        speaker: 'Rohan Mehta',
-        speakerRole: 'Framework engineer',
+        speakerId: 'rohan-mehta',
         startsAt: '09:30',
         title: 'Cache the work, not the page',
         track: 'Architecture',
@@ -148,8 +148,7 @@ const schedules = {
         endsAt: '11:30',
         id: 'mutation-protocols-that-compose',
         room: 'Studio',
-        speaker: 'Anika Rao',
-        speakerRole: 'Type systems researcher',
+        speakerId: 'anika-rao',
         startsAt: '10:45',
         title: 'Mutation protocols that compose',
         track: 'Platform',
@@ -160,8 +159,7 @@ const schedules = {
         endsAt: '12:45',
         id: 'browser-is-the-platform',
         room: 'Auditorium',
-        speaker: 'Jonah Kim',
-        speakerRole: 'Web platform lead',
+        speakerId: 'jonah-kim',
         startsAt: '12:00',
         title: 'The browser is the platform',
         track: 'Platform',
@@ -169,6 +167,65 @@ const schedules = {
     ],
   },
 } as const satisfies Record<ConferenceDay, ScheduleDefinition>;
+
+const speakers: ReadonlyMap<
+  string,
+  { readonly latency: Duration.Input; readonly speaker: Speaker }
+> = new Map([
+  [
+    'nikhil-nayak',
+    {
+      latency: '180 millis',
+      speaker: { id: 'nikhil-nayak', name: 'Nikhil Nayak', role: 'Creator, effective-rsc' },
+    },
+  ],
+  [
+    'maya-iyer',
+    {
+      latency: '420 millis',
+      speaker: { id: 'maya-iyer', name: 'Maya Iyer', role: 'Runtime engineer' },
+    },
+  ],
+  [
+    'theo-martins',
+    {
+      latency: '700 millis',
+      speaker: {
+        id: 'theo-martins',
+        name: 'Theo Martins',
+        role: 'Browser platform engineer',
+      },
+    },
+  ],
+  [
+    'leena-shah',
+    {
+      latency: '960 millis',
+      speaker: { id: 'leena-shah', name: 'Leena Shah', role: 'Design engineer' },
+    },
+  ],
+  [
+    'rohan-mehta',
+    {
+      latency: '240 millis',
+      speaker: { id: 'rohan-mehta', name: 'Rohan Mehta', role: 'Framework engineer' },
+    },
+  ],
+  [
+    'anika-rao',
+    {
+      latency: '540 millis',
+      speaker: { id: 'anika-rao', name: 'Anika Rao', role: 'Type systems researcher' },
+    },
+  ],
+  [
+    'jonah-kim',
+    {
+      latency: '840 millis',
+      speaker: { id: 'jonah-kim', name: 'Jonah Kim', role: 'Web platform lead' },
+    },
+  ],
+]);
 
 const initialAgenda = new Set([
   'server-components-from-first-principles',
@@ -223,6 +280,17 @@ export class ConferenceRepository extends Context.Service<ConferenceRepository>(
         };
 
         return yield* query({ latency: '2 seconds', value });
+      }),
+      speaker: Effect.fn('ConferenceRepository.speaker')(function* (speakerId: string) {
+        const definition = speakers.get(speakerId);
+        if (definition === undefined) {
+          return yield* Effect.die(new Error(`Unknown conference speaker "${speakerId}".`));
+        }
+
+        return yield* query({
+          latency: definition.latency,
+          value: definition.speaker,
+        });
       }),
       toggleAgenda: Effect.fn('ConferenceRepository.toggleAgenda')(function* (sessionId: string) {
         if (!sessionById.has(sessionId)) {

@@ -2,14 +2,16 @@ import { Context, type Effect, type Scope } from 'effect';
 import type { TemporaryReferenceSet } from 'react-server-dom-rspack/server.node';
 
 import type { ApplicationRouteTreeRenderer } from '../application/definition';
+import type { RequestRuntimeContext } from '../application/request-runtime';
 import type { FlightPayload, ServerFnResult } from '../rsc/flight';
 
 type FlightStream = ReadableStream<Uint8Array>;
 
 export type FlightRenderOptions<Services> = {
-  readonly renderRouteTree: ApplicationRouteTreeRenderer<Services>;
+  readonly renderRouteTree: ApplicationRouteTreeRenderer;
   readonly formState: FlightPayload['formState'];
   readonly pathname: `/${string}`;
+  readonly requestRuntime: RequestRuntimeContext<Services>;
   readonly serverFnResult: ServerFnResult | null;
   readonly temporaryReferences?: TemporaryReferenceSet;
 };

@@ -14,11 +14,12 @@
     "lint:fix": "oxlint --fix --config oxlint.config.ts",
     "fmt": "oxfmt . '!repos/**'",
     "fmt:check": "oxfmt --check . '!repos/**'",
-    "check": "bun run lint && bun run fmt:check",
+    "check": "bun run lint && bun run fmt:check && bun run typecheck",
     "test": "turbo test && turbo test:e2e && bun run test:scripts",
     "test:e2e": "turbo test:e2e",
     "test:scripts": "vitest run scripts",
     "test:watch": "turbo test:watch",
+    "typecheck": "turbo typecheck",
     "vendor:sync": "bun scripts/sync-vendor.ts",
     "prepare": "effect-tsgo patch --oxlint"
   },

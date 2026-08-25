@@ -1,39 +1,41 @@
-import type { Effect } from 'effect';
+import { Effect, Predicate } from 'effect';
 import type { ReactNode } from 'react';
 
-import type { RenderRuntime } from './render-runtime';
+import { attachERSCIdentity, type ERSCIdentity, type ERSCMember } from './ersc-identity';
 
-declare const LayoutTypeId: unique symbol;
-declare const LayoutServicesTypeId: unique symbol;
+const LayoutTypeId: unique symbol = Symbol.for('effective-rsc/LayoutConcern');
 
 export type LayoutConcern = {
   readonly [LayoutTypeId]: typeof LayoutTypeId;
 };
 
-export type LayoutProps = {
-  readonly children: ReactNode;
+export const isLayoutConcern = (value: unknown): value is LayoutConcern =>
+  Predicate.hasProperty(value, LayoutTypeId) && value[LayoutTypeId] === LayoutTypeId;
+
+type LayoutProps = {
+  readonly children: Awaited<ReactNode>;
 };
 
-type LayoutComponentProps<Services> = LayoutProps & {
-  readonly runtime: RenderRuntime<Services>;
+export interface LayoutComponent<Services> extends LayoutConcern, ERSCMember<Services> {
+  (props: LayoutProps): Promise<Awaited<ReactNode>>;
+}
+
+type LayoutOptions<Error, Services> = {
+  readonly render: (props: LayoutProps) => Effect.Effect<Awaited<ReactNode>, Error, Services>;
 };
 
-export type LayoutComponent<Services> = LayoutConcern & {
-  readonly [LayoutServicesTypeId]: Services;
-  (props: LayoutComponentProps<Services>): ReactNode;
+export type LayoutFactory<Services> = {
+  readonly make: <Error>(options: LayoutOptions<Error, Services>) => LayoutComponent<Services>;
 };
 
-type LayoutOptions<Output extends Awaited<ReactNode>, Error, Services> = {
-  readonly render: (props: LayoutProps) => Effect.Effect<Output, Error, Services>;
-};
+export const makeLayoutFactory = <Services>(
+  identity: ERSCIdentity<Services>,
+): LayoutFactory<Services> => ({
+  make: ({ render }) => {
+    const LayoutComponent = (props: LayoutProps) =>
+      identity.requestRuntime.run(Effect.suspend(() => render(props)));
 
-const make = <Output extends Awaited<ReactNode>, Error, Services>({
-  render,
-}: LayoutOptions<Output, Error, Services>): LayoutComponent<Services> => {
-  const LayoutComponent = ({ runtime, ...props }: LayoutComponentProps<Services>) =>
-    runtime(render(props));
-
-  return LayoutComponent as unknown as LayoutComponent<Services>;
-};
-
-export const Layout = { make } as const;
+    const concern: LayoutConcern = { [LayoutTypeId]: LayoutTypeId };
+    return attachERSCIdentity(Object.assign(LayoutComponent, concern), identity);
+  },
+});

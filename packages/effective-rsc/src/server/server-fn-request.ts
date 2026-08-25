@@ -8,8 +8,11 @@ import {
   loadServerAction,
 } from 'react-server-dom-rspack/server.node';
 
-import { ServerFnIdHeader, type FlightPayload, type ServerFnResult } from '../rsc/flight';
+import type { ERSCIdentity } from '../application/ersc-identity';
+import { matchServerFnInvocation } from '../application/server-fn';
+import { ServerFnIdHeader } from '../rsc/flight';
 import type { RequestOutcome } from './request-outcome';
+import { serverFnOutcome } from './server-fn-outcome';
 
 export class ServerFnRequestError extends Schema.TaggedError<ServerFnRequestError>()(
   'ServerFnRequestError',
@@ -23,6 +26,11 @@ export class ServerFnRequestError extends Schema.TaggedError<ServerFnRequestErro
 class ServerFnExecutionError extends Schema.TaggedError<ServerFnExecutionError>()(
   'ServerFnExecutionError',
   { cause: Schema.Defect() },
+) {}
+
+class ServerFnIdentityMismatchError extends Schema.TaggedError<ServerFnIdentityMismatchError>()(
+  'ServerFnIdentityMismatchError',
+  {},
 ) {}
 
 const requestError = (message: string, status: 400 | 403 | 500, cause: unknown) =>
@@ -60,17 +68,22 @@ const readBody = Effect.fnUntraced(function* (request: Request) {
   });
 });
 
-const hasEffectRuntimeType = (value: unknown) => Boolean(Effect.isEffect(value));
-
 const invokeServerReference = <Services>(
+  identity: ERSCIdentity<Services>,
   action: (...args: ReadonlyArray<unknown>) => unknown,
   args: ReadonlyArray<unknown>,
 ) =>
   Effect.suspend(() => {
     const invocation = action(...args);
-    return hasEffectRuntimeType(invocation)
-      ? (invocation as Effect.Effect<unknown, never, Services>)
-      : Effect.promise(() => Promise.resolve(invocation));
+    const match = matchServerFnInvocation(invocation, identity);
+    switch (match._tag) {
+      case 'Match':
+        return match.effect;
+      case 'IdentityMismatch':
+        return Effect.die(new ServerFnIdentityMismatchError());
+      case 'Native':
+        return Effect.promise(() => Promise.resolve(invocation));
+    }
   }).pipe(
     Effect.catchCause((cause) =>
       Cause.hasInterrupts(cause)
@@ -82,6 +95,7 @@ const invokeServerReference = <Services>(
 const runClientServerFn = Effect.fnUntraced(function* <Services>(
   request: Request,
   actionId: string,
+  identity: ERSCIdentity<Services>,
 ) {
   const temporaryReferences = createTemporaryReferenceSet();
   const body = yield* readBody(request);
@@ -93,22 +107,19 @@ const runClientServerFn = Effect.fnUntraced(function* <Services>(
     try: () => loadServerAction(actionId),
     catch: (cause) => requestError('The requested Server Function does not exist.', 400, cause),
   });
-  const exit = yield* Effect.exit(invokeServerReference<Services>(action, args));
-  const serverFnResult = (
-    exit._tag === 'Success'
-      ? { _tag: 'Success', value: exit.value }
-      : { _tag: 'Failure', error: Cause.squash(exit.cause) }
-  ) satisfies ServerFnResult;
+  const outcome = yield* serverFnOutcome(invokeServerReference(identity, action, args));
 
   return {
     formState: null,
-    serverFnResult,
-    status: exit._tag === 'Success' ? 200 : 500,
+    ...outcome,
     temporaryReferences,
   } satisfies RequestOutcome;
 });
 
-const runProgressiveServerFn = Effect.fnUntraced(function* <Services>(request: Request) {
+const runProgressiveServerFn = Effect.fnUntraced(function* <Services>(
+  request: Request,
+  identity: ERSCIdentity<Services>,
+) {
   const formData = yield* Effect.tryPromise({
     try: () => request.formData(),
     catch: (cause) => requestError('Failed to read the Server Function form body.', 400, cause),
@@ -125,7 +136,7 @@ const runProgressiveServerFn = Effect.fnUntraced(function* <Services>(request: R
     );
   }
 
-  const actionResult = yield* invokeServerReference<Services>(decodedAction, []).pipe(
+  const actionResult = yield* invokeServerReference(identity, decodedAction, []).pipe(
     Effect.mapError((error) =>
       requestError('The Server Function form action failed.', 500, error.cause),
     ),
@@ -136,7 +147,7 @@ const runProgressiveServerFn = Effect.fnUntraced(function* <Services>(request: R
   });
 
   return {
-    formState: (decodedFormState ?? null) as FlightPayload['formState'],
+    formState: decodedFormState,
     serverFnResult: null,
     status: 200,
   } satisfies RequestOutcome;
@@ -144,6 +155,7 @@ const runProgressiveServerFn = Effect.fnUntraced(function* <Services>(request: R
 
 export const handleServerFnRequest = Effect.fnUntraced(function* <Services>(
   request: HttpServerRequest.HttpServerRequest,
+  identity: ERSCIdentity<Services>,
 ) {
   yield* validateOrigin(request);
   const signal = yield* Effect.abortSignal;
@@ -151,8 +163,8 @@ export const handleServerFnRequest = Effect.fnUntraced(function* <Services>(
   const actionId = request.headers[ServerFnIdHeader];
   const handleRequest =
     actionId === undefined
-      ? runProgressiveServerFn<Services>(webRequest)
-      : runClientServerFn<Services>(webRequest, actionId);
+      ? runProgressiveServerFn(webRequest, identity)
+      : runClientServerFn(webRequest, actionId, identity);
 
   return yield* handleRequest;
 });

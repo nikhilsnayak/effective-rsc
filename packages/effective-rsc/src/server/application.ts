@@ -3,6 +3,7 @@ import { Effect, Layer, Stream } from 'effect';
 import { HttpRouter, HttpServerResponse, HttpStaticServer } from 'effect/unstable/http';
 
 import type { ApplicationDefinition } from '../application/definition';
+import { ERSCIdentityTypeId } from '../application/ersc-identity';
 import { FrameworkAssetNamespace } from '../application/route-path';
 import { FlightMediaType } from '../rsc/flight';
 import { FlightRendererLayer } from './flight';
@@ -10,7 +11,7 @@ import { FlightRenderer } from './flight-renderer';
 import { HtmlRenderer } from './html-renderer';
 import type { RequestOutcome } from './request-outcome';
 import { ServerConfig } from './server-config';
-import { handleServerFnRequest } from './server-fn';
+import { handleServerFnRequest } from './server-fn-request';
 import { HtmlRendererLayer } from './ssr';
 
 const RenderersLayer = Layer.mergeAll(FlightRendererLayer, HtmlRendererLayer);
@@ -61,6 +62,7 @@ const httpLayer = <Services, ApplicationError>(
       renderRouteTree: application.renderRouteTree,
       formState,
       pathname,
+      requestRuntime: application[ERSCIdentityTypeId].requestRuntime,
       serverFnResult,
       temporaryReferences,
     });
@@ -97,9 +99,13 @@ const httpLayer = <Services, ApplicationError>(
           }),
         );
         yield* router.add('POST', pathname, (request) =>
-          handleServerFnRequest<Services>(request).pipe(
+          handleServerFnRequest(request, application[ERSCIdentityTypeId]).pipe(
             Effect.flatMap((result) =>
-              render({ ...result, accept: request.headers['accept'], pathname }),
+              render({
+                ...result,
+                accept: request.headers['accept'],
+                pathname,
+              }),
             ),
             Effect.catchTag('ServerFnRequestError', (error) =>
               Effect.succeed(

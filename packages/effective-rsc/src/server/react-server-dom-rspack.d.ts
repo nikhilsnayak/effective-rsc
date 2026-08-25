@@ -3,13 +3,18 @@ declare module 'react-server-dom-rspack/client' {
 }
 
 declare module 'react-server-dom-rspack/server.node' {
+  import type { ReactFormState } from 'react-dom/client';
+
   export type TemporaryReferenceSet = unknown;
 
   export function createTemporaryReferenceSet(): TemporaryReferenceSet;
 
   export function decodeAction(body: FormData): Promise<(() => Promise<unknown>) | null>;
 
-  export function decodeFormState(actionResult: unknown, body: FormData): Promise<unknown>;
+  export function decodeFormState(
+    actionResult: unknown,
+    body: FormData,
+  ): Promise<ReactFormState | null>;
 
   export function decodeReply(
     body: FormData | string,

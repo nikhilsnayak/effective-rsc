@@ -1,12 +1,12 @@
 import { Effect } from 'effect';
-import { Layout, type LayoutProps } from 'effective-rsc';
 
+import { ERSC } from '@/ersc';
 import PersonalAgenda from '@/modules/agenda/components/personal-agenda';
 import ConferenceNavigation from '@/modules/conference/components/conference-navigation';
 import { ConferenceRepository } from '@/modules/conference/conference-repository';
 
-export default Layout.make({
-  render: Effect.fn('ScheduleLayout')(function* ({ children }: LayoutProps) {
+export default ERSC.Layout.make({
+  render: Effect.fn('ScheduleLayout')(function* ({ children }) {
     const repository = yield* ConferenceRepository;
     const agenda = yield* repository.agenda;
 

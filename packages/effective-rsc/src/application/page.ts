@@ -1,30 +1,36 @@
-import type { Effect } from 'effect';
+import { Effect, Predicate } from 'effect';
 import type { ReactNode } from 'react';
 
-import type { RenderRuntime } from './render-runtime';
+import { attachERSCIdentity, type ERSCIdentity, type ERSCMember } from './ersc-identity';
 
-declare const PageTypeId: unique symbol;
+const PageTypeId: unique symbol = Symbol.for('effective-rsc/PageConcern');
 
 export type PageConcern = {
   readonly [PageTypeId]: typeof PageTypeId;
 };
 
-type PageProps<Services> = {
-  readonly runtime: RenderRuntime<Services>;
+export const isPageConcern = (value: unknown): value is PageConcern =>
+  Predicate.hasProperty(value, PageTypeId) && value[PageTypeId] === PageTypeId;
+
+export interface PageComponent<Services> extends PageConcern, ERSCMember<Services> {
+  (): Promise<Awaited<ReactNode>>;
+}
+
+type PageOptions<Error, Services> = {
+  readonly render: () => Effect.Effect<Awaited<ReactNode>, Error, Services>;
 };
 
-export type PageComponent<Services> = PageConcern & {
-  (props: PageProps<Services>): Promise<Awaited<ReactNode>>;
+export type PageFactory<Services> = {
+  readonly make: <Error>(options: PageOptions<Error, Services>) => PageComponent<Services>;
 };
 
-const make = <Output extends Awaited<ReactNode>, Error, Services>(
-  operation: () => Effect.Effect<Output, Error, Services>,
-) => {
-  const PageComponent = ({ runtime }: PageProps<Services>) => {
-    return runtime(operation());
-  };
+export const makePageFactory = <Services>(
+  identity: ERSCIdentity<Services>,
+): PageFactory<Services> => ({
+  make: ({ render }) => {
+    const PageComponent = () => identity.requestRuntime.run(Effect.suspend(render));
 
-  return PageComponent as unknown as PageComponent<Services>;
-};
-
-export const Page = { make } as const;
+    const concern: PageConcern = { [PageTypeId]: PageTypeId };
+    return attachERSCIdentity(Object.assign(PageComponent, concern), identity);
+  },
+});

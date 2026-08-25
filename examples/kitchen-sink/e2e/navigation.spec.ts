@@ -51,3 +51,22 @@ test('moves between conference days through the composed schedule', async ({ pag
   ).toBe(true);
   expect(browserErrors).toEqual([]);
 });
+
+test('streams effectful speaker leaves independently within the conference schedule', async ({
+  page,
+}) => {
+  const browserErrors = observeBrowserErrors(page);
+  await page.goto('/');
+
+  await page
+    .getByRole('link', { name: 'See Sunday' })
+    .evaluate((element: HTMLAnchorElement) => element.click());
+
+  await expect(page.getByRole('heading', { level: 1, name: 'Sunday schedule' })).toBeVisible();
+  await expect(page.getByLabel('Loading speaker').first()).toBeVisible();
+  await expect(page.locator('[data-speaker-id="rohan-mehta"]')).toBeVisible();
+  await expect(page.locator('[data-speaker-id="anika-rao"]')).toBeVisible();
+  await expect(page.locator('[data-speaker-id="jonah-kim"]')).toBeVisible();
+  await expect(page.getByLabel('Loading speaker')).toHaveCount(0);
+  expect(browserErrors).toEqual([]);
+});

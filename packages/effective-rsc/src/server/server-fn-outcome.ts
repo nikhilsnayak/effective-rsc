@@ -15,6 +15,6 @@ export const serverFnOutcome = Effect.fnUntraced(function* <Output, Error, Requi
       exit._tag === 'Success'
         ? ({ _tag: 'Success', value: exit.value } satisfies ServerFnResult)
         : ({ _tag: 'Failure', error: Cause.squash(exit.cause) } satisfies ServerFnResult),
-    status: exit._tag === 'Success' ? 200 : 500,
+    status: 200,
   };
 });

@@ -33,13 +33,11 @@ export const installCallServer = Effect.fnUntraced(function* (browserRoot: Brows
         (cause) => new ServerFnCallError({ cause, message: 'Server Function request failed.' }),
       ),
     );
-    const committed = Promise.withResolvers<void>();
-    browserRoot.render({
+    const committed = browserRoot.render({
       _tag: 'ServerFunction',
-      onCommit: committed.resolve,
       routeTree: resource.payload.routeTree,
     });
-    yield* Effect.promise(() => committed.promise).pipe(
+    yield* Effect.promise(() => committed).pipe(
       Effect.onError(() => resource.release),
       Effect.forkScoped,
     );

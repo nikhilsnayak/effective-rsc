@@ -93,7 +93,7 @@ const makeBrowserRoot = (renders: Array<BrowserRenderRequest> = []) =>
   ({
     render: (request) => {
       renders.push(request);
-      request.onCommit();
+      return Promise.resolve();
     },
   }) satisfies BrowserRootController;
 
@@ -198,9 +198,13 @@ it.effect('cancels a streaming Flight response abandoned before React commits', 
     Effect.gen(function* () {
       const navigation = new TestNavigationApi();
       const renderStarted = Promise.withResolvers<void>();
+      const renderCommitted = Promise.withResolvers<void>();
       let responseSignal: AbortSignal | undefined;
       const browserRoot = {
-        render: () => renderStarted.resolve(),
+        render: () => {
+          renderStarted.resolve();
+          return renderCommitted.promise;
+        },
       } satisfies BrowserRootController;
       const httpClient = HttpClient.make((request, _url, signal) =>
         Effect.sync(() => {

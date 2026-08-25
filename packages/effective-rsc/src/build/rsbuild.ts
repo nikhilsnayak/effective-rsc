@@ -1,10 +1,7 @@
-import {
-  createRsbuild,
-  type BuildResult,
-  type RsbuildConfig,
-  type StartDevServerResult,
-} from '@rsbuild/core';
+import { createRsbuild, type BuildResult, type StartDevServerResult } from '@rsbuild/core';
 import { Context, Effect, Layer, Schema } from 'effect';
+
+import type { FrameworkRsbuildConfig } from './config';
 
 export class RsbuildError extends Schema.TaggedError<RsbuildError>()('RsbuildError', {
   message: Schema.String,
@@ -35,14 +32,14 @@ const closeDevServer = Effect.fnUntraced(function* (result: StartDevServerResult
 
 export class Rsbuild extends Context.Service<Rsbuild>()('effective-rsc/build/Rsbuild', {
   make: Effect.succeed({
-    build: Effect.fn('Rsbuild.build')(function* (root: string, config: RsbuildConfig) {
+    build: Effect.fn('Rsbuild.build')(function* (config: FrameworkRsbuildConfig) {
       yield* Effect.acquireRelease(
         Effect.tryPromise({
           try: () =>
             createRsbuild({
               callerName: 'effective-rsc',
               config,
-              cwd: root,
+              cwd: config.root,
             }).then((rsbuild) => rsbuild.build()),
           catch: (cause) =>
             new RsbuildError({
@@ -53,14 +50,14 @@ export class Rsbuild extends Context.Service<Rsbuild>()('effective-rsc/build/Rsb
         (result) => closeBuild(result).pipe(Effect.orDie),
       );
     }),
-    dev: Effect.fn('Rsbuild.dev')(function* (root: string, config: RsbuildConfig) {
+    dev: Effect.fn('Rsbuild.dev')(function* (config: FrameworkRsbuildConfig) {
       yield* Effect.acquireRelease(
         Effect.tryPromise({
           try: () =>
             createRsbuild({
               callerName: 'effective-rsc',
               config,
-              cwd: root,
+              cwd: config.root,
             }).then((rsbuild) => rsbuild.startDevServer()),
           catch: (cause) =>
             new RsbuildError({

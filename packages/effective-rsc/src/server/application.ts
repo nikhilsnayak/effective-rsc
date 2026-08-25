@@ -84,40 +84,36 @@ const httpLayer = <Services, ApplicationError>(
   });
 
   const RequestLayer = Layer.mergeAll(RenderersLayer, application.servicesLayer);
-  const ApplicationRoutesLayer = Layer.effectDiscard(
-    Effect.gen(function* () {
-      const router = yield* HttpRouter.HttpRouter;
-
-      for (const pathname of application.paths) {
-        yield* router.add('GET', pathname, (request) =>
-          render({
-            accept: request.headers['accept'],
-            formState: null,
-            pathname,
-            serverFnResult: null,
-            status: 200,
-          }),
-        );
-        yield* router.add('POST', pathname, (request) =>
-          handleServerFnRequest(request, application[ERSCIdentityTypeId]).pipe(
-            Effect.flatMap((result) =>
-              render({
-                ...result,
-                accept: request.headers['accept'],
-                pathname,
+  const ApplicationRoutesLayer = HttpRouter.addAll(
+    application.paths.flatMap((pathname) => [
+      HttpRouter.route('GET', pathname, (request) =>
+        render({
+          accept: request.headers['accept'],
+          formState: null,
+          pathname,
+          serverFnResult: null,
+          status: 200,
+        }),
+      ),
+      HttpRouter.route('POST', pathname, (request) =>
+        handleServerFnRequest(request, application[ERSCIdentityTypeId]).pipe(
+          Effect.flatMap((result) =>
+            render({
+              ...result,
+              accept: request.headers['accept'],
+              pathname,
+            }),
+          ),
+          Effect.catchTag('ServerFnRequestError', (error) =>
+            Effect.succeed(
+              HttpServerResponse.text(error.message, {
+                status: error.status,
               }),
             ),
-            Effect.catchTag('ServerFnRequestError', (error) =>
-              Effect.succeed(
-                HttpServerResponse.text(error.message, {
-                  status: error.status,
-                }),
-              ),
-            ),
           ),
-        );
-      }
-    }),
+        ),
+      ),
+    ]),
   );
 
   return Layer.mergeAll(ApplicationRoutesLayer, StaticAssetsLayer).pipe(

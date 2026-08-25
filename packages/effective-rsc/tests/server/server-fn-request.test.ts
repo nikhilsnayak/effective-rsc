@@ -15,7 +15,7 @@ describe('serverFnOutcome', () => {
     }),
   );
 
-  it.effect('turns completed success and failure exits into Flight outcomes', () =>
+  it.effect('returns completed success and failure outcomes through successful Flight', () =>
     Effect.gen(function* () {
       const success = yield* serverFnOutcome(Effect.succeed('saved'));
       const failure = yield* serverFnOutcome(Effect.fail('unavailable'));
@@ -26,7 +26,7 @@ describe('serverFnOutcome', () => {
       });
       expect(failure).toEqual({
         serverFnResult: { _tag: 'Failure', error: 'unavailable' },
-        status: 500,
+        status: 200,
       });
     }),
   );

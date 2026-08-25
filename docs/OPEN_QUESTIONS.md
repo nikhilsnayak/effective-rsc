@@ -7,8 +7,8 @@ and add or revise a decision.
 
 1. Should the published package emit JavaScript and declarations in `dist`, or continue exposing
    TypeScript source while the runtime stabilizes?
-2. What additional metadata belongs in the internal Flight model, including the final imperative
-   Server Function result channel?
+2. What additional metadata belongs in the internal Flight model beyond the imperative Server
+   Function result channel?
 3. How should SSR failures map to responses before headers, and what diagnostic should report
    failures after streaming begins?
 4. How should development detect an `ERSC.Loading.make` renderer that suspends internally?
@@ -20,9 +20,9 @@ and add or revise a decision.
   `.ersc/` by D-019.
 - Pre-header HTML failures remain typed `HtmlRenderError`s in Effect. Response mapping and
   post-header diagnostics remain unresolved.
-- The Flight model currently carries the complete document route tree and opaque React form state.
-  The provisional `serverFnResult` proves an imperative value can accompany a refresh, but not its
-  final success/failure shape.
+- The Flight model currently carries the complete document route tree, opaque React form state, and
+  the imperative Server Function result. D-040 assigns request/protocol failures to non-2xx HTTP
+  responses and completed invocation outcomes to 200 Flight with `Success` or `Failure`.
 - `ERSC.Loading.make` rejects Promise and Effect outputs, so its declared renderer is synchronous
   and service-free. TypeScript cannot detect a renderer that calls `use` or otherwise throws a
   thenable internally; the development diagnostic for that case remains open.

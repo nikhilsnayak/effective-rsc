@@ -27,6 +27,10 @@ export type RsbuildEntries = {
   readonly stylesheet: string;
 };
 
+export type FrameworkRsbuildConfig = RsbuildConfig & {
+  readonly root: string;
+};
+
 export type LoadServerBundle = () => Promise<unknown>;
 
 type DevServerCompile = (loadServerBundle: LoadServerBundle) => Promise<void>;
@@ -106,7 +110,7 @@ const makeEnvironments = (
   },
 });
 
-export const makeBuildConfig = (root: string, entries: RsbuildEntries): RsbuildConfig => ({
+export const makeBuildConfig = (root: string, entries: RsbuildEntries): FrameworkRsbuildConfig => ({
   mode: 'production',
   root,
   server: {
@@ -153,7 +157,7 @@ export const makeDevConfig = (
   entries: RsbuildEntries,
   applicationMiddleware: RequestHandler,
   onServerCompile: DevServerCompile,
-): RsbuildConfig => {
+): FrameworkRsbuildConfig => {
   return {
     mode: 'development',
     root,

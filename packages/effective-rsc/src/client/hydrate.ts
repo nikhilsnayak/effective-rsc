@@ -18,9 +18,7 @@ export const hydrate = Effect.scoped(
       try: () => createFromReadableStream<FlightPayload>(rscStream),
       catch: (cause) => new BrowserHydrationError({ cause }),
     });
-    const browserRoot = yield* hydrateBrowserRoot(document, payload).pipe(
-      Effect.mapError((cause) => new BrowserHydrationError({ cause })),
-    );
+    const browserRoot = yield* hydrateBrowserRoot(document, payload);
 
     yield* installCallServer(browserRoot);
     yield* listenForNavigation(browserRoot);

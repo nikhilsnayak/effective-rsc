@@ -18,7 +18,10 @@ declare module 'react-server-dom-rspack/server.node' {
 
   export function decodeReply(
     body: FormData | string,
-    options?: { readonly temporaryReferences?: TemporaryReferenceSet },
+    options?: {
+      readonly arraySizeLimit?: number;
+      readonly temporaryReferences?: TemporaryReferenceSet;
+    },
   ): Promise<ReadonlyArray<unknown>>;
 
   export function loadServerAction(actionId: string): (...args: ReadonlyArray<unknown>) => unknown;

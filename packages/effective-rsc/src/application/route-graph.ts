@@ -4,18 +4,18 @@ import type { PageComponent } from './page';
 import { joinRoutePaths, type StaticPath, validateUnreservedPath } from './route-path';
 import { type AnyRoutes, RoutesScopeIdTypeId } from './routes';
 
-export type RouteScope<Services> = {
+type RouteScope<Services> = {
   readonly id: string;
   readonly layout: LayoutComponent<Services> | null;
   readonly loading: LoadingComponent<Services> | null;
 };
 
-export type CompiledRoute<Services> = {
+type CompiledRoute<Services> = {
   readonly page: PageComponent<Services>;
   readonly scopes: ReadonlyArray<RouteScope<Services>>;
 };
 
-export type CompiledRouteGraph<Services> = {
+type CompiledRouteGraph<Services> = {
   readonly paths: ReadonlyArray<StaticPath>;
   readonly route: (pathname: StaticPath) => CompiledRoute<Services> | undefined;
 };

@@ -211,10 +211,11 @@ router queue. The request starts synchronously inside the single transition. No 
 intermediate canonical state is introduced.
 
 After the Flight root resolves, `BrowserRoot` performs one state update. For a different Page, it
-retains the current common Layout content while using the destination nodes and children. A native
-commit promise belongs to that navigation; only its resolver enters React, and `useLayoutEffect`
-resolves it after the exact tree commits. The browser then commits URL, history, UI, scroll, and any
-View Transition together. A global pending flag is not a commit token.
+retains the current common Layout content while using the destination nodes and children.
+`BrowserRoot.render` privately creates and returns the native commit promise; only its resolver
+enters React, and `useLayoutEffect` resolves it after the exact tree commits. The browser then
+commits URL, history, UI, scroll, and any View Transition together. A global pending flag is not a
+commit token.
 
 The Flight loader requires a successful `text/x-component` response and decodes it with native
 RSDR. Each response owns a child Effect scope. RSDR consumes eagerly, so nested rows keep streaming
@@ -243,11 +244,14 @@ path.
 Local alias or export-shape workarounds are excluded because they do not prove the native contract.
 
 The server decodes the native request, loads its reference, runs the result in the HTTP request,
-rerenders the route, and returns Flight containing the refresh and imperative result. The browser
-uses a scoped `FiberSet.makeRuntimePromise` runner at RSDR's Promise callback. It returns the
-imperative result without awaiting React commit, which would deadlock action completion; the commit
-wait runs in the captured browser scope. Failure cancels the response, success lets its eager reader
-self-finalize, and browser shutdown closes pending work.
+rerenders the route, and returns Flight containing the refresh and imperative result. Request and
+protocol failures use non-2xx HTTP responses. Once a client invocation executes, its `Success` or
+`Failure` result returns in 200 Flight so the browser can decode the result and refresh together;
+request interruption remains interruption. The browser uses a scoped
+`FiberSet.makeRuntimePromise` runner at RSDR's Promise callback. It returns the imperative result
+without awaiting React commit, which would deadlock action completion; the commit wait runs in the
+captured browser scope. Transport or commit-wait failure releases the response, successful decoding
+lets its eager reader self-finalize, and browser shutdown closes pending work.
 
 `ERSC.ServerFn.make` is a framework intrinsic. Its exported callable has a real Promise contract for
 the client graph. In the server graph it produces an ERSC-branded invocation carrying the lazy
@@ -261,9 +265,10 @@ times out. Its Playwright test remains `fixme`, so progressive enhancement is no
 
 Remaining bridge gaps:
 
-- Decoded argument counts need a limit, and concurrent responses need an explicit ordering policy.
-- The provisional `serverFnResult` proves a refresh and imperative value can share Flight; its final
-  success/failure representation is open.
+- RSDR limits decoded client argument-array size. Raw request bodies still need a limit, and
+  concurrent responses need an explicit ordering policy.
+- Expected Effect errors, defects, and serializable client failure values need an end-to-end typed
+  mapping.
 
 ## Effect boundaries — Accepted
 

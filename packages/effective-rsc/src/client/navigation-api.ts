@@ -77,16 +77,13 @@ export const listenForNavigation = Effect.fnUntraced(function* (
           const { payload, release } = await run(loadFlight({ _tag: 'Navigation', destination }), {
             signal: event.signal,
           });
-          const reactCommitted = Promise.withResolvers<void>();
-          browserRoot.render({
+          const reactCommitted = browserRoot.render({
             _tag: 'Navigation',
-            onCommit: reactCommitted.resolve,
             routeTree: payload.routeTree,
           });
-          await run(
-            Effect.promise(() => reactCommitted.promise).pipe(Effect.onInterrupt(() => release)),
-            { signal: event.signal },
-          );
+          await run(Effect.promise(() => reactCommitted).pipe(Effect.onInterrupt(() => release)), {
+            signal: event.signal,
+          });
           navigation.resolve();
         } catch (cause) {
           navigation.reject(cause);

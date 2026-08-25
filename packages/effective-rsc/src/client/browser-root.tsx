@@ -16,8 +16,11 @@ export class BrowserRootHydrationError extends Schema.TaggedError<BrowserRootHyd
 
 export type BrowserRenderRequest = {
   readonly _tag: 'Navigation' | 'ServerFunction';
-  readonly onCommit: () => void;
   readonly routeTree: RouteTreeModel;
+};
+
+type PendingBrowserRender = BrowserRenderRequest & {
+  readonly onCommit: () => void;
 };
 
 type BrowserRender =
@@ -25,10 +28,10 @@ type BrowserRender =
       readonly _tag: 'Initial';
       readonly routeTree: RouteTreeModel;
     }
-  | BrowserRenderRequest;
+  | PendingBrowserRender;
 
 export type BrowserRootController = {
-  readonly render: (request: BrowserRenderRequest) => void;
+  readonly render: (request: BrowserRenderRequest) => Promise<void>;
 };
 
 export const hydrateBrowserRoot = Effect.fnUntraced(function* (
@@ -45,14 +48,18 @@ export const hydrateBrowserRoot = Effect.fnUntraced(function* (
 
     useLayoutEffect(() => {
       browserRootReady.resolve({
-        render: (request) =>
+        render: (request) => {
+          const committed = Promise.withResolvers<void>();
           setRender((current) => ({
             ...request,
+            onCommit: committed.resolve,
             routeTree:
               request._tag === 'Navigation'
                 ? retainSharedLayoutContent(current.routeTree, request.routeTree)
                 : request.routeTree,
-          })),
+          }));
+          return committed.promise;
+        },
       });
     }, []);
 

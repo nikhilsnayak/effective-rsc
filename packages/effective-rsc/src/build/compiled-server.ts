@@ -12,26 +12,10 @@ export class CompiledServerError extends Schema.TaggedError<CompiledServerError>
   },
 ) {}
 
-const ClientBootstrapScripts = Schema.NonEmptyArray(Schema.String);
-const isClientBootstrapScripts = Schema.is(ClientBootstrapScripts);
-const ClientStylesheets = Schema.NonEmptyArray(Schema.String);
-const isClientStylesheets = Schema.is(ClientStylesheets);
-
-type WithClientResources = {
-  readonly entryCssFiles: typeof ClientStylesheets.Type;
-  readonly entryJsFiles: typeof ClientBootstrapScripts.Type;
-};
-
-const CompiledApplication = Schema.declare(
-  (input): input is WithClientResources =>
-    typeof input === 'object' &&
-    input !== null &&
-    'entryCssFiles' in input &&
-    'entryJsFiles' in input &&
-    isClientStylesheets(input.entryCssFiles) &&
-    isClientBootstrapScripts(input.entryJsFiles),
-  { expected: "the compiled 'use server-entry' application" },
-);
+const CompiledApplication = Schema.Struct({
+  entryCssFiles: Schema.NonEmptyArray(Schema.String),
+  entryJsFiles: Schema.NonEmptyArray(Schema.String),
+});
 
 const CompiledServerLayer = Schema.declare(
   (input): input is Layer.Layer<never, Types.unhandled, ServerConfig> => Layer.isLayer(input),

@@ -14,6 +14,8 @@ import { ServerFnIdHeader } from '../rsc/flight';
 import type { RequestOutcome } from './request-outcome';
 import { serverFnOutcome } from './server-fn-outcome';
 
+const ServerFnArraySizeLimit = 10_000;
+
 export class ServerFnRequestError extends Schema.TaggedError<ServerFnRequestError>()(
   'ServerFnRequestError',
   {
@@ -100,7 +102,11 @@ const runClientServerFn = Effect.fnUntraced(function* <Services>(
   const temporaryReferences = createTemporaryReferenceSet();
   const body = yield* readBody(request);
   const args = yield* Effect.tryPromise({
-    try: () => decodeReply(body, { temporaryReferences }),
+    try: () =>
+      decodeReply(body, {
+        arraySizeLimit: ServerFnArraySizeLimit,
+        temporaryReferences,
+      }),
     catch: (cause) => requestError('Failed to decode Server Function arguments.', 400, cause),
   });
   const action = yield* Effect.try({

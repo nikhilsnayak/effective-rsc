@@ -89,5 +89,5 @@ export const dev = Effect.fn('effective-rsc/build/dev')(function* (options: Buil
     (loadServerBundle) => runInDevScope(applicationReloader.reload(loadServerBundle)),
   );
 
-  return yield* rsbuild.dev(applicationRoot, config);
+  return yield* rsbuild.dev(config);
 });

@@ -57,5 +57,5 @@ export const build = Effect.fn('effective-rsc/rsbuild/build')(function* (options
   const { applicationRoot, entries } = yield* resolveApplicationBuild(options);
   const rsbuild = yield* Rsbuild;
 
-  yield* rsbuild.build(applicationRoot, makeBuildConfig(applicationRoot, entries));
+  yield* rsbuild.build(makeBuildConfig(applicationRoot, entries));
 });

@@ -61,3 +61,47 @@ it.effect('resolves the server bundle where the compiler emits it', () =>
     expect(path.resolve('/workspace', ServerBundlePath)).toBe('/workspace/.ersc/server/main.js');
   }).pipe(Effect.provide(Path.layer)),
 );
+
+const reactCompilerOptions = (plugins: ReadonlyArray<unknown> | undefined) => {
+  const captured: Array<unknown> = [];
+
+  for (const plugin of plugins ?? []) {
+    const { setup } = plugin as {
+      readonly setup: (api: {
+        readonly context: { readonly version: string };
+        readonly modifyBundlerChain: (fn: unknown) => void;
+        readonly modifyEnvironmentConfig: (
+          fn: (
+            config: unknown,
+            utils: { readonly mergeEnvironmentConfig: (fragment: unknown) => unknown },
+          ) => unknown,
+        ) => void;
+      }) => void;
+    };
+
+    setup({
+      context: { version: '2.2.0' },
+      modifyBundlerChain: () => undefined,
+      modifyEnvironmentConfig: (fn) => {
+        const fragment = fn(
+          { mode: 'production', dev: { hmr: false }, output: { target: 'web' } },
+          { mergeEnvironmentConfig: (merged) => merged },
+        ) as { tools?: { swc?: { jsc?: { transform?: { reactCompiler?: unknown } } } } };
+
+        captured.push(fragment.tools?.swc?.jsc?.transform?.reactCompiler);
+      },
+    });
+  }
+
+  return captured;
+};
+
+it.effect('keeps the React Compiler out of the server environment', () =>
+  Effect.gen(function* () {
+    const { applicationRoot, entries } = yield* resolveApplicationBuild({ root: '/workspace' });
+    const config = makeBuildConfig(applicationRoot, entries);
+
+    expect(reactCompilerOptions(config.environments?.['client']?.plugins)).toEqual([true]);
+    expect(reactCompilerOptions(config.environments?.['server']?.plugins)).toEqual([undefined]);
+  }).pipe(Effect.provide(Path.layer)),
+);

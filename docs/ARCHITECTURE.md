@@ -223,7 +223,11 @@ Remaining bridge gaps:
 Rsbuild coordinates distinct Rspack browser, RSC, and SSR graphs. Only the RSC graph receives
 React's `react-server` condition; native client references remain graph-correct. React, React DOM,
 and RSDR use one exact compatible Canary release. The browser root runs in Strict Mode, and
-Rsbuild's React plugin enables Rspack's built-in React Compiler in development and production.
+Rsbuild's React plugin enables Rspack's built-in React Compiler for the browser environment in
+development and production. The server environment omits it: `react/compiler-runtime` has no
+`react-server` variant, so a memoized Server Component would call `useMemoCache` against a hooks
+dispatcher the `react-server` build does not expose. Memoization also earns nothing in a single
+server render pass.
 
 Tailwind v4 is the only integrated styling toolchain. Applications own `src/styles.css`, starting
 with `@import 'tailwindcss'`; the framework owns its Rsbuild plugin. Plain CSS and CSS Modules use

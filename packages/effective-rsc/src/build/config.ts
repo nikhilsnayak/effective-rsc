@@ -46,6 +46,7 @@ const makeEnvironments = (
   entries: RsbuildEntries,
 ): NonNullable<RsbuildConfig['environments']> => ({
   client: {
+    plugins: [pluginReact({ reactCompiler: true })],
     source: {
       entry: {
         [ClientEntryName]: {
@@ -71,6 +72,7 @@ const makeEnvironments = (
     },
   },
   server: {
+    plugins: [pluginReact()],
     resolve: {
       alias: {
         [ApplicationEntrySpecifier]: entries.application,
@@ -110,7 +112,7 @@ export const makeBuildConfig = (root: string, entries: RsbuildEntries): RsbuildC
   server: {
     publicDir: false,
   },
-  plugins: [pluginReact({ reactCompiler: true }), pluginTailwindcss(), makeRscPlugin(entries)],
+  plugins: [pluginTailwindcss(), makeRscPlugin(entries)],
   environments: makeEnvironments(root, entries),
 });
 
@@ -168,7 +170,6 @@ export const makeDevConfig = (
       strictPort: true,
     },
     plugins: [
-      pluginReact({ reactCompiler: true }),
       pluginTailwindcss(),
       makeRscPlugin(entries),
       makeDevLifecyclePlugin(applicationMiddleware, onServerCompile),

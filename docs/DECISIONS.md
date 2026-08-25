@@ -35,4 +35,4 @@
 | D-031 | Accepted | Give each node a local React `id`, Server Component content, and optional child. Layout uses scope identity; Loading and Page use the pathname. Defer parallel-slot and partial-patch fields.                    |
 | D-032 | Accepted | Let `NavigateEvent.signal` own ordering and cancellation. In one transition, await the Flight root, publish once, and resolve Navigation API after that render's exact layout commit; do not add a router queue. |
 | D-033 | Accepted | On cross-destination navigation, retain the revealed common Layout prefix while `RouteOutlet` uses the new child. Server Function refresh replaces the complete tree.                                            |
-| D-034 | Accepted | Enable React Strict Mode at the browser root and Rspack's built-in React Compiler in development and production.                                                                                                 |
+| D-034 | Accepted | Enable React Strict Mode at the browser root and Rspack's built-in React Compiler in development and production. The compiler is browser-only; the RSC and SSR graphs omit it.                                   |

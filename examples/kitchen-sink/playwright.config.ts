@@ -2,9 +2,6 @@ import { defineConfig, devices } from '@playwright/test';
 
 const applicationOrigin = 'http://localhost:18193';
 const applicationReadyUrl = `${applicationOrigin}/_ersc/assets/main.js`;
-// oxlint-disable-next-line effecttsgo/process-env -- Playwright configuration reads the CI process boundary.
-const isCi = process.env['CI'] !== undefined;
-
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
@@ -24,8 +21,9 @@ export default defineConfig({
   ],
   webServer: {
     command: 'ersc start',
+    env: { CONFERENCE_DATABASE_PATH: ':memory:' },
     url: applicationReadyUrl,
-    reuseExistingServer: !isCi,
+    reuseExistingServer: false,
     timeout: 30_000,
     gracefulShutdown: {
       signal: 'SIGINT',

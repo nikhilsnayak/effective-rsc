@@ -13,17 +13,17 @@ test.describe.serial('Server Functions', () => {
 
     try {
       let session = sessionCard(page, title);
-      await session.getByRole('button', { name: 'Add to your agenda' }).click();
+      await session.getByRole('button', { name: 'Add to the agenda' }).click();
 
-      await expect(session.getByRole('button', { name: 'Remove from your agenda' })).toBeVisible();
-      await expect(session.getByText('Added to your agenda.')).toBeVisible();
+      await expect(session.getByRole('button', { name: 'Remove from the agenda' })).toBeVisible();
+      await expect(session.getByText('Added to the agenda.')).toBeVisible();
       await expect(
-        page.locator('section[aria-labelledby="personal-agenda-heading"]'),
+        page.locator('section[aria-labelledby="conference-agenda-heading"]'),
       ).toContainText(title);
 
       await page.reload();
       session = sessionCard(page, title);
-      await expect(session.getByRole('button', { name: 'Remove from your agenda' })).toBeVisible();
+      await expect(session.getByRole('button', { name: 'Remove from the agenda' })).toBeVisible();
       expect(browserErrors).toEqual([]);
     } finally {
       await page.goto('/schedule/saturday');
@@ -43,15 +43,15 @@ test.describe.serial('Server Functions', () => {
       await page.reload({ waitUntil: 'domcontentloaded' });
       let session = sessionCard(page, title);
       const navigation = page.waitForNavigation({ waitUntil: 'domcontentloaded' });
-      await session.getByRole('button', { name: 'Add to your agenda' }).click();
+      await session.getByRole('button', { name: 'Add to the agenda' }).click();
       const response = await navigation;
 
       expect(response?.status()).toBe(200);
       session = sessionCard(page, title);
-      await expect(session.getByRole('button', { name: 'Remove from your agenda' })).toBeVisible();
-      await expect(session.getByText('Added to your agenda.')).toBeVisible();
+      await expect(session.getByRole('button', { name: 'Remove from the agenda' })).toBeVisible();
+      await expect(session.getByText('Added to the agenda.')).toBeVisible();
       await expect(
-        page.locator('section[aria-labelledby="personal-agenda-heading"]'),
+        page.locator('section[aria-labelledby="conference-agenda-heading"]'),
       ).toContainText(title);
     } finally {
       await page.unroute('**/_ersc/assets/main.js');

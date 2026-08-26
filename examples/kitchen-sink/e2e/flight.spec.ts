@@ -15,7 +15,7 @@ test('serves the complete application route tree through the native Flight proto
   expect(response.headers()['content-type']).toBe('text/x-component;charset=utf-8');
   expect(flight).toContain('Saturday schedule');
   expect(flight).toContain('Server Components from first principles');
-  expect(flight).toContain('Your agenda');
+  expect(flight).toContain('Conference agenda');
   expect(flight).toContain('"formState":null');
   expect(flight).toContain('"routeTree"');
   expect(flight).toContain('"html"');

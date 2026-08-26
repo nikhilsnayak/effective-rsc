@@ -10,7 +10,7 @@ test('renders and styles the conference schedule without browser errors', async 
   expect(response?.status()).toBe(200);
   await expect(page).toHaveTitle('Converge 2026 — Conference schedule');
   await expect(page.getByRole('heading', { level: 1, name: 'Saturday schedule' })).toBeVisible();
-  await expect(page.getByRole('heading', { level: 2, name: 'Your agenda' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: 'Conference agenda' })).toBeVisible();
   await expect(page.getByText('Server Components from first principles').first()).toBeVisible();
   await expect(page.locator('html')).toHaveCSS('scrollbar-gutter', 'stable');
 

@@ -5,7 +5,6 @@ import type { ReactFormState } from 'react-dom/client';
 import type { RenderToReadableStreamOptions } from 'react-dom/server';
 
 import type { FlightPayload } from '../../src/rsc/flight';
-import { HtmlRenderer } from '../../src/server/html-renderer';
 import { ServerConfig } from '../../src/server/server-config';
 
 const formState = Symbol('formState') as unknown as ReactFormState;
@@ -40,7 +39,7 @@ vi.doMock('rsc-html-stream/server', () => ({
   injectRSCPayload: () => new TransformStream<Uint8Array, Uint8Array>(),
 }));
 
-const { HtmlRendererLayer } = await import('../../src/server/ssr');
+const { HtmlRenderer } = await import('../../src/server/html-renderer');
 
 describe('HtmlRenderer', () => {
   it.effect('passes the request form state to Fizz without eagerly decoding Flight', () =>
@@ -74,7 +73,7 @@ describe('HtmlRenderer', () => {
       expect(renderOptions?.bootstrapScripts).toEqual(clientBootstrapScripts);
       expect(renderOptions?.formState).toBe(formState);
     }).pipe(
-      Effect.provide(HtmlRendererLayer),
+      Effect.provide(HtmlRenderer.layer),
       Effect.provideService(
         ServerConfig,
         ServerConfig.of({

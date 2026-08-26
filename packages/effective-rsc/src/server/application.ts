@@ -7,21 +7,20 @@ import {
   HttpStaticServer,
 } from 'effect/unstable/http';
 
-import { type ApplicationDefinition, renderRouteTree } from '../application/definition';
+import { type ApplicationDefinition, getApplicationState } from '../application/definition';
 import { ERSCIdentityTypeId } from '../application/ersc-identity';
 import type { PagePathParams } from '../application/page';
 import type { CompiledDestination } from '../application/route-graph';
 import { FrameworkAssetNamespace, isAbsolutePath } from '../application/route-path';
 import { FlightMediaType } from '../rsc/flight';
-import { FlightRendererLayer } from './flight';
+import { renderRouteTree } from '../rsc/render-route-tree';
 import { FlightRenderer } from './flight-renderer';
 import { HtmlRenderer } from './html-renderer';
 import type { RequestOutcome } from './request-outcome';
 import { ServerConfig } from './server-config';
 import { handleServerFnRequest } from './server-fn-request';
-import { HtmlRendererLayer } from './ssr';
 
-const RenderersLayer = Layer.mergeAll(FlightRendererLayer, HtmlRendererLayer);
+const RenderersLayer = Layer.mergeAll(FlightRenderer.layer, HtmlRenderer.layer);
 
 const StaticAssetsLayer = Layer.unwrap(
   Effect.map(ServerConfig, ({ clientAssetsRoot }) =>
@@ -58,6 +57,7 @@ const fromWebStream = (stream: ReadableStream<Uint8Array>) =>
 const httpLayer = <Services, ApplicationError>(
   application: ApplicationDefinition<Services, ApplicationError>,
 ) => {
+  const applicationState = getApplicationState(application);
   const render = Effect.fnUntraced(function* ({
     destination,
     formState,
@@ -83,7 +83,7 @@ const httpLayer = <Services, ApplicationError>(
     const flightRenderer = yield* FlightRenderer;
     const flightStream = yield* flightRenderer.render({
       formState,
-      requestRuntime: application[ERSCIdentityTypeId].requestRuntime,
+      requestRuntime: applicationState[ERSCIdentityTypeId].requestRuntime,
       routeTree,
       serverFnResult,
       temporaryReferences,
@@ -105,9 +105,9 @@ const httpLayer = <Services, ApplicationError>(
     });
   });
 
-  const RequestLayer = Layer.mergeAll(RenderersLayer, application.servicesLayer);
+  const RequestLayer = Layer.mergeAll(RenderersLayer, applicationState.servicesLayer);
   const ApplicationRoutesLayer = HttpRouter.addAll(
-    application.routes.flatMap((destination) => [
+    applicationState.routes.flatMap((destination) => [
       HttpRouter.route('GET', destination.pattern, (request) =>
         render({
           destination,
@@ -118,7 +118,7 @@ const httpLayer = <Services, ApplicationError>(
         }),
       ),
       HttpRouter.route('POST', destination.pattern, (request) =>
-        handleServerFnRequest(request, application[ERSCIdentityTypeId]).pipe(
+        handleServerFnRequest(request, applicationState[ERSCIdentityTypeId]).pipe(
           Effect.flatMap((result) =>
             render({
               ...result,
@@ -143,8 +143,8 @@ const httpLayer = <Services, ApplicationError>(
   );
 };
 
-const layer = <Services, ApplicationError>(
+const serverLayer = <Services, ApplicationError>(
   application: ApplicationDefinition<Services, ApplicationError>,
 ) => HttpRouter.serve(httpLayer(application)).pipe(Layer.provide(BunServerLayer));
 
-export const Application = { httpLayer, layer } as const;
+export const ServerApplication = { httpLayer, serverLayer };

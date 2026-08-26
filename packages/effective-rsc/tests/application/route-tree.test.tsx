@@ -2,16 +2,13 @@ import { describe, expect, it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { renderRouteTree } from '../../src/application/definition';
+import { getApplicationState } from '../../src/application/definition';
 import { Application } from '../../src/application/ersc';
 import type { CompiledDestination } from '../../src/application/route-graph';
 import type { AbsolutePath } from '../../src/application/route-path';
-import {
-  retainSharedLayoutContent,
-  RouteOutlet,
-  RouteTree,
-  type RouteTreeModel,
-} from '../../src/application/route-tree';
+import { retainSharedLayoutContent, RouteOutlet, RouteTree } from '../../src/client/route-tree';
+import { renderRouteTree } from '../../src/rsc/render-route-tree';
+import type { RouteTreeModel } from '../../src/rsc/route-tree';
 
 describe('RouteTree', () => {
   it('recursively renders a unary Layout ancestry', () => {
@@ -123,7 +120,7 @@ describe('retainSharedLayoutContent', () => {
 
   const renderDestination = (pathname: AbsolutePath) =>
     renderRouteTree({
-      destination: findDestination(ConferenceApp.routes, pathname),
+      destination: findDestination(getApplicationState(ConferenceApp).routes, pathname),
       pathParams: {},
       pathname,
     });
@@ -185,12 +182,12 @@ describe('retainSharedLayoutContent', () => {
         .mount('/parent', ERSC.Routes.make({ layout: NestedLayout }).page('/child', ChildPage)),
     });
     const current = renderRouteTree({
-      destination: findDestination(App.routes, '/parent'),
+      destination: findDestination(getApplicationState(App).routes, '/parent'),
       pathParams: {},
       pathname: '/parent',
     });
     const destination = renderRouteTree({
-      destination: findDestination(App.routes, '/parent/child'),
+      destination: findDestination(getApplicationState(App).routes, '/parent/child'),
       pathParams: {},
       pathname: '/parent/child',
     });
@@ -216,12 +213,12 @@ describe('retainSharedLayoutContent', () => {
         .mount('/shared', ERSC.Routes.make({ layout: SecondLayout }).page('/second', SecondPage)),
     });
     const current = renderRouteTree({
-      destination: findDestination(App.routes, '/shared/first'),
+      destination: findDestination(getApplicationState(App).routes, '/shared/first'),
       pathParams: {},
       pathname: '/shared/first',
     });
     const destination = renderRouteTree({
-      destination: findDestination(App.routes, '/shared/second'),
+      destination: findDestination(getApplicationState(App).routes, '/shared/second'),
       pathParams: {},
       pathname: '/shared/second',
     });

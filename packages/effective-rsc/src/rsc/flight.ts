@@ -1,6 +1,6 @@
 import type { ReactFormState } from 'react-dom/client';
 
-import type { RouteTreeModel } from '../application/route-tree';
+import type { RouteTreeModel } from './route-tree';
 
 export type FlightPayload = {
   readonly formState: ReactFormState | null;

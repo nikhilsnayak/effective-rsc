@@ -2,12 +2,9 @@ import { Effect, Schema } from 'effect';
 import { StrictMode, useLayoutEffect, useState } from 'react';
 import { hydrateRoot } from 'react-dom/client';
 
-import {
-  retainSharedLayoutContent,
-  RouteTree,
-  type RouteTreeModel,
-} from '../application/route-tree';
 import type { FlightPayload } from '../rsc/flight';
+import type { RouteTreeModel } from '../rsc/route-tree';
+import { retainSharedLayoutContent, RouteTree } from './route-tree';
 
 export class BrowserRootHydrationError extends Schema.TaggedError<BrowserRootHydrationError>()(
   'BrowserRootHydrationError',

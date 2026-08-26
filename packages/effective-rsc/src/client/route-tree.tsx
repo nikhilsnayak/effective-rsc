@@ -1,43 +1,27 @@
 'use client';
 
 import { createContext, use } from 'react';
-import type { ReactNode } from 'react';
 
-export type RouteTreeModel = {
-  readonly child: RouteTreeModel | null;
-  readonly content: ReactNode;
-  readonly id: string;
-};
+import type { RouteTreeModel } from '../rsc/route-tree';
 
 const destinationId = (root: RouteTreeModel): string => {
   let node = root;
-  while (node.child !== null) {
-    node = node.child;
-  }
+  while (node.child !== null) node = node.child;
   return node.id;
 };
 
-/**
- * Retains revealed content only for the same authored Layout scope while publishing a different
- * Page. Role-qualified scope identities make the first different concern terminate reuse and let
- * the destination Loading boundary mount normally.
- */
+/** Retains revealed content for the shared authored Layout prefix during navigation. */
 export const retainSharedLayoutContent = (
   current: RouteTreeModel,
   destination: RouteTreeModel,
 ): RouteTreeModel => {
-  if (destinationId(current) === destinationId(destination)) {
-    return destination;
-  }
+  if (destinationId(current) === destinationId(destination)) return destination;
 
   const retainSharedLayouts = (
     currentNode: RouteTreeModel,
     destinationNode: RouteTreeModel,
   ): RouteTreeModel => {
-    if (currentNode.id !== destinationNode.id) {
-      return destinationNode;
-    }
-
+    if (currentNode.id !== destinationNode.id) return destinationNode;
     return {
       child:
         currentNode.child === null || destinationNode.child === null
@@ -51,13 +35,8 @@ export const retainSharedLayoutContent = (
   return retainSharedLayouts(current, destination);
 };
 
-type RouteNodeRendererProps = {
-  readonly node: RouteTreeModel;
-};
-
-type RouteTreeProps = {
-  readonly root: RouteTreeModel;
-};
+type RouteNodeRendererProps = { readonly node: RouteTreeModel };
+type RouteTreeProps = { readonly root: RouteTreeModel };
 
 const RouteNodeContext = createContext<RouteTreeModel | null>(null);
 
@@ -69,9 +48,6 @@ export const RouteTree = ({ root }: RouteTreeProps) => <RouteNodeRenderer node={
 
 export const RouteOutlet = () => {
   const node = use(RouteNodeContext);
-  if (node === null) {
-    throw new Error('RouteOutlet rendered outside its route node.');
-  }
-
+  if (node === null) throw new Error('RouteOutlet rendered outside its route node.');
   return node.child === null ? null : <RouteNodeRenderer key={node.child.id} node={node.child} />;
 };

@@ -3,15 +3,50 @@
 An experimental React Server Components framework where React owns the UI protocol and Effect owns
 the application runtime. It uses Rspack's native RSC support and targets Bun.
 
-## Minimal application
+## Requirements
+
+- Bun 1.4 or newer is the only supported server runtime.
+- The browser must support the Navigation API and `NavigationPrecommitController`; there is no
+  History API fallback.
+- React, React DOM, Effect, Effect's browser and Bun platforms, and
+  `react-server-dom-rspack` must use the exact compatible versions shown below.
+
+## Installation
+
+Create a Bun package and install the framework with its exact compatible peers:
+
+```sh
+mkdir my-effective-rsc-app
+cd my-effective-rsc-app
+bun init -y
+bun add effective-rsc \
+  effect@4.0.0-rc.112 \
+  @effect/platform-browser@4.0.0-rc.112 \
+  @effect/platform-bun@4.0.0-rc.112 \
+  react@19.3.0-canary-eb8feb71-20260814 \
+  react-dom@19.3.0-canary-eb8feb71-20260814 \
+  react-server-dom-rspack@0.1.0
+```
+
+Add the framework commands to `package.json`:
+
+```json
+{
+  "type": "module",
+  "scripts": {
+    "build": "ersc build",
+    "start": "ersc start"
+  }
+}
+```
+
+## Quick start
 
 Create `src/application.tsx`:
 
 ```tsx
 import { Effect } from 'effect';
 import { Application } from 'effective-rsc';
-
-import './application.css';
 
 const ERSC = Application.ersc();
 
@@ -33,23 +68,39 @@ export default ERSC.make({
 });
 ```
 
-Styles are ordinary module imports. Tailwind is supported through the same CSS pipeline; for
-example, `src/application.css` can contain:
+Build and start the application:
+
+```sh
+bun run build
+bun run start
+```
+
+Open `http://localhost:18193`.
+
+## Styling
+
+Stylesheets have no special filename or framework entry point. Import them from the modules that use
+them:
+
+```tsx
+import './styles.css';
+```
+
+Tailwind uses the same CSS pipeline. Install it:
+
+```sh
+bun add --dev tailwindcss@4.3.3
+```
+
+Then create a stylesheet, such as `src/styles.css`:
 
 ```css
 @import 'tailwindcss';
 ```
 
-Then build and run:
+## Authoring model
 
-```sh
-bunx ersc build
-bunx ersc start
-```
-
-The server listens on `http://localhost:18193` by default.
-
-## The six authoring concepts
+`Application.ersc<Services>()` creates one application-scoped authoring module with six concepts:
 
 - `Page` is an Effectful route leaf and may decode typed path parameters with Schema.
 - `Layout` is an Effectful wrapper with one `children` outlet; the root Layout owns the document.
@@ -58,20 +109,21 @@ The server listens on `http://localhost:18193` by default.
 - `ServerFn` adds Effect and Schema to React's native Server Function protocol.
 - `Routes` immutably composes Pages and nested Layout/Loading scopes through `page` and `mount`.
 
-Declare the complete service universe with `Application.ersc<Services>()`, provide its implementations
-at `ERSC.make({ servicesLayer })`, and create every Page, Layout, Loading, Component, ServerFn, and
-Routes value from that same ERSC instance.
+Create every Page, Layout, Loading, Component, ServerFn, and Routes value from that same ERSC
+instance. Declare the complete service universe through its `Services` type parameter and provide the
+implementations at `ERSC.make({ servicesLayer })`.
 
-## Requirements
+## Runtime boundary
 
-- Bun 1.4 or newer is the only supported server runtime.
-- React, React DOM, and `react-server-dom-rspack` must use the exact compatible versions required by
-  the package.
-- The browser must support the Navigation API and `NavigationPrecommitController`; there is no
-  History API fallback.
-- The package-root API is a React Server Components authoring API. Importing it outside the
-  `react-server` condition throws immediately.
+The package-root API is available only under the `react-server` condition. The framework build
+enables that condition for application authoring modules; importing `effective-rsc` from another
+runtime, including a Client Component, throws immediately.
 
-See the [architecture](https://github.com/nikhilsnayak/effective-rsc/blob/main/docs/ARCHITECTURE.md),
-[decision register](https://github.com/nikhilsnayak/effective-rsc/blob/main/docs/DECISIONS.md), and
-[open questions](https://github.com/nikhilsnayak/effective-rsc/blob/main/docs/OPEN_QUESTIONS.md).
+## Example and documentation
+
+The [kitchen-sink conference](https://github.com/nikhilsnayak/effective-rsc/tree/main/examples/kitchen-sink)
+is the complete application example and end-to-end integration fixture.
+
+- [Architecture](https://github.com/nikhilsnayak/effective-rsc/blob/main/docs/ARCHITECTURE.md)
+- [Decision register](https://github.com/nikhilsnayak/effective-rsc/blob/main/docs/DECISIONS.md)
+- [Open questions](https://github.com/nikhilsnayak/effective-rsc/blob/main/docs/OPEN_QUESTIONS.md)

@@ -22,6 +22,7 @@ export const makeERSCIdentity = <Services>(): ERSCIdentity<Services> => ({
 export const attachERSCIdentity = <Member extends object, Services>(
   member: Member,
   identity: ERSCIdentity<Services>,
-): Member & ERSCMember<Services> => {
-  return Object.assign(member, { [ERSCIdentityTypeId]: identity });
-};
+): Member & ERSCMember<Services> => Object.assign(member, { [ERSCIdentityTypeId]: identity });
+
+export const getERSCIdentity = <Services>(member: ERSCMember<Services>): ERSCIdentity<Services> =>
+  member[ERSCIdentityTypeId];

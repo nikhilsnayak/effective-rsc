@@ -1,7 +1,7 @@
 import type { ComponentFactory } from './component';
 import { makeComponentFactory } from './component';
 import { type ERSCMake, makeApplication } from './definition';
-import { type ERSCIdentity, ERSCIdentityTypeId, makeERSCIdentity } from './ersc-identity';
+import { attachERSCIdentity, type ERSCMember, makeERSCIdentity } from './ersc-identity';
 import type { LayoutFactory } from './layout';
 import { makeLayoutFactory } from './layout';
 import type { LoadingFactory } from './loading';
@@ -13,8 +13,7 @@ import { makeRoutesFactory } from './routes';
 import type { ServerFnFactory } from './server-fn';
 import { makeServerFnFactory } from './server-fn';
 
-export type ERSC<Services> = {
-  readonly [ERSCIdentityTypeId]: ERSCIdentity<Services>;
+export type ERSC<Services> = ERSCMember<Services> & {
   readonly Component: ComponentFactory<Services>;
   readonly Layout: LayoutFactory<Services>;
   readonly Loading: LoadingFactory<Services>;
@@ -28,16 +27,20 @@ const ersc = <Services = never>(): ERSC<Services> => {
   const identity = makeERSCIdentity<Services>();
   const make: ERSCMake<Services> = (options) => makeApplication(identity, options);
 
-  return Object.freeze({
-    [ERSCIdentityTypeId]: identity,
-    Component: makeComponentFactory(identity),
-    Layout: makeLayoutFactory(identity),
-    Loading: makeLoadingFactory(identity),
-    Page: makePageFactory(identity),
-    Routes: makeRoutesFactory(identity),
-    ServerFn: makeServerFnFactory(identity),
-    make,
-  });
+  return Object.freeze(
+    attachERSCIdentity(
+      {
+        Component: makeComponentFactory(identity),
+        Layout: makeLayoutFactory(identity),
+        Loading: makeLoadingFactory(identity),
+        Page: makePageFactory(identity),
+        Routes: makeRoutesFactory(identity),
+        ServerFn: makeServerFnFactory(identity),
+        make,
+      },
+      identity,
+    ),
+  );
 };
 
 export const Application = { ersc } as const;

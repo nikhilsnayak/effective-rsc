@@ -1,5 +1,7 @@
 export type AbsolutePath = `/${string}`;
 
+// Compile-time and runtime route grammars are deliberately paired. Any grammar change must update
+// both ValidRoutePath/ValidRouteParamName and analyzeRoutePath, with one paired type/runtime test.
 type InvalidRouteCharacter = '*' | '?' | '#' | '%' | ';' | '\\';
 type InvalidParameterCharacter = InvalidRouteCharacter | '/' | ':' | '(' | ')' | '.' | '-';
 

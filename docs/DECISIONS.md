@@ -1,7 +1,7 @@
 # Decision register
 
-**Current** decisions describe implemented behavior. **Planned** decisions are accepted but not yet
-implemented. **Deferred** decisions are intentionally outside the current milestone.
+Every entry is **Accepted**. **Current**, **Planned**, and **Deferred** describe delivery state:
+implemented, accepted but not implemented, and intentionally outside the current milestone.
 
 ## Current
 
@@ -24,12 +24,12 @@ implemented. **Deferred** decisions are intentionally outside the current milest
 | D-017 | Carry the complete document route tree and React form state in a small native Flight model used by Fizz and hydration.                                                                   |
 | D-018 | Expose one package-root application API; keep runtime and build subpaths private.                                                                                                        |
 | D-019 | Put generated application output under `.ersc/`.                                                                                                                                         |
-| D-020 | Model renderers as Effect services and keep cross-graph contracts separate from runtime-owned live Layers.                                                                               |
-| D-021 | Compose requests in `Application.httpLayer`; let `Application.layer` add Bun listening.                                                                                                  |
+| D-020 | Model renderers as Effect services; same-runtime services own `make` and a static live Layer, while cross-graph contracts remain implementation-free.                                    |
+| D-021 | Compose requests in `ServerApplication.httpLayer`; let `ServerApplication.serverLayer` add Bun listening.                                                                                |
 | D-022 | Declare the service universe with `Application.ersc<Services>()` and close it with `ERSC.make({ servicesLayer })`.                                                                       |
 | D-023 | Use port `18193` as the default application port.                                                                                                                                        |
 | D-024 | Let the framework `'use server-entry'` module own application compilation and asset metadata.                                                                                            |
-| D-025 | Compile Tailwind CSS v4 through `@tailwindcss/webpack` from the application root while preserving Rspack's native CSS assets.                                                            |
+| D-025 | Compile ordinary CSS imports, including Tailwind CSS v4 through `@tailwindcss/webpack`, from the application root while preserving Rspack's native CSS assets.                           |
 | D-026 | Treat React, React DOM, Effect, Effect's browser and Bun platforms, and RSDR as exact shared peers installed by applications.                                                            |
 | D-028 | Compile Page route patterns directly into Effect HTTP, reserve `/_ersc/assets`, preserve Layout/Loading ancestry, and keep native `404` responses.                                       |
 | D-029 | Make Routes immutable and mountable; nested Layout/Loading are optional, while a non-empty root requires a Layout.                                                                       |
@@ -46,6 +46,11 @@ implemented. **Deferred** decisions are intentionally outside the current milest
 | D-044 | Build the package as bundleless ESM with Rslib and publish compiled JavaScript, declarations, and source maps under `dist/`.                                                             |
 | D-045 | License the repository and published `effective-rsc` package under the MIT License.                                                                                                      |
 | D-046 | Effect HTTP alone owns pattern matching; ERSC destinations stay matcher-neutral, while Pages explicitly own either no parameter Schema or one whose keys match the path parameter names. |
+| D-047 | Expose the package-root application API only under the `react-server` condition and throw immediately when imported from another runtime condition.                                      |
+| D-048 | Treat only `src/application.tsx` as a fixed application input; stylesheets are ordinary imports owned by the modules that use them.                                                      |
+| D-049 | Keep Page, Routes, and Application authoring handles opaque; compiler and server runtimes use explicit internal projections.                                                             |
+| D-050 | Preserve `bun:*` imports as server externals and reject them when they enter the browser module graph.                                                                                   |
+| D-051 | Use the kitchen-sink conference as both the primary real-world example and the current end-to-end integration fixture, with agenda persistence backed by Effect SQL and Bun SQLite.      |
 
 ## Planned
 
@@ -62,4 +67,3 @@ implemented. **Deferred** decisions are intentionally outside the current milest
 | D-011 | Consider Effect RPC only for work that does not imply an RSC refresh.                                                               |
 | D-014 | Defer SSG, ISR, partial prerendering, SPA mode, alternate bundlers, and runtime adapters.                                           |
 | D-027 | Revisit StyleX only after its Rspack CSS-emission hook ships and MultiCompiler RSC CSS ownership and watch invalidation are proven. |
-| D-037 | Decide whether a newer committed route should retire an earlier committed-but-still-streaming Flight response.                      |

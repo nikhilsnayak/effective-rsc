@@ -4,7 +4,7 @@ import { Effect, Schema, SchemaTransformation } from 'effect';
 import { Application } from '../../src/application/ersc';
 import type { AnyPageDefinition } from '../../src/application/page';
 import type { AbsolutePath } from '../../src/application/route-path';
-import type { AnyRoutes, RoutesPaths } from '../../src/application/routes';
+import { type AnyRoutes, getRoutesState, type RoutesPaths } from '../../src/application/routes';
 
 declare const uncertainPath: '/first' | '/second';
 
@@ -51,15 +51,24 @@ describe('Routes', () => {
     const notesRoutes = ERSC.Routes.make().page('/', HomePage).page('/history', HistoryPage);
     const routes = empty.mount('/notes', notesRoutes);
     const knownPath: RoutesPaths<typeof routes> = '/notes/history';
+    const typecheckOpaqueRoutes = () => {
+      // @ts-expect-error Runtime paths are private to the route compiler.
+      void routes.paths;
+      // @ts-expect-error Runtime pages are private to the route compiler.
+      void routes.pages;
+      // @ts-expect-error Runtime mounts are private to the route compiler.
+      void routes.mounts;
+    };
 
-    expect(empty.paths).toEqual([]);
-    expect(notesRoutes.paths).toEqual(['/', '/history']);
-    expect(routes.paths).toEqual(['/notes', '/notes/history']);
+    expect(getRoutesState(empty).paths).toEqual([]);
+    expect(getRoutesState(notesRoutes).paths).toEqual(['/', '/history']);
+    expect(getRoutesState(routes).paths).toEqual(['/notes', '/notes/history']);
     expect(knownPath).toBe('/notes/history');
+    expect(typecheckOpaqueRoutes).toBeTypeOf('function');
     expect(Object.isFrozen(routes)).toBe(true);
-    expect(Object.isFrozen(routes.paths)).toBe(true);
-    expect(Object.isFrozen(notesRoutes.pages[0])).toBe(true);
-    expect(Object.isFrozen(routes.mounts[0])).toBe(true);
+    expect(Object.isFrozen(getRoutesState(routes).paths)).toBe(true);
+    expect(Object.isFrozen(getRoutesState(notesRoutes).pages[0])).toBe(true);
+    expect(Object.isFrozen(getRoutesState(routes).mounts[0])).toBe(true);
   });
 
   it('infers dynamic path params from Page schemas', () => {
@@ -72,11 +81,11 @@ describe('Routes', () => {
       ERSC.Routes.make().page('/schedule/saturday', DayPage);
       // @ts-expect-error The Page Schema key must match the path parameter name.
       ERSC.Routes.make().page('/schedule/:day', SlugPage);
-      // @ts-expect-error The internal Page adapter retains its exact raw parameter keys.
-      void DayPage.component({ params: { slug: 'saturday' } });
+      // @ts-expect-error Page implementation details are not part of the authoring API.
+      void DayPage.component;
     };
 
-    expect(routes.paths).toEqual(['/schedule/:day']);
+    expect(getRoutesState(routes).paths).toEqual(['/schedule/:day']);
     expect(knownPath).toBe('/schedule/:day');
     expect(typecheckInvalidPageParams).toBeTypeOf('function');
     expect(() =>
@@ -99,7 +108,7 @@ describe('Routes', () => {
       ERSC.Routes.make().page('/a/:b/c/:b', NestedParamsPage);
     };
 
-    expect(routes.paths).toEqual(['/a/:b/c/:d']);
+    expect(getRoutesState(routes).paths).toEqual(['/a/:b/c/:d']);
     expect(knownPath).toBe('/a/:b/c/:d');
     expect(typecheckInvalidNestedParams).toBeTypeOf('function');
   });
@@ -111,7 +120,7 @@ describe('Routes', () => {
       ERSC.Routes.make().page('/:id', RenamedParamsPage);
     };
 
-    expect(routes.paths).toEqual(['/:slug']);
+    expect(getRoutesState(routes).paths).toEqual(['/:slug']);
     expect(typecheckDecodedNameIsNotTheRouteName).toBeTypeOf('function');
   });
 
@@ -160,7 +169,7 @@ describe('Routes', () => {
       });
     };
 
-    expect(routes.paths).toEqual(['/:value']);
+    expect(getRoutesState(routes).paths).toEqual(['/:value']);
     expect(typecheckInvalidSchemas).toBeTypeOf('function');
   });
 

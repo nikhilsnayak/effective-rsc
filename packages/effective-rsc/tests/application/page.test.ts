@@ -13,7 +13,8 @@ import {
 } from 'effect';
 
 import { Application } from '../../src/application/ersc';
-import { ERSCIdentityTypeId } from '../../src/application/ersc-identity';
+import { getERSCIdentity } from '../../src/application/ersc-identity';
+import { getPageState } from '../../src/application/page';
 
 class Greeting extends Context.Service<Greeting, { readonly value: string }>()(
   'effective-rsc/tests/application/page/Greeting',
@@ -35,15 +36,22 @@ describe('ERSC.Page.make', () => {
           return `${greeting.value} ${params.day}`;
         }),
       });
+      const typecheckOpaquePage = () => {
+        // @ts-expect-error The React adapter is private to framework runtime modules.
+        void PageComponent.component;
+        // @ts-expect-error The parameter Schema is private to framework runtime modules.
+        void PageComponent.paramsSchema;
+      };
       const rendered = yield* Effect.promise(() =>
-        PageComponent[ERSCIdentityTypeId].requestRuntime.bind(runtime, () =>
-          PageComponent.component({ params: { day: 'sunday' } }),
+        getERSCIdentity(PageComponent).requestRuntime.bind(runtime, () =>
+          getPageState(PageComponent).component({ params: { day: 'sunday' } }),
         ),
       );
 
       expect(rendered).toBe('hello sunday');
-      expect(PageComponent.paramsSchema).not.toBeNull();
+      expect(getPageState(PageComponent).paramsSchema).not.toBeNull();
       expect(Object.isFrozen(PageComponent)).toBe(true);
+      expect(typecheckOpaquePage).toBeTypeOf('function');
     }).pipe(Effect.provideService(Greeting, { value: 'hello' })),
   );
 
@@ -62,13 +70,13 @@ describe('ERSC.Page.make', () => {
       });
 
       const rendered = yield* Effect.promise(() =>
-        App[ERSCIdentityTypeId].requestRuntime.bind(runtime, () =>
-          PageComponent.component({ params: {} }),
+        getERSCIdentity(App).requestRuntime.bind(runtime, () =>
+          getPageState(PageComponent).component({ params: {} }),
         ),
       );
 
       expect(rendered).toBe('hello from the request');
-      expect(PageComponent.paramsSchema).toBeNull();
+      expect(getPageState(PageComponent).paramsSchema).toBeNull();
     }).pipe(Effect.provideService(Greeting, { value: 'hello from the request' })),
   );
 
@@ -89,8 +97,8 @@ describe('ERSC.Page.make', () => {
         render: ({ params }) => Effect.succeed(params.id),
       });
       const rendered = yield* Effect.promise(() =>
-        PageComponent[ERSCIdentityTypeId].requestRuntime.bind(runtime, () =>
-          PageComponent.component({ params: { slug: 'opening-keynote' } }),
+        getERSCIdentity(PageComponent).requestRuntime.bind(runtime, () =>
+          getPageState(PageComponent).component({ params: { slug: 'opening-keynote' } }),
         ),
       );
 
@@ -118,8 +126,8 @@ describe('ERSC.Page.make', () => {
       const App = InterruptERSC.make({
         routes: InterruptERSC.Routes.make({ layout: InterruptLayout }).page('/', InterruptPage),
       });
-      const execution = App[ERSCIdentityTypeId].requestRuntime
-        .bind(runtime, () => InterruptPage.component({ params: {} }))
+      const execution = getERSCIdentity(App)
+        .requestRuntime.bind(runtime, () => getPageState(InterruptPage).component({ params: {} }))
         .then(
           () => 'completed' as const,
           () => 'interrupted' as const,

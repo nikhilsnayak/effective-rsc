@@ -3,7 +3,7 @@ import { Context, Deferred, Effect, Exit, FiberSet, Layer, Ref, Scope } from 'ef
 import type { ReactNode } from 'react';
 
 import { Application } from '../../src/application/ersc';
-import { ERSCIdentityTypeId } from '../../src/application/ersc-identity';
+import { getERSCIdentity } from '../../src/application/ersc-identity';
 
 class ShellTitle extends Context.Service<ShellTitle, { readonly value: string }>()(
   'effective-rsc/tests/application/layout/ShellTitle',
@@ -26,7 +26,7 @@ describe('ERSC.Layout.make', () => {
       const child = <main>Home</main>;
 
       const rendered = yield* Effect.promise(() =>
-        App[ERSCIdentityTypeId].requestRuntime.bind(runtime, () =>
+        getERSCIdentity(App).requestRuntime.bind(runtime, () =>
           PassthroughLayout({ children: child }),
         ),
       );
@@ -61,7 +61,7 @@ describe('ERSC.Layout.make', () => {
       });
 
       const rendered = yield* Effect.promise(() =>
-        App[ERSCIdentityTypeId].requestRuntime.bind(runtime, () =>
+        getERSCIdentity(App).requestRuntime.bind(runtime, () =>
           LayoutComponent({ children: <main>Home</main> }),
         ),
       );
@@ -96,8 +96,8 @@ describe('ERSC.Layout.make', () => {
       const App = InterruptERSC.make({
         routes: InterruptERSC.Routes.make({ layout: LayoutComponent }).page('/', Page),
       });
-      const execution = App[ERSCIdentityTypeId].requestRuntime
-        .bind(runtime, () => LayoutComponent({ children: null }))
+      const execution = getERSCIdentity(App)
+        .requestRuntime.bind(runtime, () => LayoutComponent({ children: null }))
         .then(
           () => 'completed' as const,
           () => 'interrupted' as const,

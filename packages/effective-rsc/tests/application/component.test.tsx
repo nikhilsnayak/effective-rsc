@@ -2,7 +2,7 @@ import { describe, expect, it } from '@effect/vitest';
 import { Context, Deferred, Effect, Exit, FiberSet, Ref, Scope } from 'effect';
 
 import { Application } from '../../src/application/ersc';
-import { ERSCIdentityTypeId } from '../../src/application/ersc-identity';
+import { getERSCIdentity } from '../../src/application/ersc-identity';
 import type { RequestRuntime } from '../../src/application/request-runtime';
 
 class Greeting extends Context.Service<Greeting, { readonly prefix: string }>()(
@@ -22,7 +22,7 @@ describe('ERSC.Component.make', () => {
       });
 
       const rendered = yield* Effect.promise(() =>
-        ERSC[ERSCIdentityTypeId].requestRuntime.bind(runtime, () =>
+        getERSCIdentity(ERSC).requestRuntime.bind(runtime, () =>
           GreetingComponent({ name: 'Nikhil' }),
         ),
       );
@@ -50,7 +50,7 @@ describe('ERSC.Component.make', () => {
       });
 
       const rendered = yield* Effect.promise(() =>
-        ERSC[ERSCIdentityTypeId].requestRuntime.bind(runtime, () => Component({})),
+        getERSCIdentity(ERSC).requestRuntime.bind(runtime, () => Component({})),
       );
 
       expect(rendered).toEqual(<p>Rendered</p>);
@@ -71,8 +71,8 @@ describe('ERSC.Component.make', () => {
           return yield* Effect.never.pipe(Effect.onInterrupt(() => Ref.set(interrupted, true)));
         }),
       });
-      const execution = ERSC[ERSCIdentityTypeId].requestRuntime
-        .bind(runtime, () => Component({}))
+      const execution = getERSCIdentity(ERSC)
+        .requestRuntime.bind(runtime, () => Component({}))
         .then(
           () => 'completed' as const,
           () => 'interrupted' as const,

@@ -1,17 +1,63 @@
-import { Layer } from 'effect';
-import { Suspense } from 'react';
+import { Layer, type Types } from 'effect';
 
-import { type ERSCIdentity, ERSCIdentityTypeId } from './ersc-identity';
-import { type PagePathParams } from './page';
+import {
+  type ERSCIdentity,
+  ERSCIdentityTypeId,
+  type ERSCMember,
+  getERSCIdentity,
+} from './ersc-identity';
 import { type CompiledDestination, compileRouteGraph } from './route-graph';
 import type { AbsolutePath, ReservedRoutePath } from './route-path';
-import { RouteOutlet, type RouteTreeModel } from './route-tree';
 import { type AnyRoutes, type RoutesHasLayout, type RoutesPaths } from './routes';
 
-export type ApplicationDefinition<Services, ApplicationError = never> = {
+declare const ApplicationContractTypeId: unique symbol;
+
+export interface ApplicationDefinition<
+  Services,
+  out ApplicationError = never,
+> extends ERSCMember<Services> {
+  readonly [ApplicationContractTypeId]: {
+    readonly error: Types.Covariant<ApplicationError>;
+  };
+}
+
+export type ApplicationImplementationState<Services, ApplicationError> = {
   readonly [ERSCIdentityTypeId]: ERSCIdentity<Services>;
   readonly routes: ReadonlyArray<CompiledDestination<Services>>;
   readonly servicesLayer: Layer.Layer<Services, ApplicationError>;
+};
+
+class ApplicationDefinitionImpl<Services, ApplicationError> implements ApplicationDefinition<
+  Services,
+  ApplicationError
+> {
+  declare readonly [ApplicationContractTypeId]: {
+    readonly error: Types.Covariant<ApplicationError>;
+  };
+  readonly [ERSCIdentityTypeId]: ERSCIdentity<Services>;
+
+  constructor(
+    identity: ERSCIdentity<Services>,
+    readonly routes: ReadonlyArray<CompiledDestination<Services>>,
+    readonly servicesLayer: Layer.Layer<Services, ApplicationError>,
+  ) {
+    this[ERSCIdentityTypeId] = identity;
+  }
+}
+
+const isApplicationImplementation = <Services, ApplicationError>(
+  application: ApplicationDefinition<Services, ApplicationError>,
+): application is ApplicationDefinition<Services, ApplicationError> &
+  ApplicationDefinitionImpl<Services, ApplicationError> =>
+  application instanceof ApplicationDefinitionImpl;
+
+export const getApplicationState = <Services, ApplicationError>(
+  application: ApplicationDefinition<Services, ApplicationError>,
+): ApplicationImplementationState<Services, ApplicationError> => {
+  if (!isApplicationImplementation(application)) {
+    throw new TypeError('Application must be created with ERSC.make.');
+  }
+  return application;
 };
 
 export type ApplicationServices<Application> =
@@ -56,60 +102,6 @@ function resolveServicesLayer(servicesLayer: Layer.Any | undefined): Layer.Any {
   return servicesLayer ?? Layer.empty;
 }
 
-type RenderRouteTreeOptions<Services> = {
-  readonly destination: CompiledDestination<Services>;
-  readonly pathname: AbsolutePath;
-  readonly pathParams: PagePathParams;
-};
-
-export const renderRouteTree = <Services,>({
-  destination,
-  pathname,
-  pathParams,
-}: RenderRouteTreeOptions<Services>): RouteTreeModel => {
-  const Page = destination.page.component;
-  let tree: RouteTreeModel = {
-    child: null,
-    content: <Page params={pathParams} />,
-    id: `page:${pathname}`,
-  };
-
-  for (let index = destination.scopes.length - 1; index >= 0; index--) {
-    const scope = destination.scopes[index];
-    if (scope === undefined) {
-      continue;
-    }
-
-    if (scope.loading !== null) {
-      const Loading = scope.loading;
-      tree = {
-        child: tree,
-        content: (
-          <Suspense fallback={<Loading />}>
-            <RouteOutlet />
-          </Suspense>
-        ),
-        id: `loading:${scope.id}:${pathname}`,
-      };
-    }
-
-    if (scope.layout !== null) {
-      const Layout = scope.layout;
-      tree = {
-        child: tree,
-        content: (
-          <Layout>
-            <RouteOutlet />
-          </Layout>
-        ),
-        id: `layout:${scope.id}`,
-      };
-    }
-  }
-
-  return tree;
-};
-
 export const makeApplication = <
   Services,
   Definition extends AnyRoutes<Services>,
@@ -118,13 +110,13 @@ export const makeApplication = <
   identity: ERSCIdentity<Services>,
   { routes, servicesLayer }: ERSCApplicationOptions<Services, Definition, ApplicationError>,
 ): ApplicationDefinition<Services, ApplicationError> => {
-  if (routes[ERSCIdentityTypeId] !== identity) {
+  if (getERSCIdentity(routes) !== identity) {
     throw new TypeError('Root Routes were created by a different ERSC module.');
   }
 
-  return {
-    [ERSCIdentityTypeId]: identity,
-    routes: compileRouteGraph(routes),
-    servicesLayer: resolveServicesLayer<Services, ApplicationError>(servicesLayer),
-  };
+  return new ApplicationDefinitionImpl(
+    identity,
+    compileRouteGraph(routes),
+    resolveServicesLayer<Services, ApplicationError>(servicesLayer),
+  );
 };

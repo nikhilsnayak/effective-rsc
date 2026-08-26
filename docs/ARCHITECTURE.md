@@ -17,9 +17,10 @@ packages/effective-rsc/src/
 examples/kitchen-sink/  application example and integration fixture
 ```
 
-`effective-rsc` exposes one public root API. Its application, shared protocol, browser, server, and
-build graphs remain explicit. Browser code does not import server or build entries, and only the RSC
-graph resolves React's `react-server` condition.
+`effective-rsc` exposes one public root API under the `react-server` export condition. Importing the
+root from any other condition throws immediately with an unsupported-environment error. Its
+application, shared protocol, browser, server, and build graphs remain explicit. Browser code does
+not import server or build entries, and only the RSC graph resolves React's `react-server` condition.
 
 The server owns HTTP negotiation, request scope, Flight rendering, HTML streaming, and Bun listening.
 The client owns Flight decoding, document hydration, and navigation. The build graph owns application
@@ -36,10 +37,11 @@ and the source graph boundaries survive compilation.
 native RSC plugins assign RSC/SSR layers, produce client-reference data, and coordinate assets. Output
 lives under `.ersc/client/` and `.ersc/server/`; the framework does not generate proxy source files.
 
-A checked-in `'use server-entry'` module imports the application and its global stylesheet through
-private aliases. Rspack supplies ordered JavaScript and stylesheet metadata to the compiled
-application. Fizz receives scripts as bootstrap assets and stylesheets as React resources; assets are
-not fields in the Flight model.
+A checked-in `'use server-entry'` module imports the application through one private alias. Only
+`src/application.tsx` has filename semantics. Applications import CSS from the modules that use it;
+there is no framework stylesheet alias. Rspack supplies ordered JavaScript and stylesheet metadata
+to the compiled application. Fizz receives scripts as bootstrap assets and stylesheets as React
+resources; assets are not fields in the Flight model.
 
 The browser build targets the Navigation API browser floor and enables the React Compiler. The server
 build targets Bun's Node 26 compatibility and omits the React Compiler. React, React DOM, and RSDR use
@@ -73,13 +75,18 @@ Every authored value carries its ERSC identity. Route composition rejects the wr
 value from another ERSC instance. Server Functions retain that identity across native invocation and
 execute only in the matching request runtime.
 
+The public Page, Routes, and Application values are opaque authoring handles. Routes exposes only
+`page` and `mount`; Page and Application expose only their type contracts. Internal compiler and
+server modules project those concrete handles into runtime state without a public field contract or
+a separate lookup registry.
+
 Each ERSC module owns an AsyncLocalStorage context for its request runner. Flight rendering binds one
 FiberSet runner before React enters application code. Page, Layout, and Component operations retrieve
 that runner without prop threading, while the FiberSet keeps their Effects attached to the HTTP
 request lifetime.
 
-Pages are explicit ERSC concerns with one ordinary parameter contract: `paramsSchema` is `null` for
-`Page.make({ render })` and is the authored Effect Schema for `Page.make({ params, render })`. The
+Pages are explicit ERSC concerns with one ordinary parameter contract: `Page.make({ render })` is
+static and `Page.make({ params, render })` retains the authored Effect Schema internally. The
 parameterized Page's render operation receives decoded `params`, and Routes type-checks the Schema's
 encoded object keys against the Page path parameters. Parameter Schemas must expose a finite,
 non-empty key set whose encoded fields can accept strings; transformations may produce a different
@@ -152,7 +159,7 @@ the browser Effect scope removes the listener.
 
 `NavigateEvent.signal` owns an intercepted navigation through its exact Layout commit. The Flight
 response owns a child Effect scope and remains alive while nested rows stream. A later navigation does
-not automatically retire an earlier response after its handler has settled; that policy is deferred.
+not automatically retire an earlier response after its handler has settled; OQ-005 owns that policy.
 
 The browser retains only the currently revealed common Layout prefix. It has no route cache:
 Back/Forward traversal, pushes, and replacements fetch whole trees. Server Function refresh replaces
@@ -175,8 +182,13 @@ returns 200 Flight containing both the route refresh and an imperative `Success`
 Request interruption remains interruption. Direct server invocation of an ERSC Server Function is
 rejected rather than pretending its Effect is a Promise.
 
-Pre-hydration progressive enhancement is not supported: the mutation executes, but the document
-response does not currently complete before Bun times out.
+## Known limitations
+
+| ID    | Limitation                                                                                                                         |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| L-001 | A named Server Function factory export bound by a Server Component lacks the Rspack server-layer action metadata required to work. |
+| L-002 | Inline or bound native Server Functions hit a bound-argument mismatch in the pinned Rspack/RSDR integration.                       |
+| L-003 | Pre-hydration progressive enhancement executes the mutation, but the document response does not complete before Bun times out.     |
 
 ## Effect and lifetime boundaries
 
@@ -184,8 +196,8 @@ response does not currently complete before Bun times out.
   transformations and incidental adapters plain.
 - Cross-graph service contracts stay implementation-free. The owning runtime exports their live
   Layers.
-- `Application.httpLayer` composes negotiation, assets, routes, renderers, and application services.
-  `Application.layer` adds Bun listening.
+- `ServerApplication.httpLayer` composes negotiation, assets, routes, renderers, and application
+  services. `ServerApplication.serverLayer` adds Bun listening.
 - Rspack compilation is a scoped service owned by the CLI. Server modules do not start nested
   runtimes.
 - `effect/unstable/http` owns HTTP lifecycles. `unstable/HttpApi` owns non-UI endpoints; React Server
@@ -198,3 +210,12 @@ response does not currently complete before Bun times out.
 
 There is no development command. D-041 through D-043 record the accepted but unimplemented dev-server
 and HMR design.
+
+## Kitchen-sink integration application
+
+The kitchen-sink conference is both the primary real-world example and the current end-to-end
+fixture. Its `application.tsx` is the composition boundary for Bun SQLite, SQL migration,
+`ConferenceRepository`, and `ConferenceService`. The repository owns only SQL operations; the
+service owns static conference joins, simulated latency, domain validation, and SQL-to-domain error
+mapping. Agenda membership is shared conference state stored in `.data/conference.sqlite`; E2E runs
+use a fresh `:memory:` database.

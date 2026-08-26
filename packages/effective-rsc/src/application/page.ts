@@ -1,11 +1,11 @@
 import { Effect, Predicate, Schema, type Types } from 'effect';
 import type { ReactNode } from 'react';
 
-import { attachERSCIdentity, type ERSCIdentity, type ERSCMember } from './ersc-identity';
+import { type ERSCIdentity, ERSCIdentityTypeId, type ERSCMember } from './ersc-identity';
 import type { ValidRouteParamName } from './route-path';
 
-const PageTypeId: unique symbol = Symbol.for('effective-rsc/PageConcern');
-export declare const PageParamsTypeId: unique symbol;
+const PageRuntimeTypeId: unique symbol = Symbol.for('effective-rsc/PageConcern');
+declare const PageContractTypeId: unique symbol;
 
 export type PageParamsSchema<Services> = Schema.ConstraintCodec<
   Readonly<Record<string, unknown>>,
@@ -14,21 +14,16 @@ export type PageParamsSchema<Services> = Schema.ConstraintCodec<
   unknown
 >;
 
-type PageParamKeys<ParamsSchema> = ParamsSchema extends {
-  readonly Encoded: infer Encoded;
-}
+type PageParamKeys<ParamsSchema> = ParamsSchema extends { readonly Encoded: infer Encoded }
   ? Extract<keyof Encoded, string>
   : never;
-
 type NonStringPageParamKeys<ParamsSchema> = ParamsSchema extends {
   readonly Encoded: infer Encoded;
 }
   ? Exclude<keyof Encoded, string>
   : never;
-
 type InvalidPageParamName<Name extends string> =
   Name extends ValidRouteParamName<Name> ? never : Name;
-
 type InvalidPageParamValueKeys<ParamsSchema> = ParamsSchema extends {
   readonly Encoded: infer Encoded;
 }
@@ -40,12 +35,10 @@ type InvalidPageParamValueKeys<ParamsSchema> = ParamsSchema extends {
           : never;
     }[Extract<keyof Encoded, string>]
   : never;
-
 type InvalidPageParamsSchema<ParamsSchema> =
   | NonStringPageParamKeys<ParamsSchema>
   | InvalidPageParamName<PageParamKeys<ParamsSchema>>
   | InvalidPageParamValueKeys<ParamsSchema>;
-
 type ValidPageParamsSchema<ParamsSchema> = [PageParamKeys<ParamsSchema>] extends [never]
   ? never
   : string extends PageParamKeys<ParamsSchema>
@@ -54,49 +47,85 @@ type ValidPageParamsSchema<ParamsSchema> = [PageParamKeys<ParamsSchema>] extends
       ? unknown
       : never;
 
-export type PageConcern<out ParamNames extends string> = {
-  readonly [PageTypeId]: typeof PageTypeId;
-  readonly [PageParamsTypeId]?: Types.Covariant<ParamNames>;
+export type PageConcern<
+  out ParamNames extends string,
+  out Mode extends 'Parameterized' | 'Static',
+> = {
+  readonly [PageContractTypeId]: {
+    readonly mode: Types.Covariant<Mode>;
+    readonly paramNames: Types.Covariant<ParamNames>;
+  };
 };
 
-export const isPageConcern = (value: unknown): value is PageConcern<string> =>
-  Predicate.hasProperty(value, PageTypeId) && value[PageTypeId] === PageTypeId;
-
 export type PagePathParams = Readonly<Record<string, string | undefined>>;
-
 export type PageRuntimeProps<ParamNames extends string = string> = {
   readonly params: Readonly<Record<ParamNames, string | undefined>>;
 };
-
 export type PageComponent<ParamNames extends string = string> = (
   props: PageRuntimeProps<ParamNames>,
 ) => Promise<Awaited<ReactNode>>;
 
-type PageDefinitionBase<Services, ParamNames extends string> = PageConcern<ParamNames> &
-  ERSCMember<Services> & {
-    readonly component: PageComponent<ParamNames>;
-  };
-
-export type StaticPageDefinition<Services> = PageDefinitionBase<Services, never> & {
-  readonly paramsSchema: null;
-};
-
+export type StaticPageDefinition<Services> = ERSCMember<Services> & PageConcern<never, 'Static'>;
 export type ParameterizedPageDefinition<
   Services,
   ParamNames extends string = string,
-  ParamsSchema extends PageParamsSchema<Services> = PageParamsSchema<Services>,
-> = PageDefinitionBase<Services, ParamNames> & {
-  readonly paramsSchema: ParamsSchema;
-};
-
+> = ERSCMember<Services> & PageConcern<ParamNames, 'Parameterized'>;
 export type AnyPageDefinition<Services> =
   | StaticPageDefinition<Services>
   | ParameterizedPageDefinition<Services>;
 
+export type PageImplementationState<Services> = {
+  readonly component: PageComponent;
+  readonly paramsSchema: PageParamsSchema<Services> | null;
+};
+
+class PageDefinitionImpl<
+  Services,
+  ParamNames extends string,
+  Mode extends 'Parameterized' | 'Static',
+  ParamsSchema extends PageParamsSchema<Services> | null,
+>
+  implements ERSCMember<Services>, PageConcern<ParamNames, Mode>
+{
+  declare readonly [PageContractTypeId]: {
+    readonly mode: Types.Covariant<Mode>;
+    readonly paramNames: Types.Covariant<ParamNames>;
+  };
+  readonly [PageRuntimeTypeId] = PageRuntimeTypeId;
+  readonly [ERSCIdentityTypeId]: ERSCIdentity<Services>;
+
+  constructor(
+    identity: ERSCIdentity<Services>,
+    readonly component: PageComponent,
+    readonly paramsSchema: ParamsSchema,
+  ) {
+    this[ERSCIdentityTypeId] = identity;
+    Object.freeze(this);
+  }
+}
+
+export const isPageConcern = (value: unknown): value is AnyPageDefinition<unknown> =>
+  value instanceof PageDefinitionImpl &&
+  Predicate.hasProperty(value, PageRuntimeTypeId) &&
+  value[PageRuntimeTypeId] === PageRuntimeTypeId;
+
+const isPageImplementation = <Services>(
+  page: AnyPageDefinition<Services>,
+): page is AnyPageDefinition<Services> & PageImplementationState<Services> =>
+  page instanceof PageDefinitionImpl;
+
+export const getPageState = <Services>(
+  page: AnyPageDefinition<Services>,
+): PageImplementationState<Services> => {
+  if (!isPageImplementation(page)) {
+    throw new TypeError('Page must be created with ERSC.Page.make.');
+  }
+  return page;
+};
+
 type StaticPageOptions<Error, Services> = {
   readonly render: () => Effect.Effect<Awaited<ReactNode>, Error, Services>;
 };
-
 type ParameterizedPageOptions<ParamsSchema extends PageParamsSchema<Services>, Error, Services> = {
   readonly params: ParamsSchema;
   readonly render: (props: {
@@ -109,7 +138,7 @@ export type PageFactory<Services> = {
     <ParamsSchema extends PageParamsSchema<Services>, Error>(
       options: ParameterizedPageOptions<ParamsSchema, Error, Services> &
         ValidPageParamsSchema<ParamsSchema>,
-    ): ParameterizedPageDefinition<Services, PageParamKeys<ParamsSchema>, ParamsSchema>;
+    ): ParameterizedPageDefinition<Services, PageParamKeys<ParamsSchema>>;
     <Error>(options: StaticPageOptions<Error, Services>): StaticPageDefinition<Services>;
   };
 };
@@ -120,7 +149,7 @@ export const makePageFactory = <Services>(
   function make<ParamsSchema extends PageParamsSchema<Services>, Error>(
     options: ParameterizedPageOptions<ParamsSchema, Error, Services> &
       ValidPageParamsSchema<ParamsSchema>,
-  ): ParameterizedPageDefinition<Services, PageParamKeys<ParamsSchema>, ParamsSchema>;
+  ): ParameterizedPageDefinition<Services, PageParamKeys<ParamsSchema>>;
   function make<Error>(options: StaticPageOptions<Error, Services>): StaticPageDefinition<Services>;
   function make<Error>(
     options:
@@ -138,31 +167,17 @@ export const makePageFactory = <Services>(
             ),
           ),
         );
-
-      const page: ParameterizedPageDefinition<Services> = attachERSCIdentity(
-        {
-          [PageTypeId]: PageTypeId,
-          component,
-          paramsSchema,
-        },
-        identity,
-      );
-      return Object.freeze(page);
+      return new PageDefinitionImpl<
+        Services,
+        PageParamKeys<typeof paramsSchema>,
+        'Parameterized',
+        typeof paramsSchema
+      >(identity, component, paramsSchema);
     }
 
     const { render } = options;
-    const component: PageComponent<never> = () =>
-      identity.requestRuntime.run(Effect.suspend(render));
-
-    const page: StaticPageDefinition<Services> = attachERSCIdentity(
-      {
-        [PageTypeId]: PageTypeId,
-        component,
-        paramsSchema: null,
-      },
-      identity,
-    );
-    return Object.freeze(page);
+    const component: PageComponent = () => identity.requestRuntime.run(Effect.suspend(render));
+    return new PageDefinitionImpl<Services, never, 'Static', null>(identity, component, null);
   }
 
   return { make };

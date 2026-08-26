@@ -1,8 +1,8 @@
 import type { LayoutComponent } from './layout';
 import type { LoadingComponent } from './loading';
-import type { AnyPageDefinition } from './page';
+import { getPageState, type PageImplementationState } from './page';
 import { type AbsolutePath, joinRoutePaths, validateUnreservedPath } from './route-path';
-import { type AnyRoutes, RoutesScopeIdTypeId } from './routes';
+import { type AnyRoutes, getRoutesState } from './routes';
 
 export type RouteScope<Services> = {
   readonly id: string;
@@ -11,7 +11,7 @@ export type RouteScope<Services> = {
 };
 
 export type CompiledDestination<Services> = {
-  readonly page: AnyPageDefinition<Services>;
+  readonly page: PageImplementationState<Services>;
   readonly pattern: AbsolutePath;
   readonly scopes: ReadonlyArray<RouteScope<Services>>;
 };
@@ -19,7 +19,8 @@ export type CompiledDestination<Services> = {
 export const compileRouteGraph = <Services>(
   routes: AnyRoutes<Services>,
 ): ReadonlyArray<CompiledDestination<Services>> => {
-  if (routes.layout === null) {
+  const rootState = getRoutesState(routes);
+  if (rootState.layout === null) {
     throw new TypeError('The root Routes passed to ERSC.make must define a Layout.');
   }
 
@@ -29,25 +30,26 @@ export const compileRouteGraph = <Services>(
     prefix: AbsolutePath,
     inheritedScopes: ReadonlyArray<RouteScope<Services>>,
   ): void => {
+    const currentState = getRoutesState(current);
     const scopes =
-      current.layout === null && current.loading === null
+      currentState.layout === null && currentState.loading === null
         ? inheritedScopes
         : Object.freeze([
             ...inheritedScopes,
             Object.freeze({
-              id: `${current[RoutesScopeIdTypeId]}:${prefix}`,
-              layout: current.layout,
-              loading: current.loading,
+              id: `${currentState.scopeId}:${prefix}`,
+              layout: currentState.layout,
+              loading: currentState.loading,
             }),
           ]);
 
-    for (const route of current.pages) {
+    for (const route of currentState.pages) {
       const pattern = joinRoutePaths(prefix, route.path);
       validateUnreservedPath(pattern);
-      destinations.push(Object.freeze({ page: route.page, pattern, scopes }));
+      destinations.push(Object.freeze({ page: getPageState(route.page), pattern, scopes }));
     }
 
-    for (const mount of current.mounts) {
+    for (const mount of currentState.mounts) {
       visit(mount.routes, joinRoutePaths(prefix, mount.path), scopes);
     }
   };

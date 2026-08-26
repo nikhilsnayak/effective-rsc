@@ -2,7 +2,7 @@ import { describe, expect, it } from '@effect/vitest';
 import { Context, Effect, Ref, Schema } from 'effect';
 
 import { Application } from '../../src/application/ersc';
-import { ERSCIdentityTypeId, type ERSCIdentity } from '../../src/application/ersc-identity';
+import { type ERSCIdentity, getERSCIdentity } from '../../src/application/ersc-identity';
 import { matchServerFnInvocation } from '../../src/application/server-fn';
 
 class Greeting extends Context.Service<Greeting, { readonly prefix: string }>()(
@@ -34,7 +34,7 @@ describe('ServerFn.make', () => {
       });
 
       const invocation: Promise<string> = greet({ name: 'Nikhil' });
-      const result = yield* invocationEffect(invocation, ERSC[ERSCIdentityTypeId]);
+      const result = yield* invocationEffect(invocation, getERSCIdentity(ERSC));
 
       expect(result).toBe('Hello, Nikhil');
     }).pipe(Effect.provideService(Greeting, { prefix: 'Hello' })),
@@ -51,7 +51,7 @@ describe('ServerFn.make', () => {
         }),
       });
       const exit = yield* Effect.exit(
-        invocationEffect(serverFn({ value: '' }), ERSC[ERSCIdentityTypeId]),
+        invocationEffect(serverFn({ value: '' }), getERSCIdentity(ERSC)),
       );
 
       const invokedBeforeRender = yield* Ref.get(invoked);
@@ -75,7 +75,7 @@ describe('ServerFn.make', () => {
       const invokedBeforeExecution = yield* Ref.get(invoked);
       expect(invokedBeforeExecution).toBe(false);
 
-      yield* invocationEffect(invocation, ERSC[ERSCIdentityTypeId]);
+      yield* invocationEffect(invocation, getERSCIdentity(ERSC));
       const invokedAfterExecution = yield* Ref.get(invoked);
       expect(invokedAfterExecution).toBe(true);
     }),
@@ -89,7 +89,7 @@ describe('ServerFn.make', () => {
       handler: Effect.succeed,
     });
 
-    const match = matchServerFnInvocation(serverFn('value'), Second[ERSCIdentityTypeId]);
+    const match = matchServerFnInvocation(serverFn('value'), getERSCIdentity(Second));
 
     expect(match._tag).toBe('IdentityMismatch');
   });

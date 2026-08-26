@@ -1,23 +1,23 @@
 import { CalendarCheck2, MapPin } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
-import type { AgendaItem, ObservedQuery } from '@/modules/conference/conference-repository';
+import type { AgendaItem, ObservedQuery } from '@/modules/conference/model';
 
-type PersonalAgendaProps = {
+type ConferenceAgendaProps = {
   readonly agenda: ObservedQuery<ReadonlyArray<AgendaItem>>;
 };
 
-export default function PersonalAgenda({ agenda }: PersonalAgendaProps) {
+export default function ConferenceAgenda({ agenda }: ConferenceAgendaProps) {
   return (
     <section
-      aria-labelledby='personal-agenda-heading'
+      aria-labelledby='conference-agenda-heading'
       data-agenda-completed-at={agenda.completedAt}
       data-agenda-started-at={agenda.startedAt}
     >
       <div className='flex items-center gap-2'>
         <CalendarCheck2 aria-hidden='true' className='size-4' />
-        <h2 id='personal-agenda-heading' className='text-sm font-semibold'>
-          Your agenda
+        <h2 id='conference-agenda-heading' className='text-sm font-semibold'>
+          Conference agenda
         </h2>
         <Badge className='ml-auto' variant='secondary'>
           {agenda.data.length}

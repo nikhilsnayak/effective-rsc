@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 
 import { ERSC } from '@/ersc';
-import { ConferenceRepository } from '@/modules/conference/conference-repository';
+import { ConferenceService } from '@/modules/conference/service';
 
 type SessionSpeakerProps = {
   readonly speakerId: string;
@@ -9,8 +9,8 @@ type SessionSpeakerProps = {
 
 export const SessionSpeaker = ERSC.Component.make({
   render: Effect.fn('SessionSpeaker')(function* ({ speakerId }: SessionSpeakerProps) {
-    const repository = yield* ConferenceRepository;
-    const speaker = yield* repository.speaker(speakerId);
+    const service = yield* ConferenceService;
+    const speaker = yield* service.speaker(speakerId);
 
     return (
       <div

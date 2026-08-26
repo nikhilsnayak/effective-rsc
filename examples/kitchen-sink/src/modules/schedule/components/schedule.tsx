@@ -5,11 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
 import { ERSC } from '@/ersc';
 import { cn } from '@/lib/utils';
-import {
-  ConferenceRepository,
-  type ObservedQuery,
-  type Schedule,
-} from '@/modules/conference/conference-repository';
+import type { ObservedQuery, Schedule } from '@/modules/conference/model';
+import { ConferenceService } from '@/modules/conference/service';
 import { SessionCard } from '@/modules/schedule/components/session-card';
 
 type ScheduleViewProps = {
@@ -73,8 +70,8 @@ export const SchedulePage = ERSC.Page.make({
     day: Schema.Literals(['saturday', 'sunday']),
   }),
   render: Effect.fn('SchedulePage')(function* ({ params }) {
-    const repository = yield* ConferenceRepository;
-    const schedule = yield* repository.schedule(params.day);
+    const service = yield* ConferenceService;
+    const schedule = yield* service.schedule(params.day);
 
     return <ScheduleView schedule={schedule} />;
   }),

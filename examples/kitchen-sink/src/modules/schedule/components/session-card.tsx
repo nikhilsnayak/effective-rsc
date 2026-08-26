@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AgendaToggle } from '@/modules/agenda/components/agenda-toggle';
-import type { Session } from '@/modules/conference/conference-repository';
+import type { Session } from '@/modules/conference/model';
 import { SessionSpeaker } from '@/modules/schedule/components/session-speaker';
 
 export function SessionCard({ session }: { readonly session: Session }) {

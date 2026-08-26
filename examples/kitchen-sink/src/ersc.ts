@@ -1,5 +1,5 @@
 import { Application } from 'effective-rsc';
 
-import type { ConferenceRepository } from '@/modules/conference/conference-repository';
+import type { ConferenceService } from '@/modules/conference/service';
 
-export const ERSC = Application.ersc<ConferenceRepository>();
+export const ERSC = Application.ersc<ConferenceService>();

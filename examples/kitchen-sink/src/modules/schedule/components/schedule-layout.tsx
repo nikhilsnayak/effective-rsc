@@ -1,14 +1,14 @@
 import { Effect } from 'effect';
 
 import { ERSC } from '@/ersc';
-import PersonalAgenda from '@/modules/agenda/components/personal-agenda';
+import ConferenceAgenda from '@/modules/agenda/components/conference-agenda';
 import ConferenceNavigation from '@/modules/conference/components/conference-navigation';
-import { ConferenceRepository } from '@/modules/conference/conference-repository';
+import { ConferenceService } from '@/modules/conference/service';
 
 export default ERSC.Layout.make({
   render: Effect.fn('ScheduleLayout')(function* ({ children }) {
-    const repository = yield* ConferenceRepository;
-    const agenda = yield* repository.agenda;
+    const service = yield* ConferenceService;
+    const agenda = yield* service.agenda;
 
     return (
       <div className='mx-auto grid max-w-7xl px-5 sm:px-8 lg:grid-cols-[11rem_minmax(0,1fr)_17rem] lg:gap-8'>
@@ -17,7 +17,7 @@ export default ERSC.Layout.make({
         </aside>
         {children}
         <aside className='border-t py-7 lg:border-t-0 lg:border-l lg:py-10 lg:pl-8'>
-          <PersonalAgenda agenda={agenda} />
+          <ConferenceAgenda agenda={agenda} />
         </aside>
       </div>
     );

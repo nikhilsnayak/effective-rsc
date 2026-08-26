@@ -19,7 +19,7 @@ export function AgendaToggle({ isInAgenda, sessionId }: AgendaToggleProps) {
   return (
     <form action={formAction} className='mt-5 flex flex-wrap items-center gap-3'>
       <Button
-        aria-label={selected ? 'Remove from your agenda' : 'Add to your agenda'}
+        aria-label={selected ? 'Remove from the agenda' : 'Add to the agenda'}
         disabled={pending}
         size='sm'
         type='submit'

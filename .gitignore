@@ -23,6 +23,8 @@ test-results
 
 # Framework output
 .ersc
+.data/*
+!.data/.gitkeep
 dist
 *.tgz
 

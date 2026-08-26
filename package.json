@@ -36,6 +36,7 @@
   "catalog": {
     "@effect/platform-browser": "4.0.0-rc.112",
     "@effect/platform-bun": "4.0.0-rc.112",
+    "@effect/vitest": "4.0.0-rc.112",
     "@types/bun": "^1.4.0",
     "@types/react": "19.2.18",
     "effect": "4.0.0-rc.112",

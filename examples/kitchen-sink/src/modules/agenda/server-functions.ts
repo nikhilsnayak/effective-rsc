@@ -3,12 +3,21 @@
 import { Effect, Schema } from 'effect';
 
 import { ERSC } from '@/ersc';
-import { ConferenceRepository } from '@/modules/conference/conference-repository';
+import { ConferenceService } from '@/modules/conference/service';
 
 export type AgendaMutationState = {
   readonly message: string;
   readonly selected: boolean | null;
   readonly status: 'error' | 'success';
+};
+
+type ToggleAgendaSuccess = {
+  readonly _tag: 'Success';
+  readonly result: { readonly selected: boolean } | null;
+};
+
+type ToggleAgendaUnavailable = {
+  readonly _tag: 'Unavailable';
 };
 
 const ToggleAgendaInput = Schema.Struct({
@@ -18,8 +27,23 @@ const ToggleAgendaInput = Schema.Struct({
 export const toggleAgenda = ERSC.ServerFn.make({
   input: ToggleAgendaInput,
   handler: Effect.fn('toggleAgenda')(function* ({ sessionId }) {
-    const repository = yield* ConferenceRepository;
-    const result = yield* repository.toggleAgenda(sessionId);
+    const service = yield* ConferenceService;
+    const outcome = yield* service.toggleAgenda(sessionId).pipe(
+      Effect.map((result): ToggleAgendaSuccess => ({ result, _tag: 'Success' })),
+      Effect.catchTag('@effective-rsc/example-kitchen-sink/conference/ConferenceUnavailable', () =>
+        Effect.succeed<ToggleAgendaUnavailable>({ _tag: 'Unavailable' }),
+      ),
+    );
+
+    if (outcome._tag === 'Unavailable') {
+      return {
+        message: 'The conference agenda could not be updated. Please try again.',
+        selected: null,
+        status: 'error',
+      } satisfies AgendaMutationState;
+    }
+
+    const { result } = outcome;
 
     return result === null
       ? ({
@@ -28,7 +52,7 @@ export const toggleAgenda = ERSC.ServerFn.make({
           status: 'error',
         } satisfies AgendaMutationState)
       : ({
-          message: result.selected ? 'Added to your agenda.' : 'Removed from your agenda.',
+          message: result.selected ? 'Added to the agenda.' : 'Removed from the agenda.',
           selected: result.selected,
           status: 'success',
         } satisfies AgendaMutationState);

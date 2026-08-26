@@ -22,6 +22,7 @@
         "@base-ui/react": "^1.7.0",
         "@effect/platform-browser": "catalog:",
         "@effect/platform-bun": "catalog:",
+        "@effect/sql-sqlite-bun": "4.0.0-rc.112",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "effect": "catalog:",
@@ -33,11 +34,13 @@
         "tailwind-merge": "^3.6.0",
       },
       "devDependencies": {
+        "@effect/vitest": "catalog:",
         "@playwright/test": "1.62.1",
         "@types/bun": "catalog:",
         "@types/react": "catalog:",
         "tailwindcss": "4.3.3",
         "typescript": "catalog:",
+        "vitest": "catalog:",
       },
     },
     "packages/effective-rsc": {
@@ -54,7 +57,7 @@
       "devDependencies": {
         "@effect/platform-browser": "catalog:",
         "@effect/platform-bun": "catalog:",
-        "@effect/vitest": "4.0.0-rc.112",
+        "@effect/vitest": "catalog:",
         "@rsbuild/plugin-react": "2.1.0",
         "@rslib/core": "1.0.0-rc.1",
         "@types/bun": "catalog:",
@@ -80,6 +83,7 @@
   "catalog": {
     "@effect/platform-browser": "4.0.0-rc.112",
     "@effect/platform-bun": "4.0.0-rc.112",
+    "@effect/vitest": "4.0.0-rc.112",
     "@types/bun": "^1.4.0",
     "@types/react": "19.2.18",
     "effect": "4.0.0-rc.112",
@@ -123,6 +127,8 @@
     "@effect/platform-bun": ["@effect/platform-bun@4.0.0-rc.112", "", { "dependencies": { "@effect/platform-node-shared": "^4.0.0-rc.112" }, "peerDependencies": { "effect": "^4.0.0-rc.112" } }, "sha512-Y5n2HhV/vsbrJls9ukX42RL7zqXQxISHegWFsP9njsCyDmGTnq7QYSO82rglwrLPwtTrv5dkSRTuGw4+oXxgMg=="],
 
     "@effect/platform-node-shared": ["@effect/platform-node-shared@4.0.0-rc.112", "", { "dependencies": { "@types/ws": "^8.18.1", "ws": "^8.21.3" }, "peerDependencies": { "effect": "^4.0.0-rc.112" } }, "sha512-ttjz0xKamFN7vL8pNDYVwddJLjZvqKePc05djlz2VcdaKbLsnYbtMnL1rbOfHgEnIUSHGh7FkjaN4DM1Ov81sQ=="],
+
+    "@effect/sql-sqlite-bun": ["@effect/sql-sqlite-bun@4.0.0-rc.112", "", { "peerDependencies": { "effect": "^4.0.0-rc.112" } }, "sha512-EqR8pWZo3VzedRvP6qo5HcfqNmFvSa+sQLWQl3oBMx2KY1FCc8NYjep79wYjNkW0qABnffrPUXCMTOncd1A+5g=="],
 
     "@effect/tsgo": ["@effect/tsgo@0.36.5", "", { "optionalDependencies": { "@effect/tsgo-darwin-arm64": "0.36.5", "@effect/tsgo-darwin-x64": "0.36.5", "@effect/tsgo-linux-arm": "0.36.5", "@effect/tsgo-linux-arm64": "0.36.5", "@effect/tsgo-linux-x64": "0.36.5", "@effect/tsgo-win32-arm64": "0.36.5", "@effect/tsgo-win32-x64": "0.36.5" }, "bin": { "effect-tsgo": "dist/effect-tsgo.cjs" } }, "sha512-BHxVjeRK1/XlqYHWXkbT4W9JpOrT3sNA2wrfwQPBTojD5OSyxI2TUIltobYhWudyfuCrn770qP6uOpDjdrmghA=="],
 

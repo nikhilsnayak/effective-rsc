@@ -2,12 +2,12 @@ import { Effect } from 'effect';
 import { MapPin } from 'lucide-react';
 
 import { ERSC } from '@/ersc';
-import { ConferenceRepository } from '@/modules/conference/conference-repository';
+import { ConferenceService } from '@/modules/conference/service';
 
 export default ERSC.Layout.make({
   render: Effect.fn('ConferenceShell')(function* ({ children }) {
-    const repository = yield* ConferenceRepository;
-    const conference = yield* repository.conference;
+    const service = yield* ConferenceService;
+    const conference = yield* service.conference;
 
     return (
       <html

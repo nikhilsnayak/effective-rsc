@@ -1,5 +1,6 @@
 import { Effect, Path, Schema } from 'effect';
 
+import { ApplicationEntryPath } from './contract';
 import { Rspack } from './rspack';
 import { makeRspackBuildConfig } from './rspack-config';
 
@@ -11,9 +12,6 @@ export type ResolveApplicationBuildOptions = BuildOptions & {
   readonly buildModuleUrl?: URL;
 };
 
-const ApplicationEntryPath = 'src/application.tsx';
-const ApplicationStylesheetPath = 'src/styles.css';
-
 export class BuildEntryError extends Schema.TaggedError<BuildEntryError>()('BuildEntryError', {
   message: Schema.String,
   cause: Schema.Defect(),
@@ -21,7 +19,7 @@ export class BuildEntryError extends Schema.TaggedError<BuildEntryError>()('Buil
 
 const ClientEntryPath = '../client/entry.js';
 const RscEntryPath = './rsc-entry.js';
-const SsrEntryPath = '../server/ssr.js';
+const SsrEntryPath = '../server/html-renderer.js';
 
 const resolveFrameworkEntry = Effect.fnUntraced(function* (
   buildModuleUrl: URL,
@@ -52,14 +50,11 @@ export const resolveApplicationBuild = Effect.fnUntraced(function* ({
   const clientEntry = yield* resolveFrameworkEntry(buildModuleUrl, ClientEntryPath);
   const rscEntry = yield* resolveFrameworkEntry(buildModuleUrl, RscEntryPath);
   const ssrEntry = yield* resolveFrameworkEntry(buildModuleUrl, SsrEntryPath);
-  const stylesheetPath = path.resolve(applicationRoot, ApplicationStylesheetPath);
-
   const entries = {
     application: applicationPath,
     client: clientEntry,
     rsc: rscEntry,
     ssr: ssrEntry,
-    stylesheet: stylesheetPath,
   };
 
   return { applicationRoot, entries } as const;

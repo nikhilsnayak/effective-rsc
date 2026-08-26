@@ -4,7 +4,7 @@ import rspack from '@rspack/core';
 import { Effect, Path } from 'effect';
 
 import { resolveApplicationBuild } from '../../src/build/build';
-import { ServerBundlePath } from '../../src/build/output';
+import { ServerBundlePath } from '../../src/build/contract';
 import { makeRspackBuildConfig } from '../../src/build/rspack-config';
 
 const BuildModuleUrl = new URL('file:///framework/dist/build/build.js');
@@ -53,10 +53,9 @@ it.effect('uses real framework entries and private aliases for application sourc
     const server = configNamed(configs, 'server');
 
     expect(entries.application).toBe('/workspace/src/application.tsx');
-    expect(entries.stylesheet).toBe('/workspace/src/styles.css');
     expect(entries.client).toBe('/framework/dist/client/entry.js');
     expect(entries.rsc).toBe('/framework/dist/build/rsc-entry.js');
-    expect(entries.ssr).toBe('/framework/dist/server/ssr.js');
+    expect(entries.ssr).toBe('/framework/dist/server/html-renderer.js');
     expect(entries.rsc).not.toContain('/.ersc/');
     expect(server.entry).toEqual({ main: entries.rsc });
     expect(client.target).toBe('browserslist:chrome >= 141, edge >= 141, firefox >= 147');
@@ -70,7 +69,6 @@ it.effect('uses real framework entries and private aliases for application sourc
     );
     expect(server.resolve?.alias).toEqual({
       'effective-rsc/application-entry': entries.application,
-      'effective-rsc/application-stylesheet': entries.stylesheet,
     });
     expect(client.resolve?.alias).toBeUndefined();
     expect(client.output?.path).toBe('/workspace/.ersc/client');
@@ -148,5 +146,22 @@ it.effect('keeps the React Compiler out of the server compilation', () =>
 
     expect(reactCompilerOption(configNamed(configs, 'client'))).toBe(true);
     expect(reactCompilerOption(configNamed(configs, 'server'))).toBeUndefined();
+  }).pipe(Effect.provide(Path.layer)),
+);
+
+it.effect('keeps Bun builtins external only in the server graph', () =>
+  Effect.gen(function* () {
+    const { applicationRoot, entries } = yield* resolveFixtureBuild('/workspace');
+    const configs = makeRspackBuildConfig(applicationRoot, entries);
+    const client = configNamed(configs, 'client');
+    const server = configNamed(configs, 'server');
+    const external: unknown = Array.isArray(server.externals) ? server.externals[0] : undefined;
+
+    expect(client.externals).toBeUndefined();
+    expect(external).toBeTypeOf('function');
+    if (typeof external === 'function') {
+      expect(external({ request: 'bun:sqlite' })).toBe('module bun:sqlite');
+      expect(external({ request: 'effect' })).toBe(false);
+    }
   }).pipe(Effect.provide(Path.layer)),
 );

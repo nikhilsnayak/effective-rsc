@@ -16,8 +16,8 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
+      "react-server": "./dist/index.js",
+      "default": "./dist/unsupported.js"
     }
   },
   "scripts": {

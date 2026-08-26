@@ -1,11 +1,10 @@
 'use server-entry';
 
-import 'effective-rsc/application-stylesheet';
 import App from 'effective-rsc/application-entry';
 
-import { Application } from '../server/application';
+import { ServerApplication } from '../server/application';
 
 export default App;
 
-export const HttpLayer = Application.httpLayer(App);
-export const ServerLayer = Application.layer(App);
+export const HttpLayer = ServerApplication.httpLayer(App);
+export const ServerLayer = ServerApplication.serverLayer(App);

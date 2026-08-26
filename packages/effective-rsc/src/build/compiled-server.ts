@@ -2,7 +2,7 @@ import { Effect, FileSystem, Layer, Path, Schema, Types } from 'effect';
 import { HttpRouter } from 'effect/unstable/http';
 
 import { ServerConfig } from '../server/server-config';
-import { ClientOutputDir, ServerBundlePath } from './output';
+import { ClientOutputDir, CompiledServerExportNames, ServerBundlePath } from './contract';
 
 export class CompiledServerError extends Schema.TaggedError<CompiledServerError>()(
   'CompiledServerError',
@@ -34,9 +34,9 @@ const CompiledHttpLayer = Schema.declare(
 );
 
 const ServerBundle = Schema.Struct({
-  default: CompiledApplication,
-  HttpLayer: CompiledHttpLayer,
-  ServerLayer: CompiledServerLayer,
+  [CompiledServerExportNames.application]: CompiledApplication,
+  [CompiledServerExportNames.httpLayer]: CompiledHttpLayer,
+  [CompiledServerExportNames.serverLayer]: CompiledServerLayer,
 });
 
 export type ServerBundle = typeof ServerBundle.Type;
@@ -58,8 +58,8 @@ const makeServerConfigLayer = Effect.fnUntraced(function* ({
     ServerConfig,
     ServerConfig.of({
       clientAssetsRoot: path.resolve(root, ClientOutputDir),
-      clientBootstrapScripts: bundle.default.entryJsFiles,
-      clientStylesheets: bundle.default.entryCssFiles,
+      clientBootstrapScripts: bundle[CompiledServerExportNames.application].entryJsFiles,
+      clientStylesheets: bundle[CompiledServerExportNames.application].entryCssFiles,
       hostname: 'localhost',
       port: applicationPort,
     }),
@@ -77,7 +77,7 @@ export const makeRunnableServerLayer = Effect.fnUntraced(function* ({
 }) {
   const ServerConfigLayer = yield* makeServerConfigLayer({ applicationPort, bundle, root });
 
-  return bundle.ServerLayer.pipe(Layer.provide(ServerConfigLayer));
+  return bundle[CompiledServerExportNames.serverLayer].pipe(Layer.provide(ServerConfigLayer));
 });
 
 export const makeRunnableHttpLayer = Effect.fnUntraced(function* ({
@@ -91,7 +91,7 @@ export const makeRunnableHttpLayer = Effect.fnUntraced(function* ({
 }) {
   const ServerConfigLayer = yield* makeServerConfigLayer({ applicationPort, bundle, root });
 
-  return bundle.HttpLayer.pipe(Layer.provide(ServerConfigLayer));
+  return bundle[CompiledServerExportNames.httpLayer].pipe(Layer.provide(ServerConfigLayer));
 });
 
 export const loadCompiledServer = Effect.fnUntraced(function* (root: string) {

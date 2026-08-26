@@ -4,24 +4,22 @@ import rspack, { type Configuration, type RuleSetRule } from '@rspack/core';
 
 import { FrameworkAssetPrefix } from '../application/route-path';
 import {
+  ApplicationEntrySpecifier,
   ClientEntryName,
   ClientOutputDir,
   CssFilenameTemplate,
   JsFilenameTemplate,
   ServerEntryName,
   ServerOutputDir,
-} from './output';
+} from './contract';
 
 export type RspackEntries = {
   readonly application: string;
   readonly client: string;
   readonly rsc: string;
   readonly ssr: string;
-  readonly stylesheet: string;
 };
 
-const ApplicationEntrySpecifier = 'effective-rsc/application-entry';
-const ApplicationStylesheetSpecifier = 'effective-rsc/application-stylesheet';
 const require = createRequire(import.meta.url);
 const TailwindLoaderPath = require.resolve('@tailwindcss/webpack');
 
@@ -135,6 +133,10 @@ export const makeRspackBuildConfig = (
     entry: {
       [ServerEntryName]: entries.rsc,
     },
+    externals: [
+      ({ request }: { readonly request?: string }) =>
+        request?.startsWith('bun:') ? `module ${request}` : false,
+    ],
     mode: 'production',
     module: {
       rules: [
@@ -187,7 +189,6 @@ export const makeRspackBuildConfig = (
       ...makeResolve(root),
       alias: {
         [ApplicationEntrySpecifier]: entries.application,
-        [ApplicationStylesheetSpecifier]: entries.stylesheet,
       },
     },
     target: 'node26',

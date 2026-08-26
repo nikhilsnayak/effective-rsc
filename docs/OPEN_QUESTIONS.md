@@ -29,7 +29,7 @@ IDs are append-only and never reused, including after a question is resolved.
 
 - **Question:** How should a matched Page's path-parameter Schema rejection map to NotFound or another expected failure?
 - **Why:** Effect HTTP has already selected the route, but the application-level Schema can still reject captured values.
-- **Affected:** Page rendering, HTTP status, error boundaries, and navigation Flight.
+- **Affected:** Page rendering, HTTP status, error boundaries, and navigation Flight. Any non-200 answer widens `RequestOutcome['status']`, which is `200` today.
 - **Evidence:** Parameter Schemas currently fail in the Page request runtime after route selection.
 - **Related:** D-028, D-046.
 - **Resolution:** Unresolved.
@@ -53,4 +53,14 @@ IDs are append-only and never reused, including after a question is resolved.
 - **Evidence:** `NavigateEvent.signal` owns each intercepted navigation through its commit, while response streams can outlive that handler.
 - **Related:** D-032, D-043.
 - **Resolution:** Unresolved; formerly tracked as D-037, whose identifier is permanently retired.
+- **Status:** Open.
+
+## OQ-006 — Server Function failure channel
+
+- **Question:** How should a Server Function handler's typed failure reach its caller?
+- **Why:** Effect owns the application runtime, but a handler's error type is the one part of its signature the client contract does not carry.
+- **Affected:** `ERSC.ServerFn.make` typing, Flight payloads, client call sites, and error boundaries.
+- **Evidence:** `ServerFnOperationError` stores the failure as `Schema.Defect` and `serverFnOutcome` squashes it, so `ServerFunction<Input, Output, Services>` resolves `Promise<Output>` and delivers failures as `unknown`. The kitchen-sink encodes its own `AgendaMutationState` result in `Output` to work around this.
+- **Related:** D-009, D-036, D-040.
+- **Resolution:** Unresolved.
 - **Status:** Open.

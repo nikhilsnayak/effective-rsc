@@ -200,9 +200,13 @@ export const parseSubtreeSplit = (message: string): string | undefined =>
 
 export const parseRemoteCommit = (remoteOutput: string, ref: string): string | undefined => {
   const lines = remoteOutput.trim().split('\n');
-  if (lines.length !== 1) return undefined;
+  if (lines.length !== 1) {
+    return undefined;
+  }
   const [commit, remoteRef, extra] = lines[0]!.trim().split(/\s+/);
-  if (extra !== undefined || remoteRef !== `refs/heads/${ref}`) return undefined;
+  if (extra !== undefined || remoteRef !== `refs/heads/${ref}`) {
+    return undefined;
+  }
   return /^[0-9a-f]{40}$/.test(commit ?? '') ? commit : undefined;
 };
 
@@ -222,12 +226,16 @@ const subtreeSplit = async (vendor: Vendor, root: string) => {
     root,
   );
 
-  if (log.exitCode !== 0) return undefined;
+  if (log.exitCode !== 0) {
+    return undefined;
+  }
   return parseSubtreeSplit(log.stdout);
 };
 
 const resolveRemoteCommit = async (vendor: Vendor, root: string) => {
-  if (isCommit(vendor.ref)) return vendor.ref;
+  if (isCommit(vendor.ref)) {
+    return vendor.ref;
+  }
 
   const remote = await output(
     ['git', 'ls-remote', '--exit-code', vendor.repository, `refs/heads/${vendor.ref}`],

@@ -18,6 +18,22 @@ test('renders every declared route as HTML and Flight', async ({ request }) => {
   expect(flight.body).toContain('"formState":null');
 });
 
+test('renders a parameter-free Page at the application root', async ({ request }) => {
+  const html = await getText(request, '/');
+  const flight = await getText(request, '/', { accept: 'text/x-component' });
+
+  expect(html.response.status()).toBe(200);
+  expect(html.body).toContain('<title>Converge 2026 — Conference schedule</title>');
+  expect(html.body).toMatch(/<h1[^>]*>Converge<\/h1>/);
+  expect(html.body).toContain('Two days for people building ambitious software.');
+  expect(html.body).toContain('/schedule/saturday');
+  expect(html.body).not.toMatch(/<h1[^>]*>Saturday schedule<\/h1>/);
+
+  expect(flight.response.status()).toBe(200);
+  expect(flight.body).toContain('Bangalore International Centre');
+  expect(flight.body).toContain('"formState":null');
+});
+
 test('retains the native router response for unknown paths', async ({ request }) => {
   const html = await getText(request, '/missing');
   const flight = await getText(request, '/missing', { accept: 'text/x-component' });

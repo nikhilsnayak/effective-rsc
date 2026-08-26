@@ -22,7 +22,6 @@ export interface ApplicationDefinition<
 }
 
 export type ApplicationImplementationState<Services, ApplicationError> = {
-  readonly [ERSCIdentityTypeId]: ERSCIdentity<Services>;
   readonly routes: ReadonlyArray<CompiledDestination<Services>>;
   readonly servicesLayer: Layer.Layer<Services, ApplicationError>;
 };

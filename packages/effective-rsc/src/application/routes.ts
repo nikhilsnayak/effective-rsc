@@ -8,7 +8,7 @@ import {
 } from './ersc-identity';
 import { isLayoutConcern, type LayoutComponent } from './layout';
 import { isLoadingConcern, type LoadingComponent } from './loading';
-import { type AnyPageDefinition, getPageState, isPageConcern, type PageConcern } from './page';
+import { type AnyPageDefinition, getPageState, isPageDefinition, type PageConcern } from './page';
 import {
   type AbsolutePath,
   analyzeRoutePath,
@@ -175,7 +175,7 @@ class RoutesDefinitionImpl<
     if (this.#routeShapes.has(route.shape)) {
       throw new TypeError(`Route "${path}" conflicts with an existing route pattern.`);
     }
-    if (!isPageConcern(page)) {
+    if (!isPageDefinition(page)) {
       throw new TypeError(`Page for "${path}" must be created with ERSC.Page.make.`);
     }
     if (getERSCIdentity(page) !== this[ERSCIdentityTypeId]) {

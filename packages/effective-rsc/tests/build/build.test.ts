@@ -5,7 +5,11 @@ import { Effect, Path } from 'effect';
 
 import { resolveApplicationBuild } from '../../src/build/build';
 import { ServerBundlePath } from '../../src/build/contract';
-import { makeRspackBuildConfig } from '../../src/build/rspack-config';
+import {
+  externalizeBunModule,
+  makeRspackBuildConfig,
+  rejectBunModule,
+} from '../../src/build/rspack-config';
 
 const BuildModuleUrl = new URL('file:///framework/dist/build/build.js');
 
@@ -149,19 +153,32 @@ it.effect('keeps the React Compiler out of the server compilation', () =>
   }).pipe(Effect.provide(Path.layer)),
 );
 
-it.effect('keeps Bun builtins external only in the server graph', () =>
+it('externalizes Bun builtins for the server graph and passes everything else through', () => {
+  expect(externalizeBunModule({ request: 'bun:sqlite' })).toBe('module bun:sqlite');
+  expect(externalizeBunModule({ request: 'bun:test' })).toBe('module bun:test');
+  expect(externalizeBunModule({ request: 'effect' })).toBe(false);
+  expect(externalizeBunModule({ request: 'node:path' })).toBe(false);
+  expect(externalizeBunModule({})).toBe(false);
+});
+
+it('rejects Bun builtins reaching the browser graph and points at the boundary', () => {
+  expect(() => rejectBunModule({ request: 'bun:sqlite' })).toThrow(
+    '"bun:sqlite" is a Bun built-in and cannot enter the browser module graph.',
+  );
+  expect(() => rejectBunModule({ request: 'bun:sqlite' })).toThrow(
+    /Move the import behind a Server Component, Layout, Page, or ServerFn boundary/,
+  );
+  expect(rejectBunModule({ request: 'effect' })).toBe(false);
+  expect(rejectBunModule({ request: 'node:path' })).toBe(false);
+  expect(rejectBunModule({})).toBe(false);
+});
+
+it.effect('wires each Bun predicate into the graph that owns it', () =>
   Effect.gen(function* () {
     const { applicationRoot, entries } = yield* resolveFixtureBuild('/workspace');
     const configs = makeRspackBuildConfig(applicationRoot, entries);
-    const client = configNamed(configs, 'client');
-    const server = configNamed(configs, 'server');
-    const external: unknown = Array.isArray(server.externals) ? server.externals[0] : undefined;
 
-    expect(client.externals).toBeUndefined();
-    expect(external).toBeTypeOf('function');
-    if (typeof external === 'function') {
-      expect(external({ request: 'bun:sqlite' })).toBe('module bun:sqlite');
-      expect(external({ request: 'effect' })).toBe(false);
-    }
+    expect(configNamed(configs, 'client').externals).toEqual([rejectBunModule]);
+    expect(configNamed(configs, 'server').externals).toEqual([externalizeBunModule]);
   }).pipe(Effect.provide(Path.layer)),
 );

@@ -71,3 +71,25 @@ test('streams effectful speaker leaves independently within the conference sched
   await expect(lastSpeaker).toBeVisible();
   expect(browserErrors).toEqual([]);
 });
+
+test('retains the root Layout when navigating from the landing page into a day', async ({
+  page,
+}) => {
+  const browserErrors = observeBrowserErrors(page);
+  await page.goto('/');
+
+  const conferenceHeader = page.getByRole('banner');
+  await conferenceHeader.evaluate((element) => Reflect.set(element, '__ersc_shell_marker__', true));
+
+  await page
+    .getByRole('link', { name: 'See the Saturday schedule' })
+    .evaluate((element: HTMLAnchorElement) => element.click());
+
+  await expect(page).toHaveURL('/schedule/saturday');
+  await expect(page.getByRole('heading', { level: 1, name: 'Saturday schedule' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Converge' })).toBeHidden();
+  expect(
+    await conferenceHeader.evaluate((element) => Reflect.get(element, '__ersc_shell_marker__')),
+  ).toBe(true);
+  expect(browserErrors).toEqual([]);
+});

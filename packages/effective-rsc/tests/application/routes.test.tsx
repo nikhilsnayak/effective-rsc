@@ -208,6 +208,22 @@ describe('Routes', () => {
       ERSC.Routes.make().page('/users/', HomePage),
     ).toThrow('cannot contain empty, ".", or ".." segments or end with "/"');
     expect(() =>
+      // @ts-expect-error Exercise runtime validation for empty segments.
+      ERSC.Routes.make().page('/users//history', HomePage),
+    ).toThrow('cannot contain empty, ".", or ".." segments or end with "/"');
+    expect(() =>
+      // @ts-expect-error Exercise runtime validation for URL-normalized dot segments.
+      ERSC.Routes.make().page('/users/../history', HomePage),
+    ).toThrow('cannot contain empty, ".", or ".." segments or end with "/"');
+    expect(() =>
+      // @ts-expect-error Exercise runtime validation for percent escapes.
+      ERSC.Routes.make().page('/users/%61', HomePage),
+    ).toThrow('cannot contain "*", "?", "#", "%", ";", or "\\"');
+    expect(() =>
+      // @ts-expect-error Exercise runtime validation for duplicate parameter names.
+      ERSC.Routes.make().page('/users/:userId/:userId', HomePage),
+    ).toThrow('Dynamic parameter names must be unique within a route');
+    expect(() =>
       // @ts-expect-error Exercise runtime validation for a dynamic mount prefix.
       ERSC.Routes.make().mount('/:group', ERSC.Routes.make().page('/', HomePage)),
     ).toThrow('Routes cannot be mounted beneath parameterized path "/:group".');

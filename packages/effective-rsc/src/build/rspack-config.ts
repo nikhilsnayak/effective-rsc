@@ -25,6 +25,28 @@ const TailwindLoaderPath = require.resolve('@tailwindcss/webpack');
 
 const SupportedBrowserTargets = ['chrome >= 141', 'edge >= 141', 'firefox >= 147'] as const;
 
+const BunModulePrefix = 'bun:';
+
+export type ExternalsRequest = {
+  readonly request?: string;
+};
+
+const isBunModule = (request: string | undefined): request is string =>
+  request !== undefined && request.startsWith(BunModulePrefix);
+
+export const externalizeBunModule = ({ request }: ExternalsRequest): string | false =>
+  isBunModule(request) ? `module ${request}` : false;
+
+export const rejectBunModule = ({ request }: ExternalsRequest): false => {
+  if (isBunModule(request)) {
+    throw new Error(
+      `"${request}" is a Bun built-in and cannot enter the browser module graph. Move the import behind a Server Component, Layout, Page, or ServerFn boundary so it stays in the server graph.`,
+    );
+  }
+
+  return false;
+};
+
 const makeSwcRule = (target: 'browser' | 'server'): RuleSetRule => ({
   test: /\.(?:js|jsx|mjs|cjs|ts|tsx|mts|cts)$/,
   type: 'javascript/auto',
@@ -96,6 +118,7 @@ export const makeRspackBuildConfig = (
     entry: {
       [ClientEntryName]: entries.client,
     },
+    externals: [rejectBunModule],
     mode: 'production',
     module: {
       rules: [makeCssRule(root), makeSwcRule('browser')],
@@ -133,10 +156,7 @@ export const makeRspackBuildConfig = (
     entry: {
       [ServerEntryName]: entries.rsc,
     },
-    externals: [
-      ({ request }: { readonly request?: string }) =>
-        request?.startsWith('bun:') ? `module ${request}` : false,
-    ],
+    externals: [externalizeBunModule],
     mode: 'production',
     module: {
       rules: [

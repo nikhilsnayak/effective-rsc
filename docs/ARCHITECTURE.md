@@ -18,9 +18,12 @@ examples/kitchen-sink/  application example and integration fixture
 ```
 
 `effective-rsc` exposes one public root API under the `react-server` export condition. Importing the
-root from any other condition throws immediately with an unsupported-environment error. Its
-application, shared protocol, browser, server, and build graphs remain explicit. Browser code does
-not import server or build entries, and only the RSC graph resolves React's `react-server` condition.
+root from any other condition throws immediately with an unsupported-environment error. The `types`
+condition stays unconditional, so a non-RSC consumer type-checks against the full API and learns of
+the restriction when the import executes; declaring the unsupported shape instead would trade one
+clear runtime error for an unreadable authoring surface. Its application, shared protocol, browser,
+server, and build graphs remain explicit. Browser code does not import server or build entries, and
+only the RSC graph resolves React's `react-server` condition.
 
 The server owns HTTP negotiation, request scope, Flight rendering, HTML streaming, and Bun listening.
 The client owns Flight decoding, document hydration, and navigation. The build graph owns application
@@ -75,10 +78,15 @@ Every authored value carries its ERSC identity. Route composition rejects the wr
 value from another ERSC instance. Server Functions retain that identity across native invocation and
 execute only in the matching request runtime.
 
-The public Page, Routes, and Application values are opaque authoring handles. Routes exposes only
-`page` and `mount`; Page and Application expose only their type contracts. Internal compiler and
-server modules project those concrete handles into runtime state without a public field contract or
-a separate lookup registry.
+One property decides how a concern is represented: whether React consumes the authored value
+directly. Layout, Loading, and Component are rendered by React, and ServerFn is invoked through
+React's native reference protocol, so all four stay callable functions carrying a branded ERSC
+identity. Page, Routes, and Application are read only by ERSC itself, so they are opaque handles.
+Routes exposes only `page` and `mount`; Page and Application expose only their type contracts.
+Internal compiler and server modules project those handles into runtime state through an accessor,
+without a public field contract or a separate lookup registry. Page is the instructive case: React
+does render its component, but authors hand a Page to Routes and never to React, so the handle stays
+opaque and the component is projected out of it.
 
 Each ERSC module owns an AsyncLocalStorage context for its request runner. Flight rendering binds one
 FiberSet runner before React enters application code. Page, Layout, and Component operations retrieve

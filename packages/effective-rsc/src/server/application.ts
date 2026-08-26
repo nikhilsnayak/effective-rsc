@@ -8,7 +8,7 @@ import {
 } from 'effect/unstable/http';
 
 import { type ApplicationDefinition, getApplicationState } from '../application/definition';
-import { ERSCIdentityTypeId } from '../application/ersc-identity';
+import { getERSCIdentity } from '../application/ersc-identity';
 import type { PagePathParams } from '../application/page';
 import type { CompiledDestination } from '../application/route-graph';
 import { FrameworkAssetNamespace, isAbsolutePath } from '../application/route-path';
@@ -58,6 +58,7 @@ const httpLayer = <Services, ApplicationError>(
   application: ApplicationDefinition<Services, ApplicationError>,
 ) => {
   const applicationState = getApplicationState(application);
+  const identity = getERSCIdentity(application);
   const render = Effect.fnUntraced(function* ({
     destination,
     formState,
@@ -83,7 +84,7 @@ const httpLayer = <Services, ApplicationError>(
     const flightRenderer = yield* FlightRenderer;
     const flightStream = yield* flightRenderer.render({
       formState,
-      requestRuntime: applicationState[ERSCIdentityTypeId].requestRuntime,
+      requestRuntime: identity.requestRuntime,
       routeTree,
       serverFnResult,
       temporaryReferences,
@@ -118,7 +119,7 @@ const httpLayer = <Services, ApplicationError>(
         }),
       ),
       HttpRouter.route('POST', destination.pattern, (request) =>
-        handleServerFnRequest(request, applicationState[ERSCIdentityTypeId]).pipe(
+        handleServerFnRequest(request, identity).pipe(
           Effect.flatMap((result) =>
             render({
               ...result,

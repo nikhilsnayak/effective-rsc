@@ -48,7 +48,7 @@ implemented, accepted but not implemented, and intentionally outside the current
 | D-046 | Effect HTTP alone owns pattern matching; ERSC destinations stay matcher-neutral, while Pages explicitly own either no parameter Schema or one whose keys match the path parameter names. |
 | D-047 | Expose the package-root application API only under the `react-server` condition and throw immediately when imported from another runtime condition.                                      |
 | D-048 | Treat only `src/application.tsx` as a fixed application input; stylesheets are ordinary imports owned by the modules that use them.                                                      |
-| D-049 | Keep Page, Routes, and Application authoring handles opaque; compiler and server runtimes use explicit internal projections.                                                             |
+| D-049 | Keep a concern consumed directly by React's protocol a branded function; keep a concern only ERSC reads an opaque handle projected through an internal accessor.                         |
 | D-050 | Preserve `bun:*` imports as server externals and reject them when they enter the browser module graph.                                                                                   |
 | D-051 | Use the kitchen-sink conference as both the primary real-world example and the current end-to-end integration fixture, with agenda persistence backed by Effect SQL and Bun SQLite.      |
 

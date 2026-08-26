@@ -2,6 +2,7 @@ import { SqliteClient } from '@effect/sql-sqlite-bun';
 import { Layer } from 'effect';
 
 import { ERSC } from '@/ersc';
+import { ConferenceHomePage } from '@/modules/conference/components/conference-home';
 import ConferenceShell from '@/modules/conference/components/conference-shell';
 import { ConferenceRepository } from '@/modules/conference/repository';
 import { ConferenceService } from '@/modules/conference/service';
@@ -19,6 +20,8 @@ const ConferenceInfrastructureLayer = ConferenceRepository.layer.pipe(
 const ConferenceLayer = ConferenceService.layer.pipe(Layer.provide(ConferenceInfrastructureLayer));
 
 export default ERSC.make({
-  routes: ERSC.Routes.make({ layout: ConferenceShell }).mount('/schedule', scheduleRoutes),
+  routes: ERSC.Routes.make({ layout: ConferenceShell })
+    .page('/', ConferenceHomePage)
+    .mount('/schedule', scheduleRoutes),
   servicesLayer: ConferenceLayer,
 });

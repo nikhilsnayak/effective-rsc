@@ -16,6 +16,9 @@ export default defineConfig({
     'promise',
     'node',
   ],
+  rules: {
+    curly: 'error',
+  },
   options: {
     typeAware: true,
     typeCheck: true,

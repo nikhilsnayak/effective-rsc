@@ -5,6 +5,6 @@ import type { FlightPayload } from '../rsc/flight';
 export type RequestOutcome = {
   readonly formState: FlightPayload['formState'];
   readonly serverFnResult: FlightPayload['serverFnResult'];
-  readonly status: number;
+  readonly status: 200;
   readonly temporaryReferences?: TemporaryReferenceSet;
 };

@@ -28,6 +28,10 @@
   `Effect.fnUntraced` for internal operations with that shape.
 - Propagate request and navigation cancellation through Effect interruption and Web Streams. Do not
   detach work from its request scope without an explicit lifetime owner.
+- Throw a plain `TypeError` for programmer error: a contract that only a wiring mistake can violate,
+  such as a value from another ERSC module or a concern rendered outside its request runtime. Model
+  anything reachable from request input, I/O, or application code as a typed Effect failure. A throw
+  that request data can trigger is a bug in the boundary, not a style choice.
 - Preserve React's native RSC and Server Function protocols. Framework APIs may add Effect typing,
   validation, and lifecycle management but must not invent replacement transports.
 - Generated framework artifacts live under `.ersc/`; never hand-edit or import them across

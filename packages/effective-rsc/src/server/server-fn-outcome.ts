@@ -1,6 +1,7 @@
 import { Cause, Effect } from 'effect';
 
 import type { ServerFnResult } from '../rsc/flight';
+import type { RequestOutcome } from './request-outcome';
 
 export const serverFnOutcome = Effect.fnUntraced(function* <Output, Error, Requirements>(
   operation: Effect.Effect<Output, Error, Requirements>,
@@ -16,5 +17,5 @@ export const serverFnOutcome = Effect.fnUntraced(function* <Output, Error, Requi
         ? ({ _tag: 'Success', value: exit.value } satisfies ServerFnResult)
         : ({ _tag: 'Failure', error: Cause.squash(exit.cause) } satisfies ServerFnResult),
     status: 200,
-  };
+  } satisfies Pick<RequestOutcome, 'serverFnResult' | 'status'>;
 });

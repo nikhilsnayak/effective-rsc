@@ -1,10 +1,9 @@
-import { Effect, Predicate, Schema, type Types } from 'effect';
+import { Effect, Schema, type Types } from 'effect';
 import type { ReactNode } from 'react';
 
 import { type ERSCIdentity, ERSCIdentityTypeId, type ERSCMember } from './ersc-identity';
 import type { ValidRouteParamName } from './route-path';
 
-const PageRuntimeTypeId: unique symbol = Symbol.for('effective-rsc/PageConcern');
 declare const PageContractTypeId: unique symbol;
 
 export type PageParamsSchema<Services> = Schema.ConstraintCodec<
@@ -91,7 +90,6 @@ class PageDefinitionImpl<
     readonly mode: Types.Covariant<Mode>;
     readonly paramNames: Types.Covariant<ParamNames>;
   };
-  readonly [PageRuntimeTypeId] = PageRuntimeTypeId;
   readonly [ERSCIdentityTypeId]: ERSCIdentity<Services>;
 
   constructor(
@@ -104,10 +102,8 @@ class PageDefinitionImpl<
   }
 }
 
-export const isPageConcern = (value: unknown): value is AnyPageDefinition<unknown> =>
-  value instanceof PageDefinitionImpl &&
-  Predicate.hasProperty(value, PageRuntimeTypeId) &&
-  value[PageRuntimeTypeId] === PageRuntimeTypeId;
+export const isPageDefinition = (value: unknown): value is AnyPageDefinition<unknown> =>
+  value instanceof PageDefinitionImpl;
 
 const isPageImplementation = <Services>(
   page: AnyPageDefinition<Services>,

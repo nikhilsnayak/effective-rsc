@@ -3,7 +3,7 @@ import { expect, test, type APIRequestContext } from '@playwright/test';
 
 import { getText } from './support/http';
 
-const requestFlight = (request: APIRequestContext, pathname = '/') =>
+const requestFlight = (request: APIRequestContext, pathname = '/schedule/saturday') =>
   getText(request, pathname, { accept: 'text/x-component' });
 
 test('serves the complete application route tree through the native Flight protocol', async ({
@@ -36,7 +36,7 @@ test('serializes Client Components as native module references', async ({ reques
 test('isolates ERSC runtimes across concurrent Flight requests', async ({ request }) => {
   const [saturday, sunday] = await Promise.all([
     requestFlight(request),
-    requestFlight(request, '/schedule/day-two'),
+    requestFlight(request, '/schedule/sunday'),
   ]);
 
   expect(saturday.response.status()).toBe(200);

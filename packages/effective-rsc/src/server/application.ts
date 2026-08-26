@@ -1,10 +1,17 @@
 import { BunHttpServer } from '@effect/platform-bun';
-import { Effect, Layer, Stream } from 'effect';
-import { HttpRouter, HttpServerResponse, HttpStaticServer } from 'effect/unstable/http';
+import { Effect, Layer, Option, Stream } from 'effect';
+import {
+  HttpRouter,
+  HttpServerRequest,
+  HttpServerResponse,
+  HttpStaticServer,
+} from 'effect/unstable/http';
 
-import type { ApplicationDefinition } from '../application/definition';
+import { type ApplicationDefinition, renderRouteTree } from '../application/definition';
 import { ERSCIdentityTypeId } from '../application/ersc-identity';
-import { FrameworkAssetNamespace } from '../application/route-path';
+import type { PagePathParams } from '../application/page';
+import type { CompiledDestination } from '../application/route-graph';
+import { FrameworkAssetNamespace, isAbsolutePath } from '../application/route-path';
 import { FlightMediaType } from '../rsc/flight';
 import { FlightRendererLayer } from './flight';
 import { FlightRenderer } from './flight-renderer';
@@ -35,9 +42,11 @@ const BunServerLayer = Layer.unwrap(
   ),
 );
 
-type RenderOpts = RequestOutcome & {
-  readonly accept: string | undefined;
-  readonly pathname: `/${string}`;
+const EmptyPathParams: PagePathParams = Object.freeze({});
+
+type RenderOptions<Services> = RequestOutcome & {
+  readonly destination: CompiledDestination<Services>;
+  readonly request: HttpServerRequest.HttpServerRequest;
 };
 
 const fromWebStream = (stream: ReadableStream<Uint8Array>) =>
@@ -50,24 +59,37 @@ const httpLayer = <Services, ApplicationError>(
   application: ApplicationDefinition<Services, ApplicationError>,
 ) => {
   const render = Effect.fnUntraced(function* ({
-    accept,
+    destination,
     formState,
-    pathname,
+    request,
     serverFnResult,
     status,
     temporaryReferences,
-  }: RenderOpts) {
+  }: RenderOptions<Services>) {
+    const requestUrl = HttpServerRequest.toURL(request);
+    if (Option.isNone(requestUrl) || !isAbsolutePath(requestUrl.value.pathname)) {
+      return yield* Effect.die(
+        new TypeError(`Expected request URL "${request.originalUrl}" to contain an absolute path.`),
+      );
+    }
+
+    const pathParams =
+      destination.page.paramsSchema === null ? EmptyPathParams : yield* HttpRouter.params;
+    const routeTree = renderRouteTree({
+      destination,
+      pathParams,
+      pathname: requestUrl.value.pathname,
+    });
     const flightRenderer = yield* FlightRenderer;
     const flightStream = yield* flightRenderer.render({
-      renderRouteTree: application.renderRouteTree,
       formState,
-      pathname,
       requestRuntime: application[ERSCIdentityTypeId].requestRuntime,
+      routeTree,
       serverFnResult,
       temporaryReferences,
     });
 
-    if (accept?.includes(FlightMediaType)) {
+    if (request.headers['accept']?.includes(FlightMediaType)) {
       return HttpServerResponse.stream(fromWebStream(flightStream), {
         contentType: `${FlightMediaType};charset=utf-8`,
         status,
@@ -85,23 +107,23 @@ const httpLayer = <Services, ApplicationError>(
 
   const RequestLayer = Layer.mergeAll(RenderersLayer, application.servicesLayer);
   const ApplicationRoutesLayer = HttpRouter.addAll(
-    application.paths.flatMap((pathname) => [
-      HttpRouter.route('GET', pathname, (request) =>
+    application.routes.flatMap((destination) => [
+      HttpRouter.route('GET', destination.pattern, (request) =>
         render({
-          accept: request.headers['accept'],
+          destination,
           formState: null,
-          pathname,
+          request,
           serverFnResult: null,
           status: 200,
         }),
       ),
-      HttpRouter.route('POST', pathname, (request) =>
+      HttpRouter.route('POST', destination.pattern, (request) =>
         handleServerFnRequest(request, application[ERSCIdentityTypeId]).pipe(
           Effect.flatMap((result) =>
             render({
               ...result,
-              accept: request.headers['accept'],
-              pathname,
+              destination,
+              request,
             }),
           ),
           Effect.catchTag('ServerFnRequestError', (error) =>

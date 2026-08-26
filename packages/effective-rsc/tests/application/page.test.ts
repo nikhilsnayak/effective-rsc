@@ -1,5 +1,16 @@
 import { describe, expect, it } from '@effect/vitest';
-import { Context, Deferred, Effect, Exit, FiberSet, Layer, Ref, Scope } from 'effect';
+import {
+  Context,
+  Deferred,
+  Effect,
+  Exit,
+  FiberSet,
+  Layer,
+  Ref,
+  Schema,
+  SchemaTransformation,
+  Scope,
+} from 'effect';
 
 import { Application } from '../../src/application/ersc';
 import { ERSCIdentityTypeId } from '../../src/application/ersc-identity';
@@ -12,6 +23,30 @@ const ERSC = Application.ersc<Greeting>();
 const RootLayout = ERSC.Layout.make({ render: ({ children }) => Effect.succeed(children) });
 
 describe('ERSC.Page.make', () => {
+  it.effect('decodes dynamic route params before invoking the render operation', () =>
+    Effect.gen(function* () {
+      const runtime = yield* FiberSet.makeRuntimePromise<Greeting>();
+      const PageComponent = ERSC.Page.make({
+        params: Schema.Struct({
+          day: Schema.Literals(['saturday', 'sunday']),
+        }),
+        render: Effect.fnUntraced(function* ({ params }) {
+          const greeting = yield* Greeting;
+          return `${greeting.value} ${params.day}`;
+        }),
+      });
+      const rendered = yield* Effect.promise(() =>
+        PageComponent[ERSCIdentityTypeId].requestRuntime.bind(runtime, () =>
+          PageComponent.component({ params: { day: 'sunday' } }),
+        ),
+      );
+
+      expect(rendered).toBe('hello sunday');
+      expect(PageComponent.paramsSchema).not.toBeNull();
+      expect(Object.isFrozen(PageComponent)).toBe(true);
+    }).pipe(Effect.provideService(Greeting, { value: 'hello' })),
+  );
+
   it.effect('runs an Effect.fnUntraced operation with request services', () =>
     Effect.gen(function* () {
       const runtime = yield* FiberSet.makeRuntimePromise<Greeting>();
@@ -27,11 +62,40 @@ describe('ERSC.Page.make', () => {
       });
 
       const rendered = yield* Effect.promise(() =>
-        App[ERSCIdentityTypeId].requestRuntime.bind(runtime, PageComponent),
+        App[ERSCIdentityTypeId].requestRuntime.bind(runtime, () =>
+          PageComponent.component({ params: {} }),
+        ),
       );
 
       expect(rendered).toBe('hello from the request');
+      expect(PageComponent.paramsSchema).toBeNull();
     }).pipe(Effect.provideService(Greeting, { value: 'hello from the request' })),
+  );
+
+  it.effect('decodes encoded path keys into the Schema output consumed by render', () =>
+    Effect.gen(function* () {
+      const runtime = yield* FiberSet.makeRuntimePromise<never>();
+      const TransformERSC = Application.ersc();
+      const PageComponent = TransformERSC.Page.make({
+        params: Schema.Struct({ slug: Schema.String }).pipe(
+          Schema.decodeTo(
+            Schema.Struct({ id: Schema.String }),
+            SchemaTransformation.transform({
+              decode: ({ slug }) => ({ id: slug }),
+              encode: ({ id }) => ({ slug: id }),
+            }),
+          ),
+        ),
+        render: ({ params }) => Effect.succeed(params.id),
+      });
+      const rendered = yield* Effect.promise(() =>
+        PageComponent[ERSCIdentityTypeId].requestRuntime.bind(runtime, () =>
+          PageComponent.component({ params: { slug: 'opening-keynote' } }),
+        ),
+      );
+
+      expect(rendered).toBe('opening-keynote');
+    }),
   );
 
   it.effect('interrupts the page operation when its request scope closes', () =>
@@ -54,10 +118,12 @@ describe('ERSC.Page.make', () => {
       const App = InterruptERSC.make({
         routes: InterruptERSC.Routes.make({ layout: InterruptLayout }).page('/', InterruptPage),
       });
-      const execution = App[ERSCIdentityTypeId].requestRuntime.bind(runtime, InterruptPage).then(
-        () => 'completed' as const,
-        () => 'interrupted' as const,
-      );
+      const execution = App[ERSCIdentityTypeId].requestRuntime
+        .bind(runtime, () => InterruptPage.component({ params: {} }))
+        .then(
+          () => 'completed' as const,
+          () => 'interrupted' as const,
+        );
 
       yield* Deferred.await(started);
       yield* Scope.close(scope, Exit.void);

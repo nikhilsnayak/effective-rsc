@@ -4,8 +4,8 @@ import { expect, test } from '@playwright/test';
 import { getText } from './support/http';
 
 test('renders every declared route as HTML and Flight', async ({ request }) => {
-  const html = await getText(request, '/schedule/day-two?source=integration');
-  const flight = await getText(request, '/schedule/day-two', { accept: 'text/x-component' });
+  const html = await getText(request, '/schedule/sunday?source=integration');
+  const flight = await getText(request, '/schedule/sunday', { accept: 'text/x-component' });
 
   expect(html.response.status()).toBe(200);
   expect(html.body).toContain('<title>Converge 2026 — Conference schedule</title>');

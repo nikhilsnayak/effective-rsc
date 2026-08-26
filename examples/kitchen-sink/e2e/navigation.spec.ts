@@ -11,13 +11,13 @@ test('moves between conference days through the composed schedule', async ({ pag
   let navigationFlightFinished = false;
   page.on('requestfinished', (request) => {
     if (
-      new URL(request.url()).pathname === '/schedule/day-two' &&
+      new URL(request.url()).pathname === '/schedule/sunday' &&
       isNavigationFlightRequest(request)
     ) {
       navigationFlightFinished = true;
     }
   });
-  await page.goto('/');
+  await page.goto('/schedule/saturday');
   await page.evaluate(() => Reflect.set(window, '__ersc_document_marker__', true));
   const conferenceNavigation = page.getByRole('navigation', { name: 'Conference schedule' });
   await conferenceNavigation.evaluate((element) =>
@@ -25,7 +25,7 @@ test('moves between conference days through the composed schedule', async ({ pag
   );
   const flightRequest = page.waitForRequest(
     (request) =>
-      new URL(request.url()).pathname === '/schedule/day-two' && isNavigationFlightRequest(request),
+      new URL(request.url()).pathname === '/schedule/sunday' && isNavigationFlightRequest(request),
   );
   await page
     .getByRole('link', { name: 'See Sunday' })
@@ -35,7 +35,7 @@ test('moves between conference days through the composed schedule', async ({ pag
   await expect(page.getByRole('main', { name: 'Loading schedule' })).toBeVisible({
     timeout: 1_500,
   });
-  await expect(page).toHaveURL('/schedule/day-two');
+  await expect(page).toHaveURL('/schedule/sunday');
   await expect(page.getByRole('heading', { level: 1, name: 'Saturday schedule' })).toBeHidden();
   await expect(page.getByRole('heading', { level: 1, name: 'Sunday schedule' })).toBeHidden();
   expect(navigationFlightFinished).toBe(false);
@@ -56,17 +56,18 @@ test('streams effectful speaker leaves independently within the conference sched
   page,
 }) => {
   const browserErrors = observeBrowserErrors(page);
-  await page.goto('/');
+  await page.goto('/schedule/saturday');
 
   await page
     .getByRole('link', { name: 'See Sunday' })
     .evaluate((element: HTMLAnchorElement) => element.click());
 
   await expect(page.getByRole('heading', { level: 1, name: 'Sunday schedule' })).toBeVisible();
-  await expect(page.getByLabel('Loading speaker').first()).toBeVisible();
-  await expect(page.locator('[data-speaker-id="rohan-mehta"]')).toBeVisible();
+  const firstSpeaker = page.locator('[data-speaker-id="rohan-mehta"]');
+  const lastSpeaker = page.locator('[data-speaker-id="jonah-kim"]');
+  await expect(firstSpeaker).toBeVisible();
+  await expect(lastSpeaker).toBeHidden();
   await expect(page.locator('[data-speaker-id="anika-rao"]')).toBeVisible();
-  await expect(page.locator('[data-speaker-id="jonah-kim"]')).toBeVisible();
-  await expect(page.getByLabel('Loading speaker')).toHaveCount(0);
+  await expect(lastSpeaker).toBeVisible();
   expect(browserErrors).toEqual([]);
 });

@@ -14,3 +14,8 @@ undefined.
 How should development diagnose an `ERSC.Loading.make` renderer that calls `use` or otherwise throws a
 thenable internally? Its declared renderer rejects Promise and Effect outputs, but TypeScript cannot
 detect suspension hidden inside synchronous code.
+
+## OQ-003 — Route parameter failures and search params
+
+How should a matched parameterized Page's path-parameter Schema rejection map to NotFound or another
+expected failure, and how should Pages declare and decode typed search parameters?

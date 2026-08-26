@@ -78,19 +78,36 @@ FiberSet runner before React enters application code. Page, Layout, and Componen
 that runner without prop threading, while the FiberSet keeps their Effects attached to the HTTP
 request lifetime.
 
+Pages are explicit ERSC concerns with one ordinary parameter contract: `paramsSchema` is `null` for
+`Page.make({ render })` and is the authored Effect Schema for `Page.make({ params, render })`. The
+parameterized Page's render operation receives decoded `params`, and Routes type-checks the Schema's
+encoded object keys against the Page path parameters. Parameter Schemas must expose a finite,
+non-empty key set whose encoded fields can accept strings; transformations may produce a different
+decoded object for the render operation.
+
 ## Routes and Flight model
 
-`Routes.make` builds immutable route values. `page(path, Page)` adds a destination and
+`Routes.make` builds immutable route values. `page(path, Page)` adds an Effect HTTP route pattern and
 `mount(prefix, routes)` mounts a non-empty child graph from the same ERSC identity. Nested routes may
 own Layout, Loading, both, or neither; the application root requires a Layout and at least one Page.
+`:parameter` segments belong to Page paths; mount prefixes remain parameter-free so a mounted Routes
+DAG has one unambiguous parameter owner. ERSC does not classify destinations as static, dynamic, or
+catch-all: matcher syntax and selection belong to Effect HTTP.
 
-Composition rejects invalid path syntax, duplicate paths, empty mounts, invalid concern combinations,
-and the reserved `/_ersc/assets` namespace. The current compiler registers authored exact paths
-directly with Effect HTTP, with no second runtime matcher.
+Composition requires literal canonical paths and rejects invalid syntax, duplicate paths, empty
+mounts, erased Page or Routes contracts, and invalid concern combinations. Patterns that differ only
+by parameter name or static-segment casing conflict because Effect HTTP matches them identically.
+Any pattern capable of matching the reserved `/_ersc/assets` namespace is rejected, including a
+parameterized overlap. The compiler registers authored patterns directly with Effect HTTP, with no
+second runtime matcher.
 
-Compilation flattens each destination and its ordered Layout/Loading ancestry into a lookup table. A
-mounted Routes value can appear under more than one prefix, so each destination owns its ancestry. A
-lookup produces one unary tree:
+Compilation flattens the route graph into destination values containing only the Effect HTTP pattern,
+Page, and ordered Layout/Loading ancestry. A mounted Routes value can appear under more than one
+parameter-free prefix, so each destination owns its ancestry. Each registered Effect HTTP handler
+closes over its destination. Parameter-free Pages use an empty parameter record without reading
+router context; parameterized Pages receive the parameters captured by Effect HTTP and decode them
+with their Schema in the request runtime. One shared renderer turns the matched destination into a
+unary tree:
 
 ```text
 Layout -> optional Loading -> nested scope -> ... -> Page
@@ -98,13 +115,15 @@ Layout -> optional Loading -> nested scope -> ... -> Page
 
 Each Flight node contains an opaque React `id`, Server Component content, and an optional child. IDs
 encode identity for reconciliation but are not parsed as protocol data. Every request still carries
-one complete route tree; there is no partial patch transport.
+one complete route tree; there is no partial patch transport. Unknown patterns retain Effect HTTP's
+native `404`. Mapping a matched Page's Schema rejection to NotFound or another expected failure
+remains open.
 
 ## Initial document
 
 ```text
 request
-  -> Effect HTTP route and request scope
+  -> Effect HTTP route pattern, captured params, and request scope
   -> RSC renders { routeTree, formState } as native Flight
   -> split Flight stream
        -> SSR decodes it and Fizz streams HTML

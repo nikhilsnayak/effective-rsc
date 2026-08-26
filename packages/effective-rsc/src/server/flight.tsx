@@ -7,10 +7,9 @@ import { FlightRenderer, type FlightRenderOptions } from './flight-renderer';
 const make = Effect.succeed(
   FlightRenderer.of({
     render: Effect.fn('FlightRenderer.render')(function* <Services>({
-      renderRouteTree,
       formState,
-      pathname,
       requestRuntime,
+      routeTree,
       serverFnResult,
       temporaryReferences,
     }: FlightRenderOptions<Services>) {
@@ -19,7 +18,7 @@ const make = Effect.succeed(
       return requestRuntime.bind(runtime, () => {
         const payload = {
           formState,
-          routeTree: renderRouteTree({ pathname }),
+          routeTree,
           serverFnResult,
         } satisfies FlightPayload;
 

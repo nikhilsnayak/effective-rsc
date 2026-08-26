@@ -9,8 +9,13 @@ export type RouteTreeModel = {
   readonly id: string;
 };
 
-const destinationId = (node: RouteTreeModel): string =>
-  node.child === null ? node.id : destinationId(node.child);
+const destinationId = (root: RouteTreeModel): string => {
+  let node = root;
+  while (node.child !== null) {
+    node = node.child;
+  }
+  return node.id;
+};
 
 /**
  * Retains revealed content only for the same authored Layout scope while publishing a different
@@ -21,18 +26,29 @@ export const retainSharedLayoutContent = (
   current: RouteTreeModel,
   destination: RouteTreeModel,
 ): RouteTreeModel => {
-  if (destinationId(current) === destinationId(destination) || current.id !== destination.id) {
+  if (destinationId(current) === destinationId(destination)) {
     return destination;
   }
 
-  return {
-    child:
-      current.child === null || destination.child === null
-        ? destination.child
-        : retainSharedLayoutContent(current.child, destination.child),
-    content: current.content,
-    id: destination.id,
+  const retainSharedLayouts = (
+    currentNode: RouteTreeModel,
+    destinationNode: RouteTreeModel,
+  ): RouteTreeModel => {
+    if (currentNode.id !== destinationNode.id) {
+      return destinationNode;
+    }
+
+    return {
+      child:
+        currentNode.child === null || destinationNode.child === null
+          ? destinationNode.child
+          : retainSharedLayouts(currentNode.child, destinationNode.child),
+      content: currentNode.content,
+      id: destinationNode.id,
+    };
   };
+
+  return retainSharedLayouts(current, destination);
 };
 
 type RouteNodeRendererProps = {

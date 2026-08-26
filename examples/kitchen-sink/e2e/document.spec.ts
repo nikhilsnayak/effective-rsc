@@ -11,7 +11,7 @@ const readRenderTimestamp = (html: string, attribute: string) => {
 };
 
 test('streams a complete React document with its hydration payload', async ({ request }) => {
-  const { body: html, response } = await getText(request, '/');
+  const { body: html, response } = await getText(request, '/schedule/saturday');
 
   expect(response.status()).toBe(200);
   expect(response.headers()['content-type']).toBe('text/html;charset=utf-8');
@@ -25,14 +25,14 @@ test('streams a complete React document with its hydration payload', async ({ re
 });
 
 test('reveals the loading UI before the suspended schedule', async ({ page }) => {
-  await page.goto('/', { waitUntil: 'commit' });
+  await page.goto('/schedule/saturday', { waitUntil: 'commit' });
 
   await expect(page.getByText('Loading conference schedule...')).toBeVisible();
   await expect(page.getByRole('heading', { level: 1, name: 'Saturday schedule' })).toBeVisible();
 });
 
 test('starts independent route concerns concurrently', async ({ request }) => {
-  const { body: html } = await getText(request, '/');
+  const { body: html } = await getText(request, '/schedule/saturday');
   const latestStart = Math.max(
     readRenderTimestamp(html, 'data-conference-started-at'),
     readRenderTimestamp(html, 'data-schedule-started-at'),

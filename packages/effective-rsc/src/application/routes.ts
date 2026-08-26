@@ -2,49 +2,88 @@ import type { ERSCIdentity, ERSCMember } from './ersc-identity';
 import { ERSCIdentityTypeId } from './ersc-identity';
 import { isLayoutConcern, type LayoutComponent } from './layout';
 import { isLoadingConcern, type LoadingComponent } from './loading';
-import { isPageConcern, type PageComponent } from './page';
+import { type AnyPageDefinition, isPageConcern, type PageConcern } from './page';
 import {
+  type AbsolutePath,
+  analyzeRoutePath,
   joinRoutePaths,
   type JoinPath,
-  type StaticPath,
-  validateStaticPath,
-  type ValidStaticPath,
+  type RouteParamNames,
+  type RouteShape,
+  type ValidRoutePath,
 } from './route-path';
 
 declare const RoutesTypeId: unique symbol;
 
 export const RoutesScopeIdTypeId: unique symbol = Symbol('effective-rsc/RoutesScopeId');
 
-type RoutesState<HasLayout extends boolean, Paths extends string> = {
+type RoutesState<HasLayout extends boolean, Paths extends AbsolutePath> = {
   readonly hasLayout: HasLayout;
   readonly paths: Paths;
 };
 
-type MountedPaths<Prefix extends StaticPath, Child> =
-  RoutesPaths<Child> extends infer Path extends StaticPath ? JoinPath<Prefix, Path> : never;
+type MountedPaths<Prefix extends AbsolutePath, Child> =
+  RoutesPaths<Child> extends infer Path extends AbsolutePath ? JoinPath<Prefix, Path> : never;
 
-type NoPathCollision<Current extends string, Added extends string> = [
-  Extract<Current, Added>,
+type RouteShapes<Paths extends AbsolutePath> = Paths extends AbsolutePath
+  ? RouteShape<Paths>
+  : never;
+
+type NoPathCollision<Current extends AbsolutePath, Added extends AbsolutePath> = [
+  Extract<RouteShapes<Current>, RouteShapes<Added>>,
 ] extends [never]
   ? unknown
   : never;
 
-type NonEmptyRoutes<Definition> = [RoutesPaths<Definition>] extends [never] ? never : unknown;
+type PageParamNames<Page> = Page extends PageConcern<infer ParamNames> ? ParamNames : never;
+
+type PageParamsSchema<Page> = Page extends { readonly paramsSchema: infer ParamsSchema }
+  ? ParamsSchema
+  : never;
+
+type ExactPageParamNames<Path extends AbsolutePath, Page> = [RouteParamNames<Path>] extends [
+  PageParamNames<Page>,
+]
+  ? [PageParamNames<Page>] extends [RouteParamNames<Path>]
+    ? unknown
+    : never
+  : never;
+
+type MatchingPageParams<Path extends AbsolutePath, Page> = [PageParamsSchema<Page>] extends [null]
+  ? [RouteParamNames<Path>] extends [never]
+    ? unknown
+    : never
+  : [null] extends [PageParamsSchema<Page>]
+    ? never
+    : [RouteParamNames<Path>] extends [never]
+      ? never
+      : ExactPageParamNames<Path, Page>;
+
+type StaticMountPath<Path extends AbsolutePath> = [RouteParamNames<Path>] extends [never]
+  ? unknown
+  : never;
+
+type KnownNonEmptyRoutes<Definition> =
+  AbsolutePath extends RoutesPaths<Definition>
+    ? never
+    : [RoutesPaths<Definition>] extends [never]
+      ? never
+      : unknown;
 
 export type RoutesPage<Services> = {
-  readonly page: PageComponent<Services>;
-  readonly path: StaticPath;
+  readonly page: AnyPageDefinition<Services>;
+  readonly path: AbsolutePath;
 };
 
 export type RoutesMount<Services> = {
-  readonly path: StaticPath;
+  readonly path: AbsolutePath;
   readonly routes: AnyRoutes<Services>;
 };
 
 export interface RoutesDefinition<
   Services,
   out HasLayout extends boolean,
-  out Paths extends string,
+  out Paths extends AbsolutePath,
 > extends ERSCMember<Services> {
   readonly [RoutesTypeId]: RoutesState<HasLayout, Paths>;
   readonly [RoutesScopeIdTypeId]: number;
@@ -52,23 +91,25 @@ export interface RoutesDefinition<
   readonly loading: LoadingComponent<Services> | null;
   readonly mounts: ReadonlyArray<RoutesMount<Services>>;
   readonly pages: ReadonlyArray<RoutesPage<Services>>;
-  readonly paths: ReadonlyArray<StaticPath>;
+  readonly paths: ReadonlyArray<AbsolutePath>;
 
-  page<const Path extends StaticPath>(
-    path: Path & ValidStaticPath<Path> & NoPathCollision<Paths, Path>,
-    page: PageComponent<Services>,
+  page<const Path extends AbsolutePath, const Page extends AnyPageDefinition<Services>>(
+    path: Path & ValidRoutePath<Path> & NoPathCollision<Paths, Path>,
+    page: Page & MatchingPageParams<Path, Page>,
   ): RoutesDefinition<Services, HasLayout, Paths | Path>;
 
-  mount<const Prefix extends StaticPath, const Child extends AnyRoutes<Services>>(
-    path: Prefix & ValidStaticPath<Prefix>,
-    routes: Child & NonEmptyRoutes<Child> & NoPathCollision<Paths, MountedPaths<Prefix, Child>>,
+  mount<const Prefix extends AbsolutePath, const Child extends AnyRoutes<Services>>(
+    path: Prefix & ValidRoutePath<Prefix> & StaticMountPath<Prefix>,
+    routes: Child &
+      KnownNonEmptyRoutes<Child> &
+      NoPathCollision<Paths, MountedPaths<Prefix, Child>>,
   ): RoutesDefinition<Services, HasLayout, Paths | MountedPaths<Prefix, Child>>;
 }
 
-export type AnyRoutes<Services> = RoutesDefinition<Services, boolean, string>;
+export type AnyRoutes<Services> = RoutesDefinition<Services, boolean, AbsolutePath>;
 
 export type RoutesHasLayout<Definition> = Definition extends {
-  readonly [RoutesTypeId]: RoutesState<infer HasLayout, string>;
+  readonly [RoutesTypeId]: RoutesState<infer HasLayout, AbsolutePath>;
 }
   ? HasLayout
   : never;
@@ -91,14 +132,15 @@ type RuntimeRoutesOptions<Services> = {
   readonly loading: LoadingComponent<Services> | null;
   readonly mounts: ReadonlyArray<RoutesMount<Services>>;
   readonly pages: ReadonlyArray<RoutesPage<Services>>;
-  readonly paths: ReadonlyArray<StaticPath>;
+  readonly paths: ReadonlyArray<AbsolutePath>;
+  readonly routeShapes: ReadonlySet<string>;
   readonly scopeId: number;
 };
 
 class RoutesDefinitionImpl<
   Services,
   HasLayout extends boolean,
-  Paths extends string,
+  Paths extends AbsolutePath,
 > implements RoutesDefinition<Services, HasLayout, Paths> {
   declare readonly [RoutesTypeId]: RoutesState<HasLayout, Paths>;
 
@@ -108,12 +150,12 @@ class RoutesDefinitionImpl<
   readonly loading: LoadingComponent<Services> | null;
   readonly mounts: ReadonlyArray<RoutesMount<Services>>;
   readonly pages: ReadonlyArray<RoutesPage<Services>>;
-  readonly paths: ReadonlyArray<StaticPath>;
-  readonly #pathSet: ReadonlySet<StaticPath>;
+  readonly paths: ReadonlyArray<AbsolutePath>;
+  readonly #routeShapes: ReadonlySet<string>;
 
   constructor(
     identity: ERSCIdentity<Services>,
-    { layout, loading, mounts, pages, paths, scopeId }: RuntimeRoutesOptions<Services>,
+    { layout, loading, mounts, pages, paths, routeShapes, scopeId }: RuntimeRoutesOptions<Services>,
   ) {
     this[ERSCIdentityTypeId] = identity;
     this[RoutesScopeIdTypeId] = scopeId;
@@ -122,17 +164,17 @@ class RoutesDefinitionImpl<
     this.mounts = mounts;
     this.pages = pages;
     this.paths = paths;
-    this.#pathSet = new Set(paths);
+    this.#routeShapes = routeShapes;
     Object.freeze(this);
   }
 
-  page<const Path extends StaticPath>(
-    path: Path & ValidStaticPath<Path> & NoPathCollision<Paths, Path>,
-    page: PageComponent<Services>,
+  page<const Path extends AbsolutePath, const Page extends AnyPageDefinition<Services>>(
+    path: Path & ValidRoutePath<Path> & NoPathCollision<Paths, Path>,
+    page: Page & MatchingPageParams<Path, Page>,
   ): RoutesDefinitionImpl<Services, HasLayout, Paths | Path> {
-    validateStaticPath(path);
-    if (this.#pathSet.has(path)) {
-      throw new TypeError(`Static route "${path}" is declared more than once.`);
+    const route = analyzeRoutePath(path);
+    if (this.#routeShapes.has(route.shape)) {
+      throw new TypeError(`Route "${path}" conflicts with an existing route pattern.`);
     }
     if (!isPageConcern(page)) {
       throw new TypeError(`Page for "${path}" must be created with ERSC.Page.make.`);
@@ -140,22 +182,37 @@ class RoutesDefinitionImpl<
     if (page[ERSCIdentityTypeId] !== this[ERSCIdentityTypeId]) {
       throw new TypeError(`Page for "${path}" was created by a different ERSC module.`);
     }
+    if (route._tag === 'ParameterFree' && page.paramsSchema !== null) {
+      throw new TypeError(`Parameterized Page for "${path}" requires route parameters.`);
+    }
+    if (route._tag === 'Parameterized' && page.paramsSchema === null) {
+      throw new TypeError(`Page for "${path}" must declare a parameter Schema.`);
+    }
+
+    const routeShapes = new Set(this.#routeShapes);
+    routeShapes.add(route.shape);
 
     return new RoutesDefinitionImpl(this[ERSCIdentityTypeId], {
       layout: this.layout,
       loading: this.loading,
       mounts: this.mounts,
-      pages: Object.freeze([...this.pages, { page, path }]),
+      pages: Object.freeze([...this.pages, Object.freeze({ page, path })]),
       paths: Object.freeze([...this.paths, path]),
+      routeShapes,
       scopeId: this[RoutesScopeIdTypeId],
     });
   }
 
-  mount<const Prefix extends StaticPath, const Child extends AnyRoutes<Services>>(
-    path: Prefix & ValidStaticPath<Prefix>,
-    routes: Child & NonEmptyRoutes<Child> & NoPathCollision<Paths, MountedPaths<Prefix, Child>>,
+  mount<const Prefix extends AbsolutePath, const Child extends AnyRoutes<Services>>(
+    path: Prefix & ValidRoutePath<Prefix> & StaticMountPath<Prefix>,
+    routes: Child &
+      KnownNonEmptyRoutes<Child> &
+      NoPathCollision<Paths, MountedPaths<Prefix, Child>>,
   ): RoutesDefinitionImpl<Services, HasLayout, Paths | MountedPaths<Prefix, Child>> {
-    validateStaticPath(path);
+    const route = analyzeRoutePath(path);
+    if (route._tag === 'Parameterized') {
+      throw new TypeError(`Routes cannot be mounted beneath parameterized path "${path}".`);
+    }
     if (routes.paths.length === 0) {
       throw new TypeError(`Cannot mount empty Routes at "${path}".`);
     }
@@ -164,17 +221,22 @@ class RoutesDefinitionImpl<
     }
 
     const mountedPaths = routes.paths.map((childPath) => joinRoutePaths(path, childPath));
-    const duplicatePath = mountedPaths.find((mountedPath) => this.#pathSet.has(mountedPath));
-    if (duplicatePath !== undefined) {
-      throw new TypeError(`Static route "${duplicatePath}" is declared more than once.`);
+    const routeShapes = new Set(this.#routeShapes);
+    for (const mountedPath of mountedPaths) {
+      const shape = analyzeRoutePath(mountedPath).shape;
+      if (routeShapes.has(shape)) {
+        throw new TypeError(`Route "${mountedPath}" conflicts with an existing route pattern.`);
+      }
+      routeShapes.add(shape);
     }
 
     return new RoutesDefinitionImpl(this[ERSCIdentityTypeId], {
       layout: this.layout,
       loading: this.loading,
-      mounts: Object.freeze([...this.mounts, { path, routes }]),
+      mounts: Object.freeze([...this.mounts, Object.freeze({ path, routes })]),
       pages: this.pages,
       paths: Object.freeze([...this.paths, ...mountedPaths]),
+      routeShapes,
       scopeId: this[RoutesScopeIdTypeId],
     });
   }
@@ -225,6 +287,7 @@ export const makeRoutesFactory = <Services>(
       mounts: Object.freeze([]),
       pages: Object.freeze([]),
       paths: Object.freeze([]),
+      routeShapes: new Set(),
       scopeId,
     });
   }

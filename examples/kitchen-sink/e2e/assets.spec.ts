@@ -21,8 +21,10 @@ const readClientModulePaths = (flight: string) =>
 test('serves every stylesheet and client module referenced by the document', async ({
   request,
 }) => {
-  const { body: html } = await getText(request, '/');
-  const { body: flight } = await getText(request, '/', { accept: 'text/x-component' });
+  const { body: html } = await getText(request, '/schedule/saturday');
+  const { body: flight } = await getText(request, '/schedule/saturday', {
+    accept: 'text/x-component',
+  });
   const stylesheetPaths = [...html.matchAll(/<link[^>]+rel="stylesheet"[^>]+href="([^"]+\.css)"/g)]
     .map((match) => match[1])
     .filter((path): path is string => path !== undefined);

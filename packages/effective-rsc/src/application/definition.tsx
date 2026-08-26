@@ -2,21 +2,15 @@ import { Layer } from 'effect';
 import { Suspense } from 'react';
 
 import { type ERSCIdentity, ERSCIdentityTypeId } from './ersc-identity';
-import { compileRouteGraph } from './route-graph';
-import type { ReservedPath, StaticPath } from './route-path';
+import { type PagePathParams } from './page';
+import { type CompiledDestination, compileRouteGraph } from './route-graph';
+import type { AbsolutePath, ReservedRoutePath } from './route-path';
 import { RouteOutlet, type RouteTreeModel } from './route-tree';
 import { type AnyRoutes, type RoutesHasLayout, type RoutesPaths } from './routes';
 
-type ApplicationComponentProps = {
-  readonly pathname: StaticPath;
-};
-
-export type ApplicationRouteTreeRenderer = (props: ApplicationComponentProps) => RouteTreeModel;
-
 export type ApplicationDefinition<Services, ApplicationError = never> = {
   readonly [ERSCIdentityTypeId]: ERSCIdentity<Services>;
-  readonly paths: ReadonlyArray<StaticPath>;
-  readonly renderRouteTree: ApplicationRouteTreeRenderer;
+  readonly routes: ReadonlyArray<CompiledDestination<Services>>;
   readonly servicesLayer: Layer.Layer<Services, ApplicationError>;
 };
 
@@ -29,10 +23,12 @@ type ValidRootRoutes<Services, Definition extends AnyRoutes<Services>> =
   RoutesHasLayout<Definition> extends true
     ? [RoutesPaths<Definition>] extends [never]
       ? never
-      : [Extract<RoutesPaths<Definition>, ReservedPath>] extends [never]
+      : [ReservedRoutes<RoutesPaths<Definition>>] extends [never]
         ? unknown
         : never
     : never;
+
+type ReservedRoutes<Paths> = Paths extends AbsolutePath ? ReservedRoutePath<Paths> : never;
 
 type ServicesLayerOptions<Services, ApplicationError> = [Services] extends [never]
   ? { readonly servicesLayer?: Layer.Layer<never, ApplicationError> }
@@ -60,11 +56,59 @@ function resolveServicesLayer(servicesLayer: Layer.Any | undefined): Layer.Any {
   return servicesLayer ?? Layer.empty;
 }
 
-const layoutNodeId = (scopeId: string) => `layout:${scopeId}`;
+type RenderRouteTreeOptions<Services> = {
+  readonly destination: CompiledDestination<Services>;
+  readonly pathname: AbsolutePath;
+  readonly pathParams: PagePathParams;
+};
 
-const loadingNodeId = (scopeId: string, pathname: StaticPath) => `loading:${scopeId}:${pathname}`;
+export const renderRouteTree = <Services,>({
+  destination,
+  pathname,
+  pathParams,
+}: RenderRouteTreeOptions<Services>): RouteTreeModel => {
+  const Page = destination.page.component;
+  let tree: RouteTreeModel = {
+    child: null,
+    content: <Page params={pathParams} />,
+    id: `page:${pathname}`,
+  };
 
-const pageNodeId = (pathname: StaticPath) => `page:${pathname}`;
+  for (let index = destination.scopes.length - 1; index >= 0; index--) {
+    const scope = destination.scopes[index];
+    if (scope === undefined) {
+      continue;
+    }
+
+    if (scope.loading !== null) {
+      const Loading = scope.loading;
+      tree = {
+        child: tree,
+        content: (
+          <Suspense fallback={<Loading />}>
+            <RouteOutlet />
+          </Suspense>
+        ),
+        id: `loading:${scope.id}:${pathname}`,
+      };
+    }
+
+    if (scope.layout !== null) {
+      const Layout = scope.layout;
+      tree = {
+        child: tree,
+        content: (
+          <Layout>
+            <RouteOutlet />
+          </Layout>
+        ),
+        id: `layout:${scope.id}`,
+      };
+    }
+  }
+
+  return tree;
+};
 
 export const makeApplication = <
   Services,
@@ -78,61 +122,9 @@ export const makeApplication = <
     throw new TypeError('Root Routes were created by a different ERSC module.');
   }
 
-  const routeGraph = compileRouteGraph(routes);
-
-  function renderRouteTree({ pathname }: ApplicationComponentProps) {
-    const route = routeGraph.route(pathname);
-    if (route === undefined) {
-      throw new TypeError(`No static route is registered for "${pathname}".`);
-    }
-
-    const Page = route.page;
-    let tree: RouteTreeModel = {
-      child: null,
-      content: <Page />,
-      id: pageNodeId(pathname),
-    };
-
-    for (let index = route.scopes.length - 1; index >= 0; index--) {
-      const scope = route.scopes[index];
-      if (scope === undefined) {
-        continue;
-      }
-
-      if (scope.loading !== null) {
-        const Loading = scope.loading;
-        tree = {
-          child: tree,
-          content: (
-            <Suspense fallback={<Loading />}>
-              <RouteOutlet />
-            </Suspense>
-          ),
-          id: loadingNodeId(scope.id, pathname),
-        };
-      }
-
-      if (scope.layout !== null) {
-        const Layout = scope.layout;
-        tree = {
-          child: tree,
-          content: (
-            <Layout>
-              <RouteOutlet />
-            </Layout>
-          ),
-          id: layoutNodeId(scope.id),
-        };
-      }
-    }
-
-    return tree;
-  }
-
   return {
     [ERSCIdentityTypeId]: identity,
-    paths: routeGraph.paths,
-    renderRouteTree,
+    routes: compileRouteGraph(routes),
     servicesLayer: resolveServicesLayer<Services, ApplicationError>(servicesLayer),
   };
 };

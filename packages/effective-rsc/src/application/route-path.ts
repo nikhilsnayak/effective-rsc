@@ -1,11 +1,92 @@
-export type StaticPath = `/${string}`;
+export type AbsolutePath = `/${string}`;
 
-type InvalidPathCharacter = ':' | '*' | '?' | '#';
+type InvalidRouteCharacter = '*' | '?' | '#' | '%' | ';' | '\\';
+type InvalidParameterCharacter = InvalidRouteCharacter | '/' | ':' | '(' | ')' | '.' | '-';
 
-export type ValidStaticPath<Path extends StaticPath> =
-  Path extends `${string}${InvalidPathCharacter}${string}` ? never : Path;
+export type ValidRouteParamName<Name extends string> = string extends Name
+  ? never
+  : Name extends ''
+    ? never
+    : Name extends `${string}${InvalidParameterCharacter}${string}`
+      ? never
+      : Name;
 
-export type JoinPath<Prefix extends StaticPath, Path extends StaticPath> = Prefix extends '/'
+type IsUnion<Value, Whole = Value> = Value extends Whole
+  ? [Whole] extends [Value]
+    ? false
+    : true
+  : never;
+
+type ValidRouteSegments<
+  Segments extends string,
+  Seen extends string = never,
+> = string extends Segments
+  ? false
+  : Segments extends `${infer Segment}/${infer Rest}`
+    ? Segment extends '' | '.' | '..'
+      ? false
+      : Segment extends `:${infer Parameter}`
+        ? Parameter extends ''
+          ? false
+          : Parameter extends `${string}${InvalidParameterCharacter}${string}`
+            ? false
+            : Parameter extends Seen
+              ? false
+              : ValidRouteSegments<Rest, Seen | Parameter>
+        : Segment extends `${string}:${string}`
+          ? false
+          : ValidRouteSegments<Rest, Seen>
+    : Segments extends '' | '.' | '..'
+      ? false
+      : Segments extends `:${infer Parameter}`
+        ? Parameter extends ''
+          ? false
+          : Parameter extends `${string}${InvalidParameterCharacter}${string}`
+            ? false
+            : Parameter extends Seen
+              ? false
+              : true
+        : Segments extends `${string}:${string}`
+          ? false
+          : true;
+
+export type ValidRoutePath<Path extends AbsolutePath> =
+  true extends IsUnion<Path>
+    ? never
+    : Path extends '/'
+      ? Path
+      : Path extends `${string}${InvalidRouteCharacter}${string}`
+        ? never
+        : Path extends `/${infer Segments}`
+          ? ValidRouteSegments<Segments> extends true
+            ? Path
+            : never
+          : never;
+
+type RouteParamNamesFromSegments<Segments extends string> =
+  Segments extends `${infer Segment}/${infer Rest}`
+    ?
+        | (Segment extends `:${infer Parameter}` ? Parameter : never)
+        | RouteParamNamesFromSegments<Rest>
+    : Segments extends `:${infer Parameter}`
+      ? Parameter
+      : never;
+
+export type RouteParamNames<Path extends AbsolutePath> = Path extends `/${infer Segments}`
+  ? RouteParamNamesFromSegments<Segments>
+  : never;
+
+type RouteShapeSegments<Segments extends string> = Segments extends `${infer Segment}/${infer Rest}`
+  ? `${Segment extends `:${string}` ? ':' : Segment}/${RouteShapeSegments<Rest>}`
+  : Segments extends `:${string}`
+    ? ':'
+    : Segments;
+
+export type RouteShape<Path extends AbsolutePath> = Path extends `/${infer Segments}`
+  ? Lowercase<`/${RouteShapeSegments<Segments>}`>
+  : never;
+
+export type JoinPath<Prefix extends AbsolutePath, Path extends AbsolutePath> = Prefix extends '/'
   ? Path
   : Path extends '/'
     ? Prefix
@@ -15,29 +96,107 @@ export const FrameworkAssetNamespace = '/_ersc/assets';
 
 export const FrameworkAssetPrefix = `${FrameworkAssetNamespace}/` as const;
 
-export type ReservedPath =
-  | typeof FrameworkAssetNamespace
-  | `${typeof FrameworkAssetNamespace}/${string}`;
+type SegmentCanMatch<Segment extends string, Expected extends string> = Segment extends `:${string}`
+  ? true
+  : Lowercase<Segment> extends Expected
+    ? true
+    : false;
 
-const InvalidStaticPath = /[:*?#]/u;
+type MatchesReservedSegments<Segments extends string> =
+  Segments extends `${infer First}/${infer Rest}`
+    ? Rest extends `${infer Second}/${string}`
+      ? SegmentCanMatch<First, '_ersc'> extends true
+        ? SegmentCanMatch<Second, 'assets'>
+        : false
+      : SegmentCanMatch<First, '_ersc'> extends true
+        ? SegmentCanMatch<Rest, 'assets'>
+        : false
+    : false;
 
-export const validateStaticPath = (path: string) => {
-  if (!path.startsWith('/') || InvalidStaticPath.test(path)) {
+export type ReservedRoutePath<Path extends AbsolutePath> = Path extends `/${infer Segments}`
+  ? MatchesReservedSegments<Segments> extends true
+    ? Path
+    : never
+  : never;
+
+const InvalidRoutePath = /[*?#%;\\]/u;
+const DynamicSegment = /^:([^:().-]+)$/u;
+
+type RouteAnalysis =
+  | {
+      readonly _tag: 'ParameterFree';
+      readonly shape: string;
+    }
+  | {
+      readonly _tag: 'Parameterized';
+      readonly parameterNames: readonly [string, ...Array<string>];
+      readonly shape: string;
+    };
+
+export const analyzeRoutePath = (path: string): RouteAnalysis => {
+  if (!path.startsWith('/') || InvalidRoutePath.test(path)) {
     throw new TypeError(
-      `Invalid static route path "${path}". Static routes must start with "/" and cannot contain ":", "*", "?", or "#".`,
+      `Invalid route path "${path}". Route paths must start with "/" and cannot contain "*", "?", "#", "%", ";", or "\\".`,
+    );
+  }
+
+  const segments = path === '/' ? [] : path.slice(1).split('/');
+  if (segments.some((segment) => segment === '' || segment === '.' || segment === '..')) {
+    throw new TypeError(
+      `Invalid route path "${path}". Route paths cannot contain empty, ".", or ".." segments or end with "/".`,
+    );
+  }
+
+  const parameterNames = new Set<string>();
+  const shapeSegments: Array<string> = [];
+  for (const segment of segments) {
+    if (!segment.includes(':')) {
+      shapeSegments.push(segment.toLowerCase());
+      continue;
+    }
+
+    const match = DynamicSegment.exec(segment);
+    if (match === null) {
+      throw new TypeError(
+        `Invalid route path "${path}". Dynamic segments must use the ":parameter" convention.`,
+      );
+    }
+
+    const parameterName = match[1];
+    if (parameterName === undefined || parameterNames.has(parameterName)) {
+      throw new TypeError(
+        `Invalid route path "${path}". Dynamic parameter names must be unique within a route.`,
+      );
+    }
+
+    parameterNames.add(parameterName);
+    shapeSegments.push(':');
+  }
+
+  const shape = `/${shapeSegments.join('/')}`;
+  const parameters = parameterNames.values();
+  const firstParameter = parameters.next();
+  return firstParameter.done
+    ? { _tag: 'ParameterFree', shape }
+    : {
+        _tag: 'Parameterized',
+        parameterNames: Object.freeze([firstParameter.value, ...parameters]),
+        shape,
+      };
+};
+
+export const validateUnreservedPath = (path: string) => {
+  const segments = path.slice(1).split('/');
+  const canMatch = (segment: string | undefined, expected: string) =>
+    segment?.startsWith(':') === true || segment?.toLowerCase() === expected;
+  if (canMatch(segments[0], '_ersc') && canMatch(segments[1], 'assets')) {
+    throw new TypeError(
+      `Route "${path}" uses the framework-reserved "${FrameworkAssetNamespace}" namespace.`,
     );
   }
 };
 
-export const validateUnreservedPath = (pathname: string) => {
-  if (pathname === FrameworkAssetNamespace || pathname.startsWith(FrameworkAssetPrefix)) {
-    throw new TypeError(
-      `Static route "${pathname}" uses the framework-reserved "${FrameworkAssetNamespace}" namespace.`,
-    );
-  }
-};
-
-export const joinRoutePaths = (prefix: StaticPath, path: StaticPath): StaticPath => {
+export const joinRoutePaths = (prefix: AbsolutePath, path: AbsolutePath): AbsolutePath => {
   if (prefix === '/') {
     return path;
   }
@@ -46,3 +205,5 @@ export const joinRoutePaths = (prefix: StaticPath, path: StaticPath): StaticPath
   }
   return `${prefix}${path}`;
 };
+
+export const isAbsolutePath = (value: string): value is AbsolutePath => value.startsWith('/');

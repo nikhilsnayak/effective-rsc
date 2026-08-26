@@ -2,7 +2,10 @@ import { describe, expect, it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+import { renderRouteTree } from '../../src/application/definition';
 import { Application } from '../../src/application/ersc';
+import type { CompiledDestination } from '../../src/application/route-graph';
+import type { AbsolutePath } from '../../src/application/route-path';
 import {
   retainSharedLayoutContent,
   RouteOutlet,
@@ -107,7 +110,23 @@ describe('retainSharedLayoutContent', () => {
       ),
   });
 
-  const renderDestination = (pathname: `/${string}`) => ConferenceApp.renderRouteTree({ pathname });
+  const findDestination = <Services,>(
+    routes: ReadonlyArray<CompiledDestination<Services>>,
+    pattern: AbsolutePath,
+  ) => {
+    const destination = routes.find((route) => route.pattern === pattern);
+    if (destination === undefined) {
+      throw new Error(`Expected a compiled destination for "${pattern}".`);
+    }
+    return destination;
+  };
+
+  const renderDestination = (pathname: AbsolutePath) =>
+    renderRouteTree({
+      destination: findDestination(ConferenceApp.routes, pathname),
+      pathParams: {},
+      pathname,
+    });
 
   it('retains shared Layout content while replacing destination Loading and Page nodes', () => {
     const current = renderDestination('/schedule');
@@ -165,8 +184,16 @@ describe('retainSharedLayoutContent', () => {
         .mount('/parent', ERSC.Routes.make().page('/', ParentPage))
         .mount('/parent', ERSC.Routes.make({ layout: NestedLayout }).page('/child', ChildPage)),
     });
-    const current = App.renderRouteTree({ pathname: '/parent' });
-    const destination = App.renderRouteTree({ pathname: '/parent/child' });
+    const current = renderRouteTree({
+      destination: findDestination(App.routes, '/parent'),
+      pathParams: {},
+      pathname: '/parent',
+    });
+    const destination = renderRouteTree({
+      destination: findDestination(App.routes, '/parent/child'),
+      pathParams: {},
+      pathname: '/parent/child',
+    });
 
     const retained = retainSharedLayoutContent(current, destination);
 
@@ -188,8 +215,16 @@ describe('retainSharedLayoutContent', () => {
         .mount('/shared', ERSC.Routes.make({ layout: FirstLayout }).page('/first', FirstPage))
         .mount('/shared', ERSC.Routes.make({ layout: SecondLayout }).page('/second', SecondPage)),
     });
-    const current = App.renderRouteTree({ pathname: '/shared/first' });
-    const destination = App.renderRouteTree({ pathname: '/shared/second' });
+    const current = renderRouteTree({
+      destination: findDestination(App.routes, '/shared/first'),
+      pathParams: {},
+      pathname: '/shared/first',
+    });
+    const destination = renderRouteTree({
+      destination: findDestination(App.routes, '/shared/second'),
+      pathParams: {},
+      pathname: '/shared/second',
+    });
 
     const retained = retainSharedLayoutContent(current, destination);
 

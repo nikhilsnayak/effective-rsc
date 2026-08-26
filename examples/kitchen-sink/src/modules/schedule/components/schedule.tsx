@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import { ArrowRight, CalendarDays, MapPin } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -7,19 +7,17 @@ import { ERSC } from '@/ersc';
 import { cn } from '@/lib/utils';
 import {
   ConferenceRepository,
-  type ConferenceDay,
   type ObservedQuery,
   type Schedule,
 } from '@/modules/conference/conference-repository';
 import { SessionCard } from '@/modules/schedule/components/session-card';
 
 type ScheduleViewProps = {
-  readonly day: ConferenceDay;
   readonly schedule: ObservedQuery<Schedule>;
 };
 
-const ScheduleView = ({ day, schedule }: ScheduleViewProps) => {
-  const nextDay = day === 'saturday';
+const ScheduleView = ({ schedule }: ScheduleViewProps) => {
+  const nextDay = schedule.data.day === 'saturday';
 
   return (
     <main
@@ -29,7 +27,7 @@ const ScheduleView = ({ day, schedule }: ScheduleViewProps) => {
     >
       <header className='border-b pb-7'>
         <div className='flex flex-wrap items-center gap-2'>
-          <Badge variant='outline'>Day {day === 'saturday' ? '01' : '02'}</Badge>
+          <Badge variant='outline'>Day {schedule.data.day === 'saturday' ? '01' : '02'}</Badge>
           <span className='text-muted-foreground inline-flex items-center gap-1.5 text-sm'>
             <CalendarDays aria-hidden='true' className='size-4' />
             {schedule.data.date}
@@ -60,7 +58,7 @@ const ScheduleView = ({ day, schedule }: ScheduleViewProps) => {
         <a
           aria-label={nextDay ? 'See Sunday' : 'Back to Saturday'}
           className={cn(buttonVariants({ variant: 'outline' }))}
-          href={nextDay ? '/schedule/day-two' : '/'}
+          href={nextDay ? '/schedule/sunday' : '/schedule/saturday'}
         >
           {nextDay ? 'See Sunday' : 'Back to Saturday'}
           <ArrowRight aria-hidden='true' />
@@ -70,20 +68,14 @@ const ScheduleView = ({ day, schedule }: ScheduleViewProps) => {
   );
 };
 
-export const SaturdaySchedulePage = ERSC.Page.make({
-  render: Effect.fn('SaturdaySchedulePage')(function* () {
-    const repository = yield* ConferenceRepository;
-    const schedule = yield* repository.schedule('saturday');
-
-    return <ScheduleView day='saturday' schedule={schedule} />;
+export const SchedulePage = ERSC.Page.make({
+  params: Schema.Struct({
+    day: Schema.Literals(['saturday', 'sunday']),
   }),
-});
-
-export const SundaySchedulePage = ERSC.Page.make({
-  render: Effect.fn('SundaySchedulePage')(function* () {
+  render: Effect.fn('SchedulePage')(function* ({ params }) {
     const repository = yield* ConferenceRepository;
-    const schedule = yield* repository.schedule('sunday');
+    const schedule = yield* repository.schedule(params.day);
 
-    return <ScheduleView day='sunday' schedule={schedule} />;
+    return <ScheduleView schedule={schedule} />;
   }),
 });

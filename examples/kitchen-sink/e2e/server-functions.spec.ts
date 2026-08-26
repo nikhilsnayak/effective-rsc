@@ -8,7 +8,7 @@ test.describe.serial('Server Functions', () => {
   test('calls a named ServerFn.make reference imported by a Client Component', async ({ page }) => {
     const title = 'Effect is the runtime, not a utility belt';
     const browserErrors = observeBrowserErrors(page);
-    await page.goto('/');
+    await page.goto('/schedule/saturday');
     await setAgendaSelection(page, title, false);
 
     try {
@@ -26,7 +26,7 @@ test.describe.serial('Server Functions', () => {
       await expect(session.getByRole('button', { name: 'Remove from your agenda' })).toBeVisible();
       expect(browserErrors).toEqual([]);
     } finally {
-      await page.goto('/');
+      await page.goto('/schedule/saturday');
       await setAgendaSelection(page, title, false);
     }
   });
@@ -35,7 +35,7 @@ test.describe.serial('Server Functions', () => {
   // Keep the intended contract executable while the Working checkpoint remains unresolved.
   test.fixme('returns a complete document when submitted before hydration', async ({ page }) => {
     const title = 'A router that waits for the UI';
-    await page.goto('/');
+    await page.goto('/schedule/saturday');
     await setAgendaSelection(page, title, false);
     await page.route('**/_ersc/assets/main.js', (route) => route.abort());
 
@@ -55,7 +55,7 @@ test.describe.serial('Server Functions', () => {
       ).toContainText(title);
     } finally {
       await page.unroute('**/_ersc/assets/main.js');
-      await page.goto('/');
+      await page.goto('/schedule/saturday');
       await setAgendaSelection(page, title, false);
     }
   });

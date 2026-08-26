@@ -5,7 +5,7 @@ import { observeBrowserErrors } from './support/browser-errors';
 
 test('renders and styles the conference schedule without browser errors', async ({ page }) => {
   const browserErrors = observeBrowserErrors(page);
-  const response = await page.goto('/');
+  const response = await page.goto('/schedule/saturday');
 
   expect(response?.status()).toBe(200);
   await expect(page).toHaveTitle('Converge 2026 — Conference schedule');

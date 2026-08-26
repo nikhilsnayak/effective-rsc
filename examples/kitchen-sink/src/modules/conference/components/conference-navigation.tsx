@@ -1,8 +1,8 @@
 import { ArrowUpRight } from 'lucide-react';
 
 const navigation = [
-  { day: 'saturday', href: '/', label: 'Saturday', shortDate: '22 Aug' },
-  { day: 'sunday', href: '/schedule/day-two', label: 'Sunday', shortDate: '23 Aug' },
+  { day: 'saturday', href: '/schedule/saturday', label: 'Saturday', shortDate: '22 Aug' },
+  { day: 'sunday', href: '/schedule/sunday', label: 'Sunday', shortDate: '23 Aug' },
 ] as const;
 
 export default function ConferenceNavigation() {

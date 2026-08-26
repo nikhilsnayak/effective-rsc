@@ -22,7 +22,11 @@ export default ERSC.Layout.make({
         <body>
           <header className='bg-background border-b'>
             <div className='mx-auto flex max-w-7xl items-center justify-between gap-6 px-5 py-4 sm:px-8'>
-              <a className='flex items-center gap-3' href='/' aria-label='Converge home'>
+              <a
+                className='flex items-center gap-3'
+                href='/schedule/saturday'
+                aria-label='Converge home'
+              >
                 <span className='bg-foreground text-background grid size-9 place-items-center rounded-md font-mono text-xs font-semibold'>
                   C26
                 </span>

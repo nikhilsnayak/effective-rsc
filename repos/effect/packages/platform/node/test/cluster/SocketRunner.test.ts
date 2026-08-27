@@ -46,7 +46,11 @@ const SharedStorage = Layer.mergeAll(
   Layer.provide(ShardingConfig.layerDefaults)
 )
 
-const makeRunnerLayer = (port: number, entities: Layer.Layer<never, never, Sharding.Sharding>) =>
+const makeRunnerLayer = (
+  port: number,
+  entities: Layer.Layer<never, never, Sharding.Sharding>,
+  serialization: Layer.Layer<RpcSerialization.RpcSerialization> = RpcSerialization.layerSchemaBinary()
+) =>
   entities.pipe(
     Layer.provideMerge(SocketRunner.layer),
     Layer.provide(RunnerHealth.layerNoop),
@@ -58,7 +62,7 @@ const makeRunnerLayer = (port: number, entities: Layer.Layer<never, never, Shard
       entityMessagePollInterval: 5000,
       sendRetryInterval: 100
     })),
-    Layer.provide(RpcSerialization.layerMsgPack)
+    Layer.provide(serialization)
   )
 
 const makeClientLayer = (port: number) =>
@@ -71,8 +75,60 @@ const makeClientLayer = (port: number) =>
       entityMessagePollInterval: 5000,
       sendRetryInterval: 100
     })),
-    Layer.provide(RpcSerialization.layerMsgPack)
+    Layer.provide(RpcSerialization.layerSchemaBinary())
   )
+
+const makeConfiguredClientLayer = (
+  port: number,
+  serialization?: "binary" | "ndjson",
+  serializationMaxBufferSize?: number | "unbounded"
+) =>
+  NodeClusterSocket.layer({
+    clientOnly: true,
+    storage: "byo",
+    ...(serialization === undefined ? undefined : { serialization }),
+    ...(serializationMaxBufferSize === undefined ? undefined : { serializationMaxBufferSize }),
+    shardingConfig: {
+      runnerAddress: Option.some(RunnerAddress.make("localhost", port)),
+      runnerListenAddress: Option.some(RunnerAddress.make("localhost", port)),
+      entityTerminationTimeout: 0,
+      entityMessagePollInterval: 5000,
+      sendRetryInterval: 100
+    }
+  })
+
+const SerializationEntity = Entity
+  .make("SerializationEntity", [
+    Rpc.make("Ping", {
+      success: Schema.String
+    })
+  ])
+  .annotateRpcs(ClusterSchema.Persisted, false)
+
+const SerializationEntityLayer = SerializationEntity.toLayer(
+  Effect.succeed({ Ping: () => Effect.succeed("pong") })
+)
+
+const assertSerialization = (
+  port: number,
+  serverSerialization: Layer.Layer<RpcSerialization.RpcSerialization>,
+  clientSerialization?: "binary" | "ndjson"
+) =>
+  Effect.gen(function*() {
+    yield* Layer.launch(makeRunnerLayer(port, SerializationEntityLayer, serverSerialization)).pipe(Effect.forkScoped)
+    yield* Effect.sleep("2 seconds")
+
+    const result = yield* Effect.gen(function*() {
+      const makeClient = yield* SerializationEntity.client
+      yield* Effect.sleep("3 seconds")
+      return yield* makeClient("serialization-entity").Ping()
+    }).pipe(
+      Effect.provide(makeConfiguredClientLayer(port, clientSerialization)),
+      Effect.scoped
+    )
+
+    assert.strictEqual(result, "pong")
+  }).pipe(Effect.provide(SharedStorage))
 
 // An entity whose reply cannot be serialized: the handler returns a
 // non-integer for a `Schema.Int` success schema, so `Reply.serialize` fails
@@ -100,12 +156,52 @@ const ISOLATION_PORT = 50_124
 
 // BigDecimal.normalize creates a circular `normalized` self-reference.
 // When a persisted message is sent with discard: true, the notify path in Runners.makeRpc
-// passes the raw envelope (with circular BigDecimal payload) to the runner via msgpack,
+// passes the raw envelope (with circular BigDecimal payload) to the runner,
 // causing RangeError: Maximum call stack size exceeded.
 //
 // Volatile discard should complete after the request is sent, without waiting for the
 // host runner to finish handling it.
 describe("SocketRunner", () => {
+  it.live(
+    "uses SchemaBinary by default for TCP connections",
+    () => assertSerialization(50_120, RpcSerialization.layerSchemaBinary()),
+    15_000
+  )
+
+  it.live(
+    "preserves an explicit binary selection",
+    () => assertSerialization(50_121, RpcSerialization.layerSchemaBinary(), "binary"),
+    15_000
+  )
+
+  it.live(
+    "applies serializationMaxBufferSize to the default SchemaBinary parser",
+    () =>
+      Effect.gen(function*() {
+        yield* Layer.launch(
+          makeRunnerLayer(
+            50_122,
+            SerializationEntityLayer,
+            RpcSerialization.layerSchemaBinary()
+          )
+        ).pipe(Effect.forkScoped)
+        yield* Effect.sleep("2 seconds")
+
+        const exit = yield* Effect.gen(function*() {
+          const makeClient = yield* SerializationEntity.client
+          yield* Effect.sleep("3 seconds")
+          return yield* makeClient("serialization-limit-entity").Ping().pipe(Effect.timeout("1 second"))
+        }).pipe(
+          Effect.provide(makeConfiguredClientLayer(50_122, undefined, 1)),
+          Effect.scoped,
+          Effect.exit
+        )
+
+        assert.isTrue(Exit.isFailure(exit), "the configured frame limit must reject the response")
+      }).pipe(Effect.provide(SharedStorage)),
+    15_000
+  )
+
   it.live(
     "discarded persisted requests serialize circular values and volatile requests do not wait for replies",
     () =>

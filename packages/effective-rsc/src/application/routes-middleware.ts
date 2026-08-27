@@ -1,4 +1,4 @@
-import { Effect, type Types } from 'effect';
+import type { Effect, Types } from 'effect';
 import { HttpRouter, type HttpServerResponse } from 'effect/unstable/http';
 
 import { type ERSCIdentity, ERSCIdentityTypeId, type ERSCMember } from './ersc-identity';
@@ -27,15 +27,20 @@ export type RoutesMiddlewareOptions<Services> = {
   readonly handler: RoutesMiddlewareHandler<Services>;
 };
 
-const makeHttpMiddleware = <Services>(handler: RoutesMiddlewareHandler<Services>) =>
-  HttpRouter.middleware(
-    Effect.map(
-      Effect.context<Services>(),
-      (services) =>
-        (httpEffect): RoutesHttpEffect =>
-          handler(httpEffect).pipe(Effect.provideContext(services)),
-    ),
-  );
+type RoutesMiddlewareRequirements<Services> = Exclude<Services, HttpRouter.Provided>;
+
+type RoutesHttpMiddleware<Services> = HttpRouter.Middleware<{
+  readonly error: never;
+  readonly handles: never;
+  readonly layerError: never;
+  readonly layerRequires: never;
+  readonly provides: never;
+  readonly requires: RoutesMiddlewareRequirements<Services>;
+}>;
+
+const makeHttpMiddleware = <Services>(
+  handler: RoutesMiddlewareHandler<Services>,
+): RoutesHttpMiddleware<Services> => HttpRouter.middleware(handler);
 
 export type RoutesMiddlewareImplementationState<Services> = {
   readonly httpMiddleware: ReturnType<typeof makeHttpMiddleware<Services>>;

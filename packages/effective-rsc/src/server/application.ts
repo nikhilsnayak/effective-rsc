@@ -1,5 +1,5 @@
-import { BunHttpServer } from '@effect/platform-bun';
-import { Effect, Layer, Option, Stream } from 'effect';
+import * as BunHttpServer from '@effect/platform-bun/BunHttpServer';
+import { Effect, Layer, Option, Stream, type Types } from 'effect';
 import {
   HttpRouter,
   HttpServerRequest,
@@ -12,6 +12,7 @@ import { getERSCIdentity } from '../application/ersc-identity';
 import type { PagePathParams } from '../application/page';
 import type { CompiledDestination } from '../application/route-graph';
 import { FrameworkAssetNamespace, isAbsolutePath } from '../application/route-path';
+import { getRoutesMiddlewareState } from '../application/routes-middleware';
 import { FlightMediaType } from '../rsc/flight';
 import { renderRouteTree } from '../rsc/render-route-tree';
 import { FlightRenderer } from './flight-renderer';
@@ -53,6 +54,22 @@ const fromWebStream = (stream: ReadableStream<Uint8Array>) =>
     evaluate: () => stream,
     onError: (cause) => cause,
   });
+
+const routeMiddlewareLayer = <Services>(destination: CompiledDestination<Services>) => {
+  const last = destination.middleware.at(-1);
+  if (last === undefined) {
+    throw new TypeError('Expected a Page middleware chain to be non-empty.');
+  }
+
+  let middleware = getRoutesMiddlewareState(last).httpMiddleware;
+  for (let index = destination.middleware.length - 2; index >= 0; index--) {
+    const current = destination.middleware[index];
+    if (current !== undefined) {
+      middleware = middleware.combine(getRoutesMiddlewareState(current).httpMiddleware);
+    }
+  }
+  return middleware;
+};
 
 const httpLayer = <Services, ApplicationError>(
   application: ApplicationDefinition<Services, ApplicationError>,
@@ -106,42 +123,63 @@ const httpLayer = <Services, ApplicationError>(
     });
   });
 
-  const RequestLayer = Layer.mergeAll(RenderersLayer, applicationState.servicesLayer);
-  const ApplicationRoutesLayer = HttpRouter.addAll(
-    applicationState.routes.flatMap((destination) => [
-      HttpRouter.route('GET', destination.pattern, (request) =>
-        render({
-          destination,
-          formState: null,
-          request,
-          serverFnResult: null,
-          status: 200,
-        }),
-      ),
-      HttpRouter.route('POST', destination.pattern, (request) =>
-        handleServerFnRequest(request, identity).pipe(
-          Effect.flatMap((result) =>
-            render({
-              ...result,
-              destination,
-              request,
-            }),
-          ),
-          Effect.catchTag('ServerFnRequestError', (error) =>
-            Effect.succeed(
-              HttpServerResponse.text(error.message, {
-                status: error.status,
+  const RequestLayer = Layer.mergeAll(RenderersLayer, applicationState.layer);
+  const ApplicationRoutesLayer = Layer.unwrap(
+    Effect.map(Effect.context<Services | FlightRenderer | HtmlRenderer>(), (requestContext) => {
+      const RequestContextMiddleware = HttpRouter.middleware<{
+        provides: Services | FlightRenderer | HtmlRenderer;
+      }>()((httpEffect): Effect.Effect<HttpServerResponse.HttpServerResponse, Types.unhandled> =>
+        httpEffect.pipe(Effect.provideContext(requestContext)),
+      );
+      const routeLayers = applicationState.routes.flatMap((destination) => {
+        const GetLayer = HttpRouter.add('GET', destination.pattern, (request) =>
+          render({
+            destination,
+            formState: null,
+            request,
+            serverFnResult: null,
+            status: 200,
+          }),
+        );
+        const PageMiddleware =
+          destination.middleware.length === 0
+            ? RequestContextMiddleware
+            : routeMiddlewareLayer(destination).combine(RequestContextMiddleware);
+        const pageMiddlewareLayer = PageMiddleware.layer;
+        if (typeof pageMiddlewareLayer === 'string') {
+          throw new TypeError('Expected application services to satisfy Page middleware.');
+        }
+        const PageLayer = GetLayer.pipe(Layer.provide(pageMiddlewareLayer));
+        const ServerFnLayer = HttpRouter.add('POST', destination.pattern, (request) =>
+          handleServerFnRequest(request, identity).pipe(
+            Effect.flatMap((result) =>
+              render({
+                ...result,
+                destination,
+                request,
               }),
             ),
+            Effect.catchTag('ServerFnRequestError', (error) =>
+              Effect.succeed(
+                HttpServerResponse.text(error.message, {
+                  status: error.status,
+                }),
+              ),
+            ),
           ),
-        ),
-      ),
-    ]),
-  );
+        ).pipe(Layer.provide(RequestContextMiddleware.layer));
 
-  return Layer.mergeAll(ApplicationRoutesLayer, StaticAssetsLayer).pipe(
-    HttpRouter.provideRequest(RequestLayer),
-  );
+        return [PageLayer, ServerFnLayer];
+      });
+      const [FirstRouteLayer, ...RemainingRouteLayers] = routeLayers;
+      if (FirstRouteLayer === undefined) {
+        throw new TypeError('Expected the compiled application to contain a Page route.');
+      }
+      return Layer.mergeAll(FirstRouteLayer, ...RemainingRouteLayers);
+    }),
+  ).pipe(Layer.provide(RequestLayer));
+
+  return Layer.mergeAll(ApplicationRoutesLayer, StaticAssetsLayer);
 };
 
 const serverLayer = <Services, ApplicationError>(

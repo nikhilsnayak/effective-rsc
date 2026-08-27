@@ -11,7 +11,21 @@ the application runtime. It uses Rspack's native RSC support and targets Bun.
 - React, React DOM, Effect, Effect's browser and Bun platforms, and
   `react-server-dom-rspack` must use the exact compatible versions shown below.
 
-## Installation
+## Create an application
+
+Bootstrap a complete application with the compatible dependency versions:
+
+```sh
+bunx create-ersc-app my-effective-rsc-app
+cd my-effective-rsc-app
+bun run check
+bun run build
+bun run start
+```
+
+Run `bunx create-ersc-app` without a directory for the interactive flow.
+
+## Manual installation
 
 Create a Bun package and install the framework with its exact compatible peers:
 
@@ -26,6 +40,11 @@ bun add effective-rsc \
   react@19.3.0-canary-eb8feb71-20260814 \
   react-dom@19.3.0-canary-eb8feb71-20260814 \
   react-server-dom-rspack@0.1.0
+bun add --dev \
+  typescript@7.0.2 \
+  @types/bun@^1.4.0 \
+  @types/react@19.2.18 \
+  @types/react-dom@19.2.4
 ```
 
 Add the framework commands to `package.json`:
@@ -34,6 +53,7 @@ Add the framework commands to `package.json`:
 {
   "type": "module",
   "scripts": {
+    "check": "tsc --noEmit",
     "build": "ersc build",
     "start": "ersc start"
   }
@@ -68,9 +88,10 @@ export default ERSC.make({
 });
 ```
 
-Build and start the application:
+Type-check, build, and start the application:
 
 ```sh
+bun run check
 bun run build
 bun run start
 ```
@@ -124,6 +145,10 @@ runtime, including a Client Component, throws immediately.
 The [kitchen-sink conference](https://github.com/nikhilsnayak/effective-rsc/tree/main/examples/kitchen-sink)
 is the complete application example and end-to-end integration fixture.
 
+- [Getting started](./docs/01-getting-started/index.md)
+- [Guides](./docs/02-guides/index.md)
+- [API reference](./docs/03-api-reference/index.md)
+- [Combined LLM reference](./LLMS.md)
 - [Architecture](https://github.com/nikhilsnayak/effective-rsc/blob/main/docs/ARCHITECTURE.md)
 - [Decision register](https://github.com/nikhilsnayak/effective-rsc/blob/main/docs/DECISIONS.md)
 - [Open questions](https://github.com/nikhilsnayak/effective-rsc/blob/main/docs/OPEN_QUESTIONS.md)

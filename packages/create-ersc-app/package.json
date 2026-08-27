@@ -1,0 +1,50 @@
+{
+  "name": "create-ersc-app",
+  "version": "0.0.0",
+  "description": "Create a new effective-rsc application",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nikhilsnayak/effective-rsc.git",
+    "directory": "packages/create-ersc-app"
+  },
+  "bin": {
+    "create-ersc-app": "./bin/create-ersc-app.js"
+  },
+  "files": [
+    "bin/create-ersc-app.js",
+    "dist",
+    "template",
+    "LICENSE",
+    "README.md"
+  ],
+  "type": "module",
+  "scripts": {
+    "build": "rslib build",
+    "prepack": "bun run build",
+    "test": "tsc --project tsconfig.json && tsc --project template/tsconfig.json && vitest run --exclude tests/distribution.test.ts",
+    "test:dist": "vitest run tests/distribution.test.ts",
+    "test:pack": "bun pm pack --dry-run --ignore-scripts --quiet",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@effect/platform-bun": "catalog:",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@effect/platform-browser": "catalog:",
+    "@effect/vitest": "catalog:",
+    "@rslib/core": "catalog:",
+    "@types/bun": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "effective-rsc": "workspace:*",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "engines": {
+    "bun": ">=1.4.0"
+  }
+}

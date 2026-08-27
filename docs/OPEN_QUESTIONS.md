@@ -64,3 +64,25 @@ IDs are append-only and never reused, including after a question is resolved.
 - **Related:** D-009, D-036, D-040.
 - **Resolution:** Unresolved.
 - **Status:** Open.
+
+## OQ-007 — Packaged framework agent evaluation
+
+- **Question:** How should effective-rsc evaluate whether a fresh agent can discover the public API,
+  scaffold an application, and complete a realistic build using only published package artifacts?
+- **Why:** Type checks and integration tests validate framework behavior but do not measure CLI,
+  documentation, diagnostics, or API discoverability for a new user or agent.
+- **Candidate:** Use two layers: deterministic scaffold, type-check, build, start, route, and 404
+  checks in CI; plus a fresh-context agent evaluation at milestones or before publishing.
+- **Anti-overfitting:** Rotate several versioned application briefs with the same feature matrix but
+  different domains. Keep some briefs absent from examples and documentation.
+- **Scoring:** Record setup, documentation, API discovery, type experience, routing, services,
+  Server Functions, styling/build/runtime, diagnostics, confidence on another application, and an
+  independently justified overall score.
+- **Evidence:** The first packaged-artifact evaluation uses local `effective-rsc` and
+  `create-ersc-app` tarballs to build City Signals without source-repository context.
+- **Affected:** Release confidence, `create-ersc-app`, package documentation, `LLMS.md`, public API
+  design, and diagnostics.
+- **Related:** D-052, D-053.
+- **Resolution:** Future exploration; use the first run to define assertions and a result schema
+  without embedding its solution.
+- **Status:** Deferred until the baseline framework feature set is ready.

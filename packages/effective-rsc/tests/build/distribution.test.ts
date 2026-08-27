@@ -58,7 +58,14 @@ it('publishes compiled entries while preserving package boundaries', async () =>
     'react-server': './dist/index.js',
     types: './dist/index.d.ts',
   });
-  expect(manifest.files).toEqual(['bin/ersc.js', 'dist', 'LICENSE', 'README.md']);
+  expect(manifest.files).toEqual([
+    'bin/ersc.js',
+    'dist',
+    'docs',
+    'LICENSE',
+    'LLMS.md',
+    'README.md',
+  ]);
   expect(manifest.license).toBe('MIT');
   expect(binModule).toBe("#!/usr/bin/env bun\n\nimport '../dist/cli.js';\n");
   expect(cliModule).toContain('import("./build/build.js")');

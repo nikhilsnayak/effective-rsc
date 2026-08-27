@@ -1,6 +1,6 @@
 /* oxlint-disable effecttsgo/async-function, effecttsgo/global-console, effecttsgo/node-builtin-import -- Standalone Bun process adapter. */
 import { existsSync } from 'node:fs';
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -304,9 +304,8 @@ type VendorLock = Record<
 
 const updateVendorLock = async (name: VendorName, vendor: Vendor, commit: string, root: string) => {
   const lockPath = join(root, 'repos/.vendor-lock.json');
-  const lock = existsSync(lockPath)
-    ? (JSON.parse(await readFile(lockPath, 'utf8')) as VendorLock)
-    : {};
+  const lockFile = Bun.file(lockPath);
+  const lock: VendorLock = (await lockFile.exists()) ? await lockFile.json() : {};
 
   lock[name] = {
     repository: vendor.repository,
@@ -316,7 +315,7 @@ const updateVendorLock = async (name: VendorName, vendor: Vendor, commit: string
     ...(vendor.kind === 'directories' ? { sourcePaths: vendor.directories } : {}),
   };
 
-  await writeFile(lockPath, `${JSON.stringify(lock, undefined, 2)}\n`);
+  await Bun.write(lockPath, `${JSON.stringify(lock, undefined, 2)}\n`);
 };
 
 const syncSubtree = async (
@@ -325,7 +324,7 @@ const syncSubtree = async (
   commit: string,
   root: string,
 ) => {
-  const prefixExists = existsSync(`${root}/${vendor.prefix}`);
+  const prefixExists = existsSync(join(root, vendor.prefix));
   const existingSplit = await subtreeSplit(vendor, root);
 
   if (prefixExists && existingSplit === undefined) {

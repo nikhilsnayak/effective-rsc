@@ -51,6 +51,8 @@ implemented, accepted but not implemented, and intentionally outside the current
 | D-049 | Keep a concern consumed directly by React's protocol a branded function; keep a concern only ERSC reads an opaque handle projected through an internal accessor.                         |
 | D-050 | Preserve `bun:*` imports as server externals and reject them when they enter the browser module graph.                                                                                   |
 | D-051 | Use the kitchen-sink conference as both the primary real-world example and the current end-to-end integration fixture, with agenda persistence backed by Effect SQL and Bun SQLite.      |
+| D-052 | Ship authored, executable package documentation and generate its checked-in `LLMS.md` from the same sources with a small Bun script.                                                     |
+| D-053 | Ship `create-ersc-app` as a Bun-targeted Effect CLI with a version-matched generic Tailwind template, optional dependency installation, and a fallback directory prompt.                 |
 
 ## Planned
 

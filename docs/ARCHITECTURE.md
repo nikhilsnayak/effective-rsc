@@ -36,6 +36,12 @@ Rslib emits the framework as bundleless ESM, declarations, and source maps under
 all execute that JavaScript; raw TypeScript is not a published entry point. Top-level RSC directives
 and the source graph boundaries survive compilation.
 
+The published package also includes the authored guides under `docs/` and a generated `LLMS.md`.
+Documentation examples type-check as part of the package tests, and the root check rejects a stale
+generated document. The kitchen sink remains the sole application build and end-to-end integration
+fixture. Like Effect's agent documentation, `0*` examples form a small inline canonical core while
+later numbered examples become descriptive package-relative links.
+
 `ersc build` runs a direct Rspack MultiCompiler with paired browser and server configurations. Rspack's
 native RSC plugins assign RSC/SSR layers, produce client-reference data, and coordinate assets. Output
 lives under `.ersc/client/` and `.ersc/server/`; the framework does not generate proxy source files.
@@ -72,7 +78,9 @@ universe, runtime identity, and request-runner context. Feature modules use its 
 
 Each effectful operation infers its own requirements and must fit within `Services`. JSX erases nested
 requirements, so the universe is declared once. `ERSC.make` receives a closed Layer for that universe;
-service-free applications call `Application.ersc()`.
+service-free applications call `Application.ersc()`. The HTTP server builds the application Layer
+once in its server scope, shares the resulting services across requests, and releases them when that
+scope closes. Request Effects retain their independent interruption lifetime.
 
 Every authored value carries its ERSC identity. Route composition rejects the wrong concern role or a
 value from another ERSC instance. Server Functions retain that identity across native invocation and
@@ -213,8 +221,13 @@ rejected rather than pretending its Effect is a Promise.
 
 ## Command surface
 
+- `create-ersc-app <directory>` writes a standalone application from a checked package template and
+  installs its dependencies unless passed `--no-install`.
 - `ersc build` emits `.ersc/client/` and `.ersc/server/`.
 - `ersc start` loads the compiled server once and listens on port `18193` with Bun.
+
+The scaffolder's template is a published product asset, not another integration fixture. The
+kitchen-sink remains the only application that validates the complete framework pipeline.
 
 There is no development command. D-041 through D-043 record the accepted but unimplemented dev-server
 and HMR design.

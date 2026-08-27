@@ -2,13 +2,20 @@
   "name": "effective-rsc",
   "version": "0.0.0",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nikhilsnayak/effective-rsc.git",
+    "directory": "packages/effective-rsc"
+  },
   "bin": {
     "ersc": "./bin/ersc.js"
   },
   "files": [
     "bin/ersc.js",
     "dist",
+    "docs",
     "LICENSE",
+    "LLMS.md",
     "README.md"
   ],
   "type": "module",
@@ -22,8 +29,10 @@
   },
   "scripts": {
     "build": "rslib build",
-    "prepack": "bun run build",
-    "test": "vitest run --exclude tests/build/distribution.test.ts",
+    "docs:check": "bun ../../scripts/generate-docs.ts --check",
+    "prepack": "bun run build && bun run docs:check",
+    "test": "vitest run --exclude tests/build/distribution.test.ts && bun run test:docs",
+    "test:docs": "tsc --project tsconfig.docs.json",
     "test:dist": "vitest run tests/build/distribution.test.ts",
     "test:pack": "bun pm pack --dry-run --ignore-scripts --quiet",
     "test:watch": "vitest --exclude tests/build/distribution.test.ts"
@@ -38,10 +47,10 @@
     "@effect/platform-bun": "catalog:",
     "@effect/vitest": "catalog:",
     "@rsbuild/plugin-react": "2.1.0",
-    "@rslib/core": "1.0.0-rc.1",
+    "@rslib/core": "catalog:",
     "@types/bun": "catalog:",
     "@types/react": "catalog:",
-    "@types/react-dom": "19.2.4",
+    "@types/react-dom": "catalog:",
     "effect": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",

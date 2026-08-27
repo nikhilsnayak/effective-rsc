@@ -46,6 +46,47 @@ const RenamedParamsPage = ERSC.Page.make({
 });
 
 describe('Routes', () => {
+  it('owns immutable non-empty middleware lists', () => {
+    const First = ERSC.Routes.middleware({ handler: (httpEffect) => httpEffect });
+    const Second = ERSC.Routes.middleware({ handler: (httpEffect) => httpEffect });
+    const routes = ERSC.Routes.make({ middleware: [First, Second] });
+    const typecheckMiddlewareTuple = () => {
+      ERSC.Routes.make({ middleware: [First] });
+      ERSC.Routes.make({
+        // @ts-expect-error Middleware must be a non-empty ordered list.
+        middleware: [],
+      });
+      ERSC.Routes.make({
+        // @ts-expect-error A single middleware must still be placed in a list.
+        middleware: First,
+      });
+      ERSC.Routes.middleware({
+        // @ts-expect-error Routes middleware must handle every typed failure it introduces.
+        handler: (httpEffect) => Effect.andThen(Effect.fail('failure'), httpEffect), // oxlint-disable-line effecttsgo/missing-effect-error -- intentional invalid Effect fixture
+      });
+    };
+
+    expect(getRoutesState(routes).middleware).toEqual([First, Second]);
+    expect(Object.isFrozen(First)).toBe(true);
+    expect(Object.isFrozen(getRoutesState(routes).middleware)).toBe(true);
+    expect(typecheckMiddlewareTuple).toBeTypeOf('function');
+    expect(() =>
+      ERSC.Routes.make({
+        // @ts-expect-error Exercise runtime validation for an empty list.
+        middleware: [],
+      }),
+    ).toThrow('must be a non-empty ordered list');
+    expect(() => ERSC.Routes.make({ middleware: [First, First] })).toThrow(
+      'cannot appear twice in the same scope',
+    );
+    expect(() =>
+      ERSC.Routes.middleware({
+        // @ts-expect-error Exercise runtime validation for a non-function handler.
+        handler: null,
+      }),
+    ).toThrow('handler must be a function');
+  });
+
   it('composes immutable mountable route descriptions', () => {
     const empty = ERSC.Routes.make({ layout: Shell, loading: LoadingPage });
     const notesRoutes = ERSC.Routes.make().page('/', HomePage).page('/history', HistoryPage);

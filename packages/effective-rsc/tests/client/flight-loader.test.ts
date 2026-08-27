@@ -43,7 +43,12 @@ const makePendingFlightResponse = (signal: AbortSignal) =>
         signal.addEventListener('abort', () => controller.error(signal.reason), { once: true });
       },
     }),
-    { headers: { 'content-type': 'text/x-component' } },
+    {
+      headers: {
+        'content-location': 'https://effective-rsc.test/schedule/day-two',
+        'content-type': 'text/x-component',
+      },
+    },
   );
 
 it.effect('requests and decodes a whole-tree Flight response', () =>
@@ -52,7 +57,10 @@ it.effect('requests and decodes a whole-tree Flight response', () =>
     const client = makeClient((request) => {
       observedRequest = request;
       return new Response(new Uint8Array(), {
-        headers: { 'content-type': 'text/x-component;charset=utf-8' },
+        headers: {
+          'content-location': 'https://effective-rsc.test/schedule/day-two',
+          'content-type': 'text/x-component;charset=utf-8',
+        },
       });
     });
 
@@ -60,8 +68,12 @@ it.effect('requests and decodes a whole-tree Flight response', () =>
       _tag: 'Navigation',
       destination: new URL('https://effective-rsc.test/schedule/day-two'),
     }).pipe(Effect.provideService(HttpClient.HttpClient, client));
+    if (response._tag === 'Document') {
+      return yield* Effect.die('Expected a Flight response.');
+    }
 
     expect(response.payload).toBe(decodedPayload);
+    expect(response.resolvedUrl.href).toBe('https://effective-rsc.test/schedule/day-two');
     expect(observedRequest?.method).toBe('GET');
     expect(observedRequest?.url).toBe('https://effective-rsc.test/schedule/day-two');
     expect(observedRequest?.headers['accept']).toBe('text/x-component');
@@ -109,7 +121,10 @@ it.effect('closes the response scope when the Flight stream reaches EOF', () =>
     const client = makeClient((_request, signal) => {
       requestSignal = signal;
       return new Response(new Uint8Array(), {
-        headers: { 'content-type': 'text/x-component' },
+        headers: {
+          'content-location': 'https://effective-rsc.test/schedule/day-two',
+          'content-type': 'text/x-component',
+        },
       });
     });
 
@@ -151,7 +166,30 @@ it.effect('cancels an unfinished decoded stream when the browser scope closes', 
   }),
 );
 
-it.effect('rejects a successful response that is not Flight', () =>
+it.effect('returns document navigation for a non-Flight navigation response', () =>
+  Effect.gen(function* () {
+    const resource = yield* loadFlight({
+      _tag: 'Navigation',
+      destination: new URL('https://effective-rsc.test/schedule/day-two'),
+    }).pipe(
+      Effect.provideService(
+        HttpClient.HttpClient,
+        makeClient(
+          () =>
+            new Response('<!doctype html>', {
+              headers: { 'content-type': 'text/html;charset=utf-8' },
+            }),
+        ),
+      ),
+    );
+
+    expect(resource._tag).toBe('Document');
+    expect(decodeFlight).not.toHaveBeenCalled();
+    yield* resource.release;
+  }),
+);
+
+it.effect('rejects a Flight response without its resolved location', () =>
   loadFlight({
     _tag: 'Navigation',
     destination: new URL('https://effective-rsc.test/schedule/day-two'),
@@ -160,8 +198,8 @@ it.effect('rejects a successful response that is not Flight', () =>
       HttpClient.HttpClient,
       makeClient(
         () =>
-          new Response('<!doctype html>', {
-            headers: { 'content-type': 'text/html;charset=utf-8' },
+          new Response(new Uint8Array(), {
+            headers: { 'content-type': 'text/x-component' },
           }),
       ),
     ),
@@ -170,6 +208,31 @@ it.effect('rejects a successful response that is not Flight', () =>
       expect(error).toBeInstanceOf(FlightLoadError);
       expect(error.reason).toBe('UnexpectedResponse');
       expect(decodeFlight).not.toHaveBeenCalled();
+    }),
+  ),
+);
+
+it.effect('rejects a non-Flight Server Function response', () =>
+  loadFlight({
+    _tag: 'ServerFunction',
+    body: 'encoded-arguments',
+    destination: new URL('https://effective-rsc.test/'),
+    id: 'server-function-id',
+    temporaryReferences: {},
+  }).pipe(
+    Effect.provideService(
+      HttpClient.HttpClient,
+      makeClient(
+        () =>
+          new Response('Unauthorized', {
+            status: 401,
+          }),
+      ),
+    ),
+    Effect.flip,
+    Effect.map((error) => {
+      expect(error).toBeInstanceOf(FlightLoadError);
+      expect(error.reason).toBe('RequestFailed');
     }),
   ),
 );
@@ -190,7 +253,10 @@ it.effect('decodes a Server Function response with its temporary references', ()
         makeClient((request) => {
           observedRequest = request;
           return new Response(new Uint8Array(), {
-            headers: { 'content-type': 'text/x-component' },
+            headers: {
+              'content-location': 'https://effective-rsc.test/',
+              'content-type': 'text/x-component',
+            },
           });
         }),
       ),

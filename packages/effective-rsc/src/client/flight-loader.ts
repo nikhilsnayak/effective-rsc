@@ -25,6 +25,18 @@ type FlightRequest =
       readonly temporaryReferences: TemporaryReferenceSet;
     };
 
+type FlightResource = {
+  readonly _tag: 'Flight';
+  readonly payload: FlightPayload;
+  readonly release: Effect.Effect<void>;
+  readonly resolvedUrl: URL;
+};
+
+type DocumentResource = {
+  readonly _tag: 'Document';
+  readonly release: Effect.Effect<void>;
+};
+
 export const loadFlight = Effect.fnUntraced(function* (flightRequest: FlightRequest) {
   const parentScope = yield* Effect.scope;
   const responseScope = yield* Scope.fork(parentScope);
@@ -32,7 +44,7 @@ export const loadFlight = Effect.fnUntraced(function* (flightRequest: FlightRequ
 
   return yield* Effect.gen(function* () {
     const httpClient = yield* HttpClient.HttpClient;
-    const client = httpClient.pipe(HttpClient.filterStatusOk, HttpClient.withScope);
+    const client = httpClient.pipe(HttpClient.withScope);
     const request =
       flightRequest._tag === 'Navigation'
         ? HttpClientRequest.get(flightRequest.destination).pipe(
@@ -55,8 +67,20 @@ export const loadFlight = Effect.fnUntraced(function* (flightRequest: FlightRequ
           }),
       ),
     );
+    if (response.status < 200 || response.status >= 300) {
+      if (flightRequest._tag === 'Navigation') {
+        return { _tag: 'Document', release } satisfies DocumentResource;
+      }
+      return yield* new FlightLoadError({
+        cause: new Error(`Flight request failed with status ${response.status}.`),
+        reason: 'RequestFailed',
+      });
+    }
     const contentType = response.headers['content-type']?.split(';', 1)[0]?.trim().toLowerCase();
     if (contentType !== FlightMediaType) {
+      if (flightRequest._tag === 'Navigation') {
+        return { _tag: 'Document', release } satisfies DocumentResource;
+      }
       return yield* new FlightLoadError({
         cause: new Error(
           `Expected a ${FlightMediaType} response, received ${response.headers['content-type'] ?? 'no content type'}.`,
@@ -64,6 +88,22 @@ export const loadFlight = Effect.fnUntraced(function* (flightRequest: FlightRequ
         reason: 'UnexpectedResponse',
       });
     }
+
+    const contentLocation = response.headers['content-location'];
+    if (contentLocation === undefined) {
+      return yield* new FlightLoadError({
+        cause: new Error('Expected the Flight response to include a Content-Location header.'),
+        reason: 'UnexpectedResponse',
+      });
+    }
+    const resolvedUrl = yield* Effect.try({
+      try: () => new URL(contentLocation, flightRequest.destination),
+      catch: (cause) =>
+        new FlightLoadError({
+          cause,
+          reason: 'UnexpectedResponse',
+        }),
+    });
 
     const responseBody = yield* Stream.toReadableStreamEffect(
       response.stream.pipe(Stream.ensuring(release)),
@@ -83,6 +123,11 @@ export const loadFlight = Effect.fnUntraced(function* (flightRequest: FlightRequ
         }),
     });
 
-    return { payload, release };
+    return {
+      _tag: 'Flight',
+      payload,
+      release,
+      resolvedUrl,
+    } satisfies FlightResource;
   }).pipe(Effect.onError(() => release));
 });

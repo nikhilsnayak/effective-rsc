@@ -33,6 +33,12 @@ export const installCallServer = Effect.fnUntraced(function* (browserRoot: Brows
         (cause) => new ServerFnCallError({ cause, message: 'Server Function request failed.' }),
       ),
     );
+    if (resource._tag === 'Document') {
+      return yield* new ServerFnCallError({
+        cause: new Error('A Server Function response cannot request document navigation.'),
+        message: 'Server Function response was incompatible with Flight.',
+      });
+    }
     const committed = browserRoot.render({
       _tag: 'ServerFunction',
       routeTree: resource.payload.routeTree,

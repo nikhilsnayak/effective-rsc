@@ -110,6 +110,7 @@ const httpLayer = <Services, ApplicationError>(
     if (request.headers['accept']?.includes(FlightMediaType)) {
       return HttpServerResponse.stream(fromWebStream(flightStream), {
         contentType: `${FlightMediaType};charset=utf-8`,
+        headers: { 'content-location': requestUrl.value.href },
         status,
       });
     }

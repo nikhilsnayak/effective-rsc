@@ -37,8 +37,8 @@ bun add effective-rsc \
   effect@4.0.0-rc.112 \
   @effect/platform-browser@4.0.0-rc.112 \
   @effect/platform-bun@4.0.0-rc.112 \
-  react@19.3.0-canary-eb8feb71-20260814 \
-  react-dom@19.3.0-canary-eb8feb71-20260814 \
+  react@19.3.0-canary-a1124489-20260826 \
+  react-dom@19.3.0-canary-a1124489-20260826 \
   react-server-dom-rspack@0.1.0
 bun add --dev \
   typescript@7.0.2 \

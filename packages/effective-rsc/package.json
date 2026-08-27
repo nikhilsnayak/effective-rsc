@@ -38,7 +38,7 @@
     "test:watch": "vitest --exclude tests/build/distribution.test.ts"
   },
   "dependencies": {
-    "@rspack/core": "2.2.0-rc.0",
+    "@rspack/core": "2.2.0",
     "@tailwindcss/webpack": "4.3.3",
     "rsc-html-stream": "0.0.8"
   },

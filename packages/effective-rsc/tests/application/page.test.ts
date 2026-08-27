@@ -66,7 +66,7 @@ describe('ERSC.Page.make', () => {
       });
       const App = ERSC.make({
         routes: ERSC.Routes.make({ layout: RootLayout }).page('/', PageComponent),
-        servicesLayer: Layer.succeed(Greeting, { value: 'application greeting' }),
+        layer: Layer.succeed(Greeting, { value: 'application greeting' }),
       });
 
       const rendered = yield* Effect.promise(() =>

@@ -1,4 +1,5 @@
 import { Layer, type Types } from 'effect';
+import type { HttpRouter } from 'effect/unstable/http';
 
 import {
   type ERSCIdentity,
@@ -22,8 +23,8 @@ export interface ApplicationDefinition<
 }
 
 export type ApplicationImplementationState<Services, ApplicationError> = {
+  readonly layer: Layer.Layer<Services, ApplicationError, HttpRouter.HttpRouter>;
   readonly routes: ReadonlyArray<CompiledDestination<Services>>;
-  readonly servicesLayer: Layer.Layer<Services, ApplicationError>;
 };
 
 class ApplicationDefinitionImpl<Services, ApplicationError> implements ApplicationDefinition<
@@ -38,7 +39,7 @@ class ApplicationDefinitionImpl<Services, ApplicationError> implements Applicati
   constructor(
     identity: ERSCIdentity<Services>,
     readonly routes: ReadonlyArray<CompiledDestination<Services>>,
-    readonly servicesLayer: Layer.Layer<Services, ApplicationError>,
+    readonly layer: Layer.Layer<Services, ApplicationError, HttpRouter.HttpRouter>,
   ) {
     this[ERSCIdentityTypeId] = identity;
   }
@@ -75,9 +76,13 @@ type ValidRootRoutes<Services, Definition extends AnyRoutes<Services>> =
 
 type ReservedRoutes<Paths> = Paths extends AbsolutePath ? ReservedRoutePath<Paths> : never;
 
-type ServicesLayerOptions<Services, ApplicationError> = [Services] extends [never]
-  ? { readonly servicesLayer?: Layer.Layer<never, ApplicationError> }
-  : { readonly servicesLayer: Layer.Layer<Services, ApplicationError> };
+type ApplicationLayerOptions<Services, ApplicationError> = [Services] extends [never]
+  ? {
+      readonly layer?: Layer.Layer<Services, ApplicationError, HttpRouter.HttpRouter>;
+    }
+  : {
+      readonly layer: Layer.Layer<Services, ApplicationError, HttpRouter.HttpRouter>;
+    };
 
 export type ERSCApplicationOptions<
   Services,
@@ -85,20 +90,17 @@ export type ERSCApplicationOptions<
   ApplicationError,
 > = {
   readonly routes: Definition & ValidRootRoutes<Services, Definition>;
-} & ServicesLayerOptions<Services, ApplicationError>;
+} & ApplicationLayerOptions<Services, ApplicationError>;
 
 export type ERSCMake<Services> = <Definition extends AnyRoutes<Services>, ApplicationError = never>(
   options: ERSCApplicationOptions<Services, Definition, ApplicationError>,
 ) => ApplicationDefinition<Services, ApplicationError>;
 
-function resolveServicesLayer<Services, ApplicationError>(
-  servicesLayer:
-    | Layer.Layer<Services, ApplicationError>
-    | Layer.Layer<never, ApplicationError>
-    | undefined,
-): Layer.Layer<Services, ApplicationError>;
-function resolveServicesLayer(servicesLayer: Layer.Any | undefined): Layer.Any {
-  return servicesLayer ?? Layer.empty;
+function resolveApplicationLayer<Services, ApplicationError>(
+  layer: Layer.Layer<Services, ApplicationError, HttpRouter.HttpRouter> | undefined,
+): Layer.Layer<Services, ApplicationError, HttpRouter.HttpRouter>;
+function resolveApplicationLayer(layer: Layer.Any | undefined): Layer.Any {
+  return layer ?? Layer.empty;
 }
 
 export const makeApplication = <
@@ -107,7 +109,7 @@ export const makeApplication = <
   ApplicationError = never,
 >(
   identity: ERSCIdentity<Services>,
-  { routes, servicesLayer }: ERSCApplicationOptions<Services, Definition, ApplicationError>,
+  { layer, routes }: ERSCApplicationOptions<Services, Definition, ApplicationError>,
 ): ApplicationDefinition<Services, ApplicationError> => {
   if (getERSCIdentity(routes) !== identity) {
     throw new TypeError('Root Routes were created by a different ERSC module.');
@@ -116,6 +118,6 @@ export const makeApplication = <
   return new ApplicationDefinitionImpl(
     identity,
     compileRouteGraph(routes),
-    resolveServicesLayer<Services, ApplicationError>(servicesLayer),
+    resolveApplicationLayer<Services, ApplicationError>(layer),
   );
 };

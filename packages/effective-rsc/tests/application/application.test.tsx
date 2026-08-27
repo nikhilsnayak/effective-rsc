@@ -107,7 +107,7 @@ describe('ERSC.make', () => {
       // @ts-expect-error Compiled routes are private to framework runtime modules.
       void App.routes;
       // @ts-expect-error The application Layer is private to framework runtime modules.
-      void App.servicesLayer;
+      void App.layer;
     };
     const rootNode = renderApplicationRoute(applicationRoutes(App), '/');
     const root = asElement<{ readonly children: ReactNode }>(rootNode.content);
@@ -253,6 +253,37 @@ describe('ERSC.make', () => {
     expect(applicationRoutes(App)[1]?.page.component).toBe(pageComponent(SaturdayPage));
   });
 
+  it('compiles inherited Routes middleware without adding React scopes', () => {
+    const RootMiddleware = ERSC.Routes.middleware({ handler: (httpEffect) => httpEffect });
+    const NestedMiddleware = ERSC.Routes.middleware({ handler: (httpEffect) => httpEffect });
+    const App = ERSC.make({
+      routes: ERSC.Routes.make({ layout: RootLayout, middleware: [RootMiddleware] })
+        .page('/', HomePage)
+        .mount(
+          '/schedule',
+          ERSC.Routes.make({ middleware: [NestedMiddleware] }).page('/', SaturdayPage),
+        ),
+    });
+    const [home, schedule] = applicationRoutes(App);
+
+    expect(home?.middleware).toEqual([RootMiddleware]);
+    expect(schedule?.middleware).toEqual([RootMiddleware, NestedMiddleware]);
+    expect(schedule?.scopes).toHaveLength(1);
+    expect(Object.isFrozen(schedule?.middleware)).toBe(true);
+  });
+
+  it('rejects duplicate middleware inherited by one destination', () => {
+    const RequireUser = ERSC.Routes.middleware({ handler: (httpEffect) => httpEffect });
+    const routes = ERSC.Routes.make({ layout: RootLayout, middleware: [RequireUser] }).mount(
+      '/account',
+      ERSC.Routes.make({ middleware: [RequireUser] }).page('/', HomePage),
+    );
+
+    expect(() => ERSC.make({ routes })).toThrow(
+      'Routes middleware for destination "/account" appears more than once',
+    );
+  });
+
   it('declares service contracts once and chooses their implementations at application assembly', () => {
     type AppServices = LayoutService | PageService | NestedPageService;
     const ServiceERSC = Application.ersc<AppServices>();
@@ -283,7 +314,7 @@ describe('ERSC.make', () => {
       routes: ServiceERSC.Routes.make({ layout: ServiceLayout })
         .page('/', ServicePage)
         .mount('/nested', ServiceERSC.Routes.make().page('/', ServiceNestedPage)),
-      servicesLayer: ApplicationLayer,
+      layer: ApplicationLayer,
     });
     type Services = ApplicationServices<typeof App>;
     const servicesAreCombined: [Services] extends [LayoutService | PageService | NestedPageService]
@@ -293,7 +324,7 @@ describe('ERSC.make', () => {
       : false = true;
 
     expect(servicesAreCombined).toBe(true);
-    expect(getApplicationState(App).servicesLayer).toBe(ApplicationLayer);
+    expect(getApplicationState(App).layer).toBe(ApplicationLayer);
   });
 
   it('requires a root Layout, a reachable Page, and a closed implementation Layer', () => {
@@ -329,7 +360,7 @@ describe('ERSC.make', () => {
       ServiceERSC.make({
         routes: serviceRoutes,
         // @ts-expect-error The application Layer must have no remaining service requirements.
-        servicesLayer: IncompleteApplicationLayer, // oxlint-disable-line effecttsgo/missing-layer-context -- intentional invalid Layer fixture
+        layer: IncompleteApplicationLayer, // oxlint-disable-line effecttsgo/missing-layer-context -- intentional invalid Layer fixture
       });
     };
 
@@ -363,6 +394,15 @@ describe('ERSC.make', () => {
           yield* LayoutService;
           return null;
         }),
+      });
+      NarrowERSC.Routes.middleware({
+        handler: (httpEffect) =>
+          // @ts-expect-error LayoutService is not part of this application's declared contracts.
+          // oxlint-disable-next-line effecttsgo/missing-effect-context -- intentional invalid Effect fixture
+          Effect.gen(function* () {
+            yield* LayoutService;
+            return yield* httpEffect;
+          }),
       });
       NarrowERSC.Layout.make({
         // @ts-expect-error LayoutService is not part of this application's declared contracts.
@@ -423,11 +463,19 @@ describe('ERSC.make', () => {
     });
     const OtherLoading = OtherERSC.Loading.make({ render: () => <p>Loading...</p> });
     const OtherPage = OtherERSC.Page.make({ render: () => Effect.succeed(<h1>Other</h1>) });
+    const OtherMiddleware = OtherERSC.Routes.middleware({
+      handler: (httpEffect) => httpEffect,
+    });
     const OtherRoutes = OtherERSC.Routes.make({ layout: OtherLayout }).page('/', OtherPage);
 
     expect(() => ERSC.Routes.make({ loading: OtherLoading })).toThrow(
       'Loading was created by a different ERSC module.',
     );
+    expect(() =>
+      ERSC.Routes.make({
+        middleware: [OtherMiddleware],
+      }),
+    ).toThrow('Routes middleware was created by a different ERSC module.');
     expect(() =>
       ERSC.make({
         routes: ERSC.Routes.make({ layout: RootLayout }).page('/', OtherPage),

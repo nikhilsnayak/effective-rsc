@@ -52,6 +52,24 @@ test('moves between conference days through the composed schedule', async ({ pag
   expect(browserErrors).toEqual([]);
 });
 
+test('follows a Routes middleware redirect during client navigation', async ({ page }) => {
+  const browserErrors = observeBrowserErrors(page);
+  await page.goto('/');
+  await page.evaluate(() => Reflect.set(window, '__ersc_document_marker__', true));
+
+  const redirectedFlight = page.waitForRequest(
+    (request) =>
+      new URL(request.url()).pathname === '/schedule' && isNavigationFlightRequest(request),
+  );
+  await page.getByRole('banner').getByRole('link', { name: 'Programme' }).click();
+  await redirectedFlight;
+
+  await expect(page).toHaveURL('/schedule/saturday');
+  await expect(page.getByRole('heading', { level: 1, name: 'Saturday schedule' })).toBeVisible();
+  expect(await page.evaluate(() => Reflect.get(window, '__ersc_document_marker__'))).toBe(true);
+  expect(browserErrors).toEqual([]);
+});
+
 test('streams effectful speaker leaves independently within the conference schedule', async ({
   page,
 }) => {

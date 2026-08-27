@@ -1,5 +1,6 @@
 import { SqliteClient } from '@effect/sql-sqlite-bun';
 import { Layer } from 'effect';
+import { HttpRouter } from 'effect/unstable/http';
 
 import { ERSC } from '@/ersc';
 import { ConferenceHomePage } from '@/modules/conference/components/conference-home';
@@ -18,10 +19,15 @@ const ConferenceInfrastructureLayer = ConferenceRepository.layer.pipe(
   Layer.provide(PersistenceLayer),
 );
 const ConferenceLayer = ConferenceService.layer.pipe(Layer.provide(ConferenceInfrastructureLayer));
+const PublicHttpLayer = HttpRouter.cors({
+  allowedMethods: ['GET', 'HEAD'],
+  allowedOrigins: ['https://app.converge.example'],
+});
+const ApplicationLayer = Layer.mergeAll(ConferenceLayer, PublicHttpLayer);
 
 export default ERSC.make({
   routes: ERSC.Routes.make({ layout: ConferenceShell })
     .page('/', ConferenceHomePage)
     .mount('/schedule', scheduleRoutes),
-  servicesLayer: ConferenceLayer,
+  layer: ApplicationLayer,
 });

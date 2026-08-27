@@ -11,10 +11,14 @@ const readRenderTimestamp = (html: string, attribute: string) => {
 };
 
 test('streams a complete React document with its hydration payload', async ({ request }) => {
-  const { body: html, response } = await getText(request, '/schedule/saturday');
+  const { body: html, response } = await getText(request, '/schedule/saturday', {
+    origin: 'https://app.converge.example',
+  });
 
   expect(response.status()).toBe(200);
   expect(response.headers()['content-type']).toBe('text/html;charset=utf-8');
+  expect(response.headers()['cache-control']).toBe('private, no-store');
+  expect(response.headers()['access-control-allow-origin']).toBe('https://app.converge.example');
   expect(html.startsWith('<!DOCTYPE html>')).toBe(true);
   expect(html).toMatch(/<html[^>]* lang="en"[^>]*>/);
   expect(html).toContain('<title>Converge 2026 — Conference schedule</title>');

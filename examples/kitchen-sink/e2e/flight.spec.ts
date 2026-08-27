@@ -4,7 +4,10 @@ import { expect, test, type APIRequestContext } from '@playwright/test';
 import { getText } from './support/http';
 
 const requestFlight = (request: APIRequestContext, pathname = '/schedule/saturday') =>
-  getText(request, pathname, { accept: 'text/x-component' });
+  getText(request, pathname, {
+    accept: 'text/x-component',
+    origin: 'https://app.converge.example',
+  });
 
 test('serves the complete application route tree through the native Flight protocol', async ({
   request,
@@ -13,6 +16,8 @@ test('serves the complete application route tree through the native Flight proto
 
   expect(response.status()).toBe(200);
   expect(response.headers()['content-type']).toBe('text/x-component;charset=utf-8');
+  expect(response.headers()['cache-control']).toBe('private, no-store');
+  expect(response.headers()['access-control-allow-origin']).toBe('https://app.converge.example');
   expect(flight).toContain('Saturday schedule');
   expect(flight).toContain('Server Components from first principles');
   expect(flight).toContain('Conference agenda');

@@ -33,9 +33,14 @@ export default ERSC.Layout.make({
                   </span>
                 </span>
               </a>
-              <div className='text-muted-foreground hidden items-center gap-2 text-sm sm:flex'>
-                <MapPin aria-hidden='true' className='size-4' />
-                {conference.data.location}
+              <div className='text-muted-foreground hidden items-center gap-4 text-sm sm:flex'>
+                <a className='hover:text-foreground' href='/schedule'>
+                  Programme
+                </a>
+                <span className='inline-flex items-center gap-2'>
+                  <MapPin aria-hidden='true' className='size-4' />
+                  {conference.data.location}
+                </span>
               </div>
             </div>
           </header>

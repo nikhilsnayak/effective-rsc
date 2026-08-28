@@ -250,18 +250,42 @@ const resolveRemoteCommit = async (vendor: Vendor, root: string) => {
   return commit;
 };
 
-const fetchRemoteCommit = async (vendor: Vendor, commit: string, root: string) => {
-  const fetched = await run(['git', 'fetch', '--no-tags', vendor.repository, commit], root);
+export const fetchRemoteCommit = async (vendor: Vendor, commit: string, root: string) => {
+  const fetchRef = `refs/ersc/vendor-sync/${process.pid}-${Bun.randomUUIDv7()}`;
+  const removeFetchRef = () => run(['git', 'update-ref', '-d', fetchRef], root);
 
-  if (fetched !== 0) {
-    throw new Error(`Could not fetch ${vendor.repository} at ${commit}.`);
-  }
-
-  const fetchHead = await output(['git', 'rev-parse', '--verify', 'FETCH_HEAD^{commit}'], root);
-  if (fetchHead.exitCode !== 0 || fetchHead.stdout !== commit) {
-    throw new Error(
-      `Fetched ${fetchHead.stdout || 'nothing'} instead of expected commit ${commit}.`,
+  try {
+    const fetched = await run(
+      [
+        'git',
+        'fetch',
+        '--no-tags',
+        '--no-write-fetch-head',
+        vendor.repository,
+        `+${commit}:${fetchRef}`,
+      ],
+      root,
     );
+
+    if (fetched !== 0) {
+      throw new Error(`Could not fetch ${vendor.repository} at ${commit}.`);
+    }
+
+    const fetchedCommit = await output(
+      ['git', 'rev-parse', '--verify', `${fetchRef}^{commit}`],
+      root,
+    );
+    if (fetchedCommit.exitCode !== 0 || fetchedCommit.stdout !== commit) {
+      throw new Error(
+        `Fetched ${fetchedCommit.stdout || 'nothing'} instead of expected commit ${commit}.`,
+      );
+    }
+  } catch (error) {
+    await removeFetchRef();
+    throw error;
+  }
+  if ((await removeFetchRef()) !== 0) {
+    throw new Error(`Could not remove the temporary fetch ref ${fetchRef}.`);
   }
 };
 
@@ -302,7 +326,7 @@ type VendorLock = Record<
   }
 >;
 
-const updateVendorLock = async (name: VendorName, vendor: Vendor, commit: string, root: string) => {
+const updateVendorLock = async (name: string, vendor: Vendor, commit: string, root: string) => {
   const lockPath = join(root, 'repos/.vendor-lock.json');
   const lockFile = Bun.file(lockPath);
   const lock: VendorLock = (await lockFile.exists()) ? await lockFile.json() : {};
@@ -318,12 +342,37 @@ const updateVendorLock = async (name: VendorName, vendor: Vendor, commit: string
   await Bun.write(lockPath, `${JSON.stringify(lock, undefined, 2)}\n`);
 };
 
-const syncSubtree = async (
-  name: VendorName,
-  vendor: SubtreeVendor,
-  commit: string,
-  root: string,
-) => {
+const commitSubtreeVendorLock = async (name: string, root: string, headBeforeSync: string) => {
+  if ((await run(['git', 'add', '--', 'repos/.vendor-lock.json'], root)) !== 0) {
+    throw new Error(`Could not stage the ${name} vendor lock update.`);
+  }
+
+  const staged = await run(
+    ['git', 'diff', '--cached', '--quiet', '--', 'repos/.vendor-lock.json'],
+    root,
+  );
+  if (staged === 0) {
+    return;
+  }
+  if (staged !== 1) {
+    throw new Error(`Could not inspect the staged ${name} vendor lock update.`);
+  }
+
+  const headAfterSync = await output(['git', 'rev-parse', '--verify', 'HEAD'], root);
+  if (headAfterSync.exitCode !== 0) {
+    throw new Error(`Could not read HEAD after syncing ${name}.`);
+  }
+
+  const commitCommand =
+    headAfterSync.stdout === headBeforeSync
+      ? ['git', 'commit', '-m', `chore: sync ${name} vendor lock`]
+      : ['git', 'commit', '--amend', '--no-edit'];
+  if ((await run(commitCommand, root)) !== 0) {
+    throw new Error(`Could not commit the ${name} vendor lock update.`);
+  }
+};
+
+const syncSubtree = async (name: string, vendor: SubtreeVendor, commit: string, root: string) => {
   const prefixExists = existsSync(join(root, vendor.prefix));
   const existingSplit = await subtreeSplit(vendor, root);
 
@@ -363,7 +412,7 @@ const syncSubtree = async (
 };
 
 const syncDirectory = async (
-  name: VendorName,
+  name: string,
   vendor: DirectoryVendor | DirectoriesVendor,
   commit: string,
   root: string,
@@ -489,9 +538,16 @@ const syncDirectory = async (
   }
 };
 
-const sync = async (name: VendorName, root: string) => {
-  const vendor = vendors[name];
+export const syncVendor = async (name: string, vendor: Vendor, root: string) => {
   const remoteCommit = await resolveRemoteCommit(vendor, root);
+  const headBeforeSync =
+    vendor.kind === 'subtree'
+      ? await output(['git', 'rev-parse', '--verify', 'HEAD'], root)
+      : undefined;
+
+  if (headBeforeSync !== undefined && headBeforeSync.exitCode !== 0) {
+    throw new Error(`Could not read HEAD before syncing ${name}.`);
+  }
 
   if (vendor.kind === 'subtree') {
     await syncSubtree(name, vendor, remoteCommit, root);
@@ -501,7 +557,12 @@ const sync = async (name: VendorName, root: string) => {
   }
 
   await updateVendorLock(name, vendor, remoteCommit, root);
+  if (headBeforeSync !== undefined) {
+    await commitSubtreeVendorLock(name, root, headBeforeSync.stdout);
+  }
 };
+
+const sync = async (name: VendorName, root: string) => syncVendor(name, vendors[name], root);
 
 const main = async () => {
   const requested = Bun.argv[2];
@@ -531,7 +592,15 @@ const main = async () => {
     throw new Error('The worktree must be clean before syncing vendored repositories.');
   }
 
-  for (const name of requested === 'all' ? names : [requested as VendorName]) {
+  const requestedNames =
+    requested === 'all'
+      ? [
+          ...names.filter((name) => vendors[name].kind === 'subtree'),
+          ...names.filter((name) => vendors[name].kind !== 'subtree'),
+        ]
+      : [requested as VendorName];
+
+  for (const name of requestedNames) {
     await sync(name, root.stdout);
   }
 };

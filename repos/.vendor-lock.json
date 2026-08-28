@@ -2,7 +2,7 @@
   "effect": {
     "repository": "https://github.com/Effect-TS/effect.git",
     "ref": "main",
-    "commit": "811d579c432856a9e3fc05b517fd8e924cbf991a"
+    "commit": "f356bc2da6abb4dee05b8c22fb597af3823e2ef7"
   },
   "react-server-dom-rspack": {
     "repository": "https://github.com/react/react.git",

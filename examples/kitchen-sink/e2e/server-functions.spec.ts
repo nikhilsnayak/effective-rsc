@@ -5,7 +5,9 @@ import { observeBrowserErrors } from './support/browser-errors';
 import { sessionCard, setAgendaSelection } from './support/conference-page';
 
 test.describe.serial('Server Functions', () => {
-  test('calls a named ServerFn.make reference imported by a Client Component', async ({ page }) => {
+  test('refreshes through a named ServerFn without revealing the route fallback', async ({
+    page,
+  }) => {
     const title = 'Effect is the runtime, not a utility belt';
     const browserErrors = observeBrowserErrors(page);
     await page.goto('/schedule/saturday');
@@ -13,9 +15,17 @@ test.describe.serial('Server Functions', () => {
 
     try {
       let session = sessionCard(page, title);
+      const fallbackAppeared = page
+        .getByRole('main', { name: 'Loading schedule' })
+        .waitFor({ state: 'visible', timeout: 1_500 })
+        .then(
+          () => true,
+          () => false,
+        );
       await session.getByRole('button', { name: 'Add to the agenda' }).click();
 
       await expect(session.getByRole('button', { name: 'Remove from the agenda' })).toBeVisible();
+      expect(await fallbackAppeared).toBe(false);
       await expect(session.getByText('Added to the agenda.')).toBeVisible();
       await expect(
         page.locator('section[aria-labelledby="conference-agenda-heading"]'),

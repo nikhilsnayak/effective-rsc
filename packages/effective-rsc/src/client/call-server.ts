@@ -1,4 +1,5 @@
 import { Effect, Schema } from 'effect';
+import { startTransition } from 'react';
 import {
   createTemporaryReferenceSet,
   encodeReply,
@@ -46,8 +47,13 @@ export const installCallServer = Effect.fnUntraced(function* (
       });
     }
     const commitRefresh = navigationResources.prepareRefresh(resource.payload.routeTree);
-    const committed = browserRoot.refresh(resource.payload.routeTree);
-    yield* Effect.all([resource.completed, Effect.promise(() => committed)], {
+    const committed = Promise.withResolvers<void>();
+    startTransition(() => {
+      // Keep the commit Promise outside React's Transition Action. Returning it would make React
+      // wait for the commit that this Promise itself observes.
+      browserRoot.refresh(resource.payload.routeTree).then(committed.resolve, committed.reject);
+    });
+    yield* Effect.all([resource.completed, Effect.promise(() => committed.promise)], {
       concurrency: 'unbounded',
       discard: true,
     }).pipe(

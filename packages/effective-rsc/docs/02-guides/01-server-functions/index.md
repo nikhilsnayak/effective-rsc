@@ -1,7 +1,8 @@
 ## Server Functions
 
 `ERSC.ServerFn.make` adds Schema input decoding, an Effect handler, request cancellation, application
-services, and a whole-tree refresh to React's Server Function protocol.
+services, and a whole-tree refresh to React's Server Function protocol. The refresh runs in a React
+transition, retaining the revealed route while refreshed content suspends.
 
 - Export it by name from a `'use server'` module.
 - Invoke it only through its client reference; direct server invocation throws.

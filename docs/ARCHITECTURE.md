@@ -203,7 +203,8 @@ entry because application mutations may affect other routes.
 
 React and RSDR own references, argument and form encoding, temporary references, form state, and
 Flight. The framework adds Schema decoding, Effect execution, request lifetime, and whole-tree
-refresh; it does not replace the native protocol with RPC.
+refresh; it does not replace the native protocol with RPC. ERSC publishes that refresh inside a
+React transition so the revealed route remains visible while the refreshed tree suspends.
 
 | Form                                                                | Current state                                              |
 | ------------------------------------------------------------------- | ---------------------------------------------------------- |

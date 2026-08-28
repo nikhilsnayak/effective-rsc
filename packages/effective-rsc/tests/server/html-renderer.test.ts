@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Logger } from 'effect';
 import { Children, Fragment, isValidElement, type ReactNode } from 'react';
 import type { ReactFormState } from 'react-dom/client';
 import type { RenderToReadableStreamOptions } from 'react-dom/server';
@@ -42,8 +42,13 @@ vi.doMock('rsc-html-stream/server', () => ({
 const { HtmlRenderer } = await import('../../src/server/html-renderer');
 
 describe('HtmlRenderer', () => {
-  it.effect('passes the request form state to Fizz without eagerly decoding Flight', () =>
-    Effect.gen(function* () {
+  it.effect('passes the request form state to Fizz without eagerly decoding Flight', () => {
+    const logs: Array<unknown> = [];
+    const logger = Logger.make<unknown, void>(({ message }) => {
+      logs.push(message);
+    });
+
+    return Effect.gen(function* () {
       const renderer = yield* HtmlRenderer;
       const flightStream = new ReadableStream<Uint8Array>({
         start(controller) {
@@ -72,7 +77,12 @@ describe('HtmlRenderer', () => {
       });
       expect(renderOptions?.bootstrapScripts).toEqual(clientBootstrapScripts);
       expect(renderOptions?.formState).toBe(formState);
+      const renderError = new Error('render failed');
+      renderOptions?.onError?.(renderError, { componentStack: '\n    at Page' });
+      yield* Effect.yieldNow;
+      expect(logs).toEqual([['HTML render failed.', renderError, '\n    at Page']]);
     }).pipe(
+      Effect.withLogger(logger),
       Effect.provide(HtmlRenderer.layer),
       Effect.provideService(
         ServerConfig,
@@ -85,6 +95,6 @@ describe('HtmlRenderer', () => {
           publicAssetsRoot: '/tmp/ersc-public',
         }),
       ),
-    ),
-  );
+    );
+  });
 });

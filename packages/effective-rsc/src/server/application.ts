@@ -1,6 +1,7 @@
 import * as BunHttpServer from '@effect/platform-bun/BunHttpServer';
 import { Effect, Layer, Option, Stream, type Types } from 'effect';
 import {
+  HttpEffect,
   HttpRouter,
   HttpServerRequest,
   HttpServerResponse,
@@ -43,6 +44,23 @@ const BunServerLayer = Layer.unwrap(
 );
 
 const EmptyPathParams: PagePathParams = Object.freeze({});
+const DynamicResponseHeaders = {
+  'cache-control': 'private, no-store',
+} as const;
+
+const appendAcceptVary = (vary: string | undefined) => {
+  if (vary === undefined || vary.trim() === '') {
+    return 'Accept';
+  }
+
+  const fields = vary.split(',').map((field) => field.trim().toLowerCase());
+  return fields.includes('*') || fields.includes('accept') ? vary : `${vary}, Accept`;
+};
+
+const acceptVaryPreResponseHandler: HttpEffect.PreResponseHandler = (_request, response) =>
+  Effect.succeed(
+    HttpServerResponse.setHeader(response, 'vary', appendAcceptVary(response.headers['vary'])),
+  );
 
 type RenderOptions<Services> = RequestOutcome & {
   readonly destination: CompiledDestination<Services>;
@@ -118,7 +136,10 @@ const httpLayer = <Services, ApplicationError>(
         ),
         {
           contentType: `${FlightMediaType};charset=utf-8`,
-          headers: { 'content-location': requestUrl.value.href },
+          headers: {
+            ...DynamicResponseHeaders,
+            'content-location': requestUrl.value.href,
+          },
           status,
         },
       );
@@ -133,6 +154,7 @@ const httpLayer = <Services, ApplicationError>(
       fromWebStream(htmlStream).pipe(Stream.ensuring(flight.release)),
       {
         contentType: 'text/html;charset=utf-8',
+        headers: DynamicResponseHeaders,
         status,
       },
     );
@@ -154,7 +176,7 @@ const httpLayer = <Services, ApplicationError>(
             request,
             serverFnResult: null,
             status: 200,
-          }),
+          }).pipe(HttpEffect.withPreResponseHandler(acceptVaryPreResponseHandler)),
         );
         const PageMiddleware =
           destination.middleware.length === 0
@@ -177,10 +199,12 @@ const httpLayer = <Services, ApplicationError>(
             Effect.catchTag('ServerFnRequestError', (error) =>
               Effect.succeed(
                 HttpServerResponse.text(error.message, {
+                  headers: DynamicResponseHeaders,
                   status: error.status,
                 }),
               ),
             ),
+            HttpEffect.withPreResponseHandler(acceptVaryPreResponseHandler),
           ),
         ).pipe(Layer.provide(RequestContextMiddleware.layer));
 

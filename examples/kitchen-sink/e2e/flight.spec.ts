@@ -18,6 +18,13 @@ test('serves the complete application route tree through the native Flight proto
   expect(response.headers()['content-type']).toBe('text/x-component;charset=utf-8');
   expect(response.headers()['content-location']).toBe(response.url());
   expect(response.headers()['cache-control']).toBe('private, no-store');
+  expect(
+    response
+      .headers()
+      ['vary']?.split(',')
+      .map((field) => field.trim())
+      .sort(),
+  ).toEqual(['Accept', 'Origin']);
   expect(response.headers()['access-control-allow-origin']).toBe('https://app.converge.example');
   expect(flight).toContain('Saturday schedule');
   expect(flight).toContain('Server Components from first principles');

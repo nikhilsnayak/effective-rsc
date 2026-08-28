@@ -161,6 +161,8 @@ describe('ServerApplication.httpLayer', () => {
             ),
           );
           expect(serverFnResponse.status).toBe(400);
+          expect(serverFnResponse.headers.get('cache-control')).toBe('private, no-store');
+          expect(serverFnResponse.headers.get('vary')).toBe('Accept');
           expect(serverFnResponse.headers.get('x-middleware-order')).toBeNull();
           expect(serverFnResponse.headers.get('x-global-middleware')).toBe('true');
           expect(events).toEqual([]);
@@ -171,6 +173,8 @@ describe('ServerApplication.httpLayer', () => {
           expect(yield* Effect.promise(() => apiResponse.text())).toBe('healthy');
           expect(apiResponse.headers.get('x-global-middleware')).toBe('true');
           expect(apiResponse.headers.get('x-middleware-order')).toBeNull();
+          expect(apiResponse.headers.get('cache-control')).toBeNull();
+          expect(apiResponse.headers.get('vary')).toBeNull();
           expect(events).toEqual(['api']);
 
           const missingResponse = yield* Effect.promise(() =>

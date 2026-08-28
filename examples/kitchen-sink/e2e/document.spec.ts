@@ -19,6 +19,13 @@ test('streams a complete React document with its hydration payload', async ({ re
   expect(response.status()).toBe(200);
   expect(response.headers()['content-type']).toBe('text/html;charset=utf-8');
   expect(response.headers()['cache-control']).toBe('private, no-store');
+  expect(
+    response
+      .headers()
+      ['vary']?.split(',')
+      .map((field) => field.trim())
+      .sort(),
+  ).toEqual(['Accept', 'Origin']);
   expect(response.headers()['access-control-allow-origin']).toBe('https://app.converge.example');
   expect(html.startsWith('<!DOCTYPE html>')).toBe(true);
   expect(html).toMatch(/<html[^>]* lang="en"[^>]*>/);

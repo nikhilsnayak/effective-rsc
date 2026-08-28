@@ -33,6 +33,7 @@ test('reveals the loading UI before the suspended schedule', async ({ page }) =>
 
   await expect(page.getByText('Loading conference schedule...')).toBeVisible();
   await expect(page.getByRole('heading', { level: 1, name: 'Saturday schedule' })).toBeVisible();
+  await expect(page.locator('[data-speaker-id="leena-shah"]')).toBeVisible();
 });
 
 test('starts independent route concerns concurrently', async ({ request }) => {

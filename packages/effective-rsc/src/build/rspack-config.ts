@@ -26,6 +26,9 @@ const TailwindLoaderPath = require.resolve('@tailwindcss/webpack');
 const SupportedBrowserTargets = ['chrome >= 141', 'edge >= 141', 'firefox >= 147'] as const;
 
 const BunModulePrefix = 'bun:';
+const EffectModuleName = 'effect';
+const EffectModulePrefix = `${EffectModuleName}/`;
+const EffectPackagePrefix = '@effect/';
 
 export type ExternalsRequest = {
   readonly request?: string;
@@ -34,8 +37,13 @@ export type ExternalsRequest = {
 const isBunModule = (request: string | undefined): request is string =>
   request !== undefined && request.startsWith(BunModulePrefix);
 
-export const externalizeBunModule = ({ request }: ExternalsRequest): string | false =>
-  isBunModule(request) ? `module ${request}` : false;
+const isEffectModule = (request: string | undefined): request is string =>
+  request === EffectModuleName ||
+  request?.startsWith(EffectModulePrefix) === true ||
+  request?.startsWith(EffectPackagePrefix) === true;
+
+export const externalizeServerModule = ({ request }: ExternalsRequest): string | false =>
+  isBunModule(request) || isEffectModule(request) ? `module ${request}` : false;
 
 export const rejectBunModule = ({ request }: ExternalsRequest): false => {
   if (isBunModule(request)) {
@@ -156,7 +164,7 @@ export const makeRspackBuildConfig = (
     entry: {
       [ServerEntryName]: entries.rsc,
     },
-    externals: [externalizeBunModule],
+    externals: [externalizeServerModule],
     mode: 'production',
     module: {
       rules: [

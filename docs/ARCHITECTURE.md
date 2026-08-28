@@ -54,7 +54,9 @@ resources; assets are not fields in the Flight model.
 
 The browser build targets the Navigation API browser floor and enables the React Compiler. The server
 build targets Bun's Node 26 compatibility and omits the React Compiler. React, React DOM, and RSDR use
-one exact compatible release.
+one exact compatible release. The server build leaves `effect` and `@effect/*` imports external so Bun
+loads the application's exact shared peers at runtime. This also preserves runtime-owned dynamic
+imports, such as filesystem migration loading, instead of rewriting them into bundle contexts.
 
 CSS stays in Rspack's native pipeline. `@tailwindcss/webpack` compiles Tailwind CSS v4 from the
 application root; applications install `tailwindcss` explicitly. React hoists emitted stylesheets

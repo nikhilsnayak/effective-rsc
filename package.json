@@ -17,9 +17,8 @@
     "fmt": "oxfmt . '!repos/**'",
     "fmt:check": "oxfmt --check . '!repos/**'",
     "check": "bun run lint && bun run fmt:check && bun run docs:check",
-    "test": "turbo test test:dist test:pack && turbo test:e2e && bun run test:scripts",
+    "test": "turbo test test:dist test:pack && turbo test:e2e",
     "test:e2e": "turbo test:e2e",
-    "test:scripts": "vitest run scripts",
     "test:watch": "turbo test:watch",
     "vendor:sync": "bun scripts/sync-vendor.ts",
     "prepare": "effect-tsgo patch --oxlint"

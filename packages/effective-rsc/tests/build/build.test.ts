@@ -6,7 +6,7 @@ import { Effect, Path } from 'effect';
 import { resolveApplicationBuild } from '../../src/build/build';
 import { ServerBundlePath } from '../../src/build/contract';
 import {
-  externalizeBunModule,
+  externalizeServerModule,
   makeRspackBuildConfig,
   rejectBunModule,
 } from '../../src/build/rspack-config';
@@ -153,12 +153,18 @@ it.effect('keeps the React Compiler out of the server compilation', () =>
   }).pipe(Effect.provide(Path.layer)),
 );
 
-it('externalizes Bun builtins for the server graph and passes everything else through', () => {
-  expect(externalizeBunModule({ request: 'bun:sqlite' })).toBe('module bun:sqlite');
-  expect(externalizeBunModule({ request: 'bun:test' })).toBe('module bun:test');
-  expect(externalizeBunModule({ request: 'effect' })).toBe(false);
-  expect(externalizeBunModule({ request: 'node:path' })).toBe(false);
-  expect(externalizeBunModule({})).toBe(false);
+it('externalizes Bun and Effect modules for the server graph', () => {
+  expect(externalizeServerModule({ request: 'bun:sqlite' })).toBe('module bun:sqlite');
+  expect(externalizeServerModule({ request: 'bun:test' })).toBe('module bun:test');
+  expect(externalizeServerModule({ request: 'effect' })).toBe('module effect');
+  expect(externalizeServerModule({ request: 'effect/Schema' })).toBe('module effect/Schema');
+  expect(externalizeServerModule({ request: '@effect/platform-bun/BunHttpServer' })).toBe(
+    'module @effect/platform-bun/BunHttpServer',
+  );
+  expect(externalizeServerModule({ request: 'effective-rsc' })).toBe(false);
+  expect(externalizeServerModule({ request: '@effectual/core' })).toBe(false);
+  expect(externalizeServerModule({ request: 'node:path' })).toBe(false);
+  expect(externalizeServerModule({})).toBe(false);
 });
 
 it('rejects Bun builtins reaching the browser graph and points at the boundary', () => {
@@ -173,12 +179,12 @@ it('rejects Bun builtins reaching the browser graph and points at the boundary',
   expect(rejectBunModule({})).toBe(false);
 });
 
-it.effect('wires each Bun predicate into the graph that owns it', () =>
+it.effect('wires the browser rejection and server externalization into their owning graphs', () =>
   Effect.gen(function* () {
     const { applicationRoot, entries } = yield* resolveFixtureBuild('/workspace');
     const configs = makeRspackBuildConfig(applicationRoot, entries);
 
     expect(configNamed(configs, 'client').externals).toEqual([rejectBunModule]);
-    expect(configNamed(configs, 'server').externals).toEqual([externalizeBunModule]);
+    expect(configNamed(configs, 'server').externals).toEqual([externalizeServerModule]);
   }).pipe(Effect.provide(Path.layer)),
 );

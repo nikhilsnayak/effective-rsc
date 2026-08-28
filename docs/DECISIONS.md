@@ -56,6 +56,7 @@ implemented, accepted but not implemented, and intentionally outside the current
 | D-054 | Compose services and native userland HTTP through one `ERSC.make({ layer })`; Routes middleware inherits over Page GET/HEAD only, runs request order top-down and response order bottom-up, and redirects through the native Flight and Navigation API protocols. |
 | D-055 | Interrupt canceled and superseded Flight from browser to server; restore URL and UI for cancellation, while a successor retires the earlier render without rollback flicker.                                                                                      |
 | D-056 | Cache completed whole-tree payloads by Navigation API history-entry id for Back/Forward traversal, evict on entry disposal, and invalidate across Server Function refreshes.                                                                                      |
+| D-057 | Externalize `effect` and `@effect/*` from the server bundle so Bun loads the application's exact shared peers and runtime dynamic imports retain their native semantics.                                                                                          |
 
 ## Planned
 

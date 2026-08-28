@@ -172,6 +172,12 @@ request
 The browser makes no second initial Flight request and hydrates `document`, not a framework container.
 Disconnecting cancels both stream branches and interrupts request-scoped Effects.
 
+If Fizz fails before producing the HTML shell, `HtmlRenderError` reaches Effect HTTP and becomes an
+empty `500` response. Once streaming begins, the status and headers are already committed. Fizz
+reports subsequent render errors through the request's Effect logger, while React and Web Streams
+own boundary recovery or stream termination. Expected request aborts are not logged as render
+failures.
+
 ## Client navigation
 
 ```text

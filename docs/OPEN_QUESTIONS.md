@@ -5,16 +5,6 @@ and add or revise its owning decision.
 
 IDs are append-only and never reused, including after a question is resolved.
 
-## OQ-001 — Streaming SSR failure policy
-
-- **Question:** How should failures before HTML headers map to HTTP responses, and how should failures after streaming begins be reported?
-- **Why:** Once headers are committed, the server cannot replace the response with an ordinary typed error response.
-- **Affected:** HTML rendering, Effect HTTP responses, diagnostics, and observability.
-- **Evidence:** Pre-header failures are typed `HtmlRenderError`s; post-header diagnostics are undefined.
-- **Related:** D-004, D-020, D-040.
-- **Resolution:** Unresolved.
-- **Status:** Open.
-
 ## OQ-002 — Suspensing Loading diagnostics
 
 - **Question:** How should development diagnose an `ERSC.Loading.make` renderer that calls `use` or otherwise throws a thenable internally?

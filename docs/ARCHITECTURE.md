@@ -211,6 +211,11 @@ Flight. The framework adds Schema decoding, Effect execution, request lifetime, 
 refresh; it does not replace the native protocol with RPC. ERSC publishes that refresh inside a
 React transition so the revealed route remains visible while the refreshed tree suspends.
 
+Server Function POST requires an `Origin` whose host matches the first `X-Forwarded-Host` value or
+the `Host` header. The server rejects a missing or mismatched Origin with `403`. Request bodies are
+limited to 10 MiB; known oversized bodies fail before reading, and streamed bodies fail as soon as
+they cross the limit, before React decodes them.
+
 | Form                                                                | Current state                                              |
 | ------------------------------------------------------------------- | ---------------------------------------------------------- |
 | Named `ERSC.ServerFn.make` imported and bound by a Client Component | Works after hydration.                                     |

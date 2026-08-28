@@ -58,6 +58,7 @@ implemented, accepted but not implemented, and intentionally outside the current
 | D-056 | Cache completed whole-tree payloads by Navigation API history-entry id for Back/Forward traversal, evict on entry disposal, and invalidate across Server Function refreshes.                                                                                      |
 | D-057 | Externalize `effect` and `@effect/*` from the server bundle so Bun loads the application's exact shared peers and runtime dynamic imports retain their native semantics.                                                                                          |
 | D-058 | Serve the conventional application-root `public/` directory from `/` through Effect `HttpStaticServer`, with revalidation-friendly `Cache-Control: public, max-age=0`; keep compiler assets under `/_ersc/assets`.                                                |
+| D-059 | Require a matching browser Origin host for Server Function POST requests and reject bodies larger than 10 MiB while streaming, before React decodes them.                                                                                                         |
 
 ## Planned
 

@@ -9,5 +9,6 @@ transition, retaining the revealed route while refreshed content suspends.
 - Bind serializable input before passing it to a form action.
 - Let `input` infer the handler parameter; do not annotate it.
 - The returned client reference resolves `Promise<Output>`.
+- Browser requests require an `Origin` matching the application host and may contain at most 10 MiB.
 - Encode expected mutation failures in a discriminated `Output` union. The Effect error channel is
   not exposed by the client reference yet.

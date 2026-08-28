@@ -4,15 +4,14 @@ import { Check, Plus, X } from 'lucide-react';
 import { useActionState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { toggleAgenda, type AgendaMutationState } from '@/modules/agenda/server-functions';
+import type { AgendaMutationState } from '@/modules/agenda/server-functions';
 
 type AgendaToggleProps = {
+  readonly action: () => Promise<AgendaMutationState>;
   readonly isInAgenda: boolean;
-  readonly sessionId: string;
 };
 
-export function AgendaToggle({ isInAgenda, sessionId }: AgendaToggleProps) {
-  const action = toggleAgenda.bind(null, { sessionId });
+export function AgendaToggle({ action, isInAgenda }: AgendaToggleProps) {
   const [state, formAction, pending] = useActionState<AgendaMutationState | null>(action, null);
   const selected = state?.selected ?? isInAgenda;
 

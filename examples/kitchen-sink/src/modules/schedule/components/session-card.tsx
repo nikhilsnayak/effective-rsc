@@ -5,10 +5,13 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AgendaToggle } from '@/modules/agenda/components/agenda-toggle';
+import { toggleAgenda } from '@/modules/agenda/server-functions';
 import type { Session } from '@/modules/conference/model';
 import { SessionSpeaker } from '@/modules/schedule/components/session-speaker';
 
 export function SessionCard({ session }: { readonly session: Session }) {
+  const toggleAgendaAction = toggleAgenda.bind(null, { sessionId: session.id });
+
   return (
     <Card className='gap-0 rounded-lg py-0 shadow-none'>
       <article className='grid sm:grid-cols-[7.5rem_minmax(0,1fr)]'>
@@ -40,7 +43,7 @@ export function SessionCard({ session }: { readonly session: Session }) {
           >
             <SessionSpeaker speakerId={session.speakerId} />
           </Suspense>
-          <AgendaToggle isInAgenda={session.isInAgenda} sessionId={session.id} />
+          <AgendaToggle action={toggleAgendaAction} isInAgenda={session.isInAgenda} />
           <span className='sr-only'>
             <Clock3 aria-hidden='true' /> {session.startsAt} to {session.endsAt}
           </span>

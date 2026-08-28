@@ -1,5 +1,13 @@
 import { Effect, Schema } from 'effect';
-import { StrictMode, useLayoutEffect, useRef, useState } from 'react';
+import {
+  Component,
+  type ErrorInfo,
+  type ReactNode,
+  StrictMode,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { hydrateRoot } from 'react-dom/client';
 
 import type { FlightPayload } from '../rsc/flight';
@@ -8,6 +16,8 @@ import {
   type BrowserRootController,
   makeBrowserRenderer,
 } from './browser-renderer';
+import { BrowserFailureScreen } from './browser-screen';
+import { ClientRuntime } from './client-runtime';
 import { RouteTree } from './route-tree';
 
 export class BrowserRootHydrationError extends Schema.TaggedError<BrowserRootHydrationError>()(
@@ -15,11 +25,41 @@ export class BrowserRootHydrationError extends Schema.TaggedError<BrowserRootHyd
   { cause: Schema.Defect() },
 ) {}
 
+type BrowserErrorBoundaryState = { readonly _tag: 'Ready' } | { readonly _tag: 'Failed' };
+type BrowserErrorBoundaryProps = {
+  readonly children: ReactNode;
+  readonly onError: (error: unknown, info: ErrorInfo) => void;
+};
+
+class BrowserErrorBoundary extends Component<BrowserErrorBoundaryProps, BrowserErrorBoundaryState> {
+  override readonly state: BrowserErrorBoundaryState = { _tag: 'Ready' };
+
+  static getDerivedStateFromError(): BrowserErrorBoundaryState {
+    return { _tag: 'Failed' };
+  }
+
+  override componentDidCatch(error: unknown, info: ErrorInfo) {
+    this.props.onError(error, info);
+  }
+
+  override render() {
+    if (this.state._tag === 'Failed') {
+      return <BrowserFailureScreen />;
+    }
+
+    return this.props.children;
+  }
+}
+
 export const hydrateBrowserRoot = Effect.fnUntraced(function* (
   container: Element | Document,
   initialPayload: FlightPayload,
 ) {
   const browserRootReady = Promise.withResolvers<BrowserRootController>();
+  const run = yield* ClientRuntime;
+  const reportError = (error: unknown, info: ErrorInfo) => {
+    void run(Effect.logError('Uncaught client render error.', error, info.componentStack));
+  };
 
   function BrowserRoot() {
     const [render, setRender] = useState<BrowserRender>(() => ({
@@ -40,7 +80,11 @@ export const hydrateBrowserRoot = Effect.fnUntraced(function* (
       rendererRef.current!.commit(render);
     }, [render]);
 
-    return <RouteTree root={render.routeTree} />;
+    return (
+      <BrowserErrorBoundary onError={reportError}>
+        <RouteTree root={render.routeTree} />
+      </BrowserErrorBoundary>
+    );
   }
 
   yield* Effect.acquireRelease(

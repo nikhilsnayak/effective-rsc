@@ -3,6 +3,7 @@ import * as BrowserRuntime from '@effect/platform-browser/BrowserRuntime';
 import { Effect, Layer } from 'effect';
 
 import { BrowserNavigation } from './browser-navigation';
+import { showBrowserFailure, showUnsupportedBrowser } from './browser-screen';
 import { ClientRuntime } from './client-runtime';
 import { hydrate } from './hydrate';
 
@@ -10,4 +11,17 @@ const ClientLayer = Layer.mergeAll(BrowserNavigation.layer, ClientRuntime.layer)
   Layer.provide(BrowserHttpClient.layerFetch),
 );
 
-BrowserRuntime.runMain(hydrate.pipe(Effect.provide(ClientLayer)));
+const renderBrowserFailure = Effect.sync(showBrowserFailure);
+const renderUnsupportedBrowser = Effect.sync(showUnsupportedBrowser);
+
+const program = hydrate.pipe(
+  Effect.provide(ClientLayer),
+  Effect.catchTags({
+    BrowserHydrationError: () => renderBrowserFailure,
+    BrowserRootHydrationError: () => renderBrowserFailure,
+    NavigationApiUnavailableError: () => renderUnsupportedBrowser,
+    NavigationPrecommitUnavailableError: () => renderUnsupportedBrowser,
+  }),
+);
+
+BrowserRuntime.runMain(program);

@@ -1,7 +1,16 @@
 {
   "name": "create-ersc-app",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Create a new effective-rsc application",
+  "keywords": [
+    "bun",
+    "effect",
+    "react-server-components"
+  ],
+  "homepage": "https://github.com/nikhilsnayak/effective-rsc/tree/main/packages/create-ersc-app#readme",
+  "bugs": {
+    "url": "https://github.com/nikhilsnayak/effective-rsc/issues"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -19,6 +28,9 @@
     "README.md"
   ],
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "rslib build",
     "prepack": "bun run build",

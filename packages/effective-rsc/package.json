@@ -1,6 +1,16 @@
 {
   "name": "effective-rsc",
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "description": "An Effect-native React Server Components framework for Bun",
+  "keywords": [
+    "bun",
+    "effect",
+    "react-server-components"
+  ],
+  "homepage": "https://github.com/nikhilsnayak/effective-rsc#readme",
+  "bugs": {
+    "url": "https://github.com/nikhilsnayak/effective-rsc/issues"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -26,6 +36,9 @@
       "react-server": "./dist/index.js",
       "default": "./dist/unsupported.js"
     }
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "rslib build",

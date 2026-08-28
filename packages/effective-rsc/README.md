@@ -1,4 +1,4 @@
-# effective-rsc
+# effective-rsc ![Experimental](https://img.shields.io/badge/status-experimental-orange)
 
 An experimental React Server Components framework where React owns the UI protocol and Effect owns
 the application runtime. It uses Rspack's native RSC support and targets Bun.
@@ -150,6 +150,26 @@ is the complete application example and end-to-end integration fixture.
 - [Guides](./docs/02-guides/index.md)
 - [API reference](./docs/03-api-reference/index.md)
 - [Combined LLM reference](./LLMS.md)
-- [Architecture](https://github.com/nikhilsnayak/effective-rsc/blob/main/docs/ARCHITECTURE.md)
-- [Decision register](https://github.com/nikhilsnayak/effective-rsc/blob/main/docs/DECISIONS.md)
-- [Open questions](https://github.com/nikhilsnayak/effective-rsc/blob/main/docs/OPEN_QUESTIONS.md)
+
+## Credits
+
+### Key dependencies
+
+- [Rspack](https://github.com/web-infra-dev/rspack) and
+  [react-server-dom-rspack](https://www.npmjs.com/package/react-server-dom-rspack) provide native
+  RSC compilation and transport. Special thanks to [Cong-Cong Pan](https://github.com/SyMind) for
+  their work on Rspack's RSC implementation.
+- [rsc-html-stream](https://github.com/devongovett/rsc-html-stream) by
+  [Devon Govett](https://x.com/devongovett) embeds Flight in streamed HTML.
+
+### Prior art
+
+- [Next.js](https://github.com/vercel/next.js) is a reference for production RSC conventions and
+  protocol behavior.
+- [Waku](https://github.com/wakujs/waku) by [Daishi Kato](https://x.com/dai_shi) and
+  [Twofold](https://github.com/twofold-rsc/twofold) by
+  [Ryan Toronto](https://x.com/ryantotweets) demonstrated compact RSC framework design.
+- [rspack-rsc](https://github.com/rstackjs/rstack-examples/tree/main/rspack/rspack-rsc),
+  [rsbuild-plugin-rsc](https://github.com/rstackjs/rsbuild-plugin-rsc), and
+  [Vite RSC](https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-rsc) provide
+  reference implementations for RSC bundling and Server Function integration.

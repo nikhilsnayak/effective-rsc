@@ -12,7 +12,7 @@
     "@effect/platform-browser": "4.0.0-rc.112",
     "@effect/platform-bun": "4.0.0-rc.112",
     "effect": "4.0.0-rc.112",
-    "effective-rsc": "0.0.0",
+    "effective-rsc": "0.1.0",
     "react": "19.3.0-canary-a1124489-20260826",
     "react-dom": "19.3.0-canary-a1124489-20260826",
     "react-server-dom-rspack": "0.1.0"

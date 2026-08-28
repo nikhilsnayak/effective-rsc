@@ -2,7 +2,12 @@ import { Effect, FileSystem, Layer, Path, Schema, Types } from 'effect';
 import { HttpRouter } from 'effect/unstable/http';
 
 import { ServerConfig } from '../server/server-config';
-import { ClientOutputDir, CompiledServerExportNames, ServerBundlePath } from './contract';
+import {
+  ClientOutputDir,
+  CompiledServerExportNames,
+  PublicAssetsDir,
+  ServerBundlePath,
+} from './contract';
 
 export class CompiledServerError extends Schema.TaggedError<CompiledServerError>()(
   'CompiledServerError',
@@ -66,6 +71,7 @@ const makeServerConfigLayer = Effect.fnUntraced(function* ({
       clientStylesheets: bundle[CompiledServerExportNames.application].entryCssFiles,
       hostname,
       port,
+      publicAssetsRoot: path.resolve(root, PublicAssetsDir),
     }),
   );
 });

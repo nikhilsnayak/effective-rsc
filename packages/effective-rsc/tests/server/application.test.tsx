@@ -35,6 +35,7 @@ const ServerConfigLayer = Layer.succeed(
     clientStylesheets: [],
     hostname: 'localhost',
     port: 18193,
+    publicAssetsRoot: '/tmp/ersc-test-public-assets',
   }),
 );
 
@@ -181,7 +182,7 @@ describe('ServerApplication.httpLayer', () => {
             handler(new Request('http://effective-rsc.test/missing')),
           );
           expect(missingResponse.status).toBe(404);
-          expect(missingResponse.headers.get('x-global-middleware')).toBeNull();
+          expect(missingResponse.headers.get('x-global-middleware')).toBe('true');
           expect(globalRequests).toBe(5);
           expect(acquisitions).toBe(1);
         }),

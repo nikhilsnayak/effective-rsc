@@ -11,5 +11,6 @@ export class ServerConfig extends Context.Service<
     readonly clientStylesheets: ReadonlyArray<string>;
     readonly hostname: string;
     readonly port: number;
+    readonly publicAssetsRoot: string;
   }
 >()('ersc/server/server-config/ServerConfig') {}

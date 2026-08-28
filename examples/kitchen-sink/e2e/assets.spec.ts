@@ -47,3 +47,13 @@ test('serves every stylesheet and client module referenced by the document', asy
     );
   }
 });
+
+test('serves conventional public assets from the application root', async ({ request }) => {
+  const { body, response } = await getText(request, '/robots.txt');
+
+  expect(response.status()).toBe(200);
+  expect(response.headers()['content-type']).toBe('text/plain; charset=utf-8');
+  expect(response.headers()['cache-control']).toBe('public, max-age=0');
+  expect(response.headers()['access-control-allow-origin']).toBe('https://app.converge.example');
+  expect(body).toBe('User-agent: *\nAllow: /\n');
+});

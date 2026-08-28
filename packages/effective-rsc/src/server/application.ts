@@ -34,6 +34,15 @@ const StaticAssetsLayer = Layer.unwrap(
   ),
 );
 
+const PublicAssetsLayer = Layer.unwrap(
+  Effect.map(ServerConfig, ({ publicAssetsRoot }) =>
+    HttpStaticServer.layer({
+      cacheControl: 'public, max-age=0',
+      root: publicAssetsRoot,
+    }),
+  ),
+);
+
 const BunServerLayer = Layer.unwrap(
   Effect.map(ServerConfig, ({ hostname, port }) =>
     BunHttpServer.layer({
@@ -218,7 +227,7 @@ const httpLayer = <Services, ApplicationError>(
     }),
   ).pipe(Layer.provide(RequestLayer));
 
-  return Layer.mergeAll(ApplicationRoutesLayer, StaticAssetsLayer);
+  return Layer.mergeAll(ApplicationRoutesLayer, StaticAssetsLayer, PublicAssetsLayer);
 };
 
 const serverLayer = <Services, ApplicationError>(

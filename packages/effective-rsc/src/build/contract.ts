@@ -3,6 +3,7 @@ export const ApplicationEntrySpecifier = 'effective-rsc/application-entry';
 
 export const ClientEntryName = 'main';
 export const ClientOutputDir = '.ersc/client';
+export const PublicAssetsDir = 'public';
 export const ServerEntryName = 'main';
 export const ServerOutputDir = '.ersc/server';
 

@@ -82,6 +82,7 @@ describe('HtmlRenderer', () => {
           clientStylesheets: ['/_ersc/assets/main.css'],
           hostname: 'localhost',
           port: 18193,
+          publicAssetsRoot: '/tmp/ersc-public',
         }),
       ),
     ),

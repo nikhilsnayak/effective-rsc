@@ -77,7 +77,7 @@ describe('HtmlRenderer', () => {
       Effect.provideService(
         ServerConfig,
         ServerConfig.of({
-          clientAssetsRoot: '/tmp/effective-rsc-client',
+          clientAssetsRoot: '/tmp/ersc-client',
           clientBootstrapScripts,
           clientStylesheets: ['/_ersc/assets/main.css'],
           hostname: 'localhost',

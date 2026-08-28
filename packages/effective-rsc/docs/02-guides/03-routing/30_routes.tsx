@@ -6,10 +6,12 @@
 import { ERSC } from './01_application';
 import { ArticleLayout, ArticleLoading, RootLayout } from './10_layouts';
 import { ArticlePage, HomePage } from './20_pages';
+import { ArticleResponsePolicy } from './25_middleware';
 
 const articleRoutes = ERSC.Routes.make({
   layout: ArticleLayout,
   loading: ArticleLoading,
+  middleware: [ArticleResponsePolicy],
 }).page('/:slug', ArticlePage);
 
 export const applicationRoutes = ERSC.Routes.make({ layout: RootLayout })

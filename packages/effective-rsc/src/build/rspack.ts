@@ -125,7 +125,7 @@ const reportStats = Effect.fnUntraced(function* (stats: RspackStats) {
   );
 });
 
-export class Rspack extends Context.Service<Rspack>()('effective-rsc/build/Rspack', {
+export class Rspack extends Context.Service<Rspack>()('ersc/build/Rspack', {
   make: Effect.succeed({
     build: Effect.fn('Rspack.build')(function* (configs: ReadonlyArray<Configuration>) {
       yield* Effect.logInfo(`${Ansi.cyan}●${Ansi.reset} Building application with Rspack...`);

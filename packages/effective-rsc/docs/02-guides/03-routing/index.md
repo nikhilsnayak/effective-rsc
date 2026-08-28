@@ -5,6 +5,12 @@
 - `mount(prefix, routes)` mounts a non-empty graph below a parameter-free prefix.
 - A Page parameter Schema must exactly match its path parameters.
 - Nested scopes may own a Layout, Loading fallback, both, or neither.
+- A scope's ordered `middleware` list applies to Page GET and native HEAD fallback for every
+  descendant. Ancestors run before descendants; responses unwind in reverse order.
+- ERSC resolves scope inheritance and delegates composition to native Effect
+  `HttpRouter.Middleware`.
+- Routes middleware does not apply to Server Function POST, userland HTTP, assets, or unmatched
+  paths. Use native Effect HTTP global middleware for server-wide policy.
 - Loading is synchronous and service-free.
 - Root Routes require a Layout and at least one Page.
 

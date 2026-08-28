@@ -45,16 +45,6 @@ IDs are append-only and never reused, including after a question is resolved.
 - **Resolution:** Unresolved.
 - **Status:** Open.
 
-## OQ-005 — Superseded committed navigation responses
-
-- **Question:** Should a newer committed route retire an earlier committed-but-still-streaming Flight response?
-- **Why:** The earlier response can continue consuming request-scoped work after a later navigation owns the visible URL.
-- **Affected:** Navigation cancellation, Flight stream lifetime, resource use, and reveal behavior.
-- **Evidence:** `NavigateEvent.signal` owns each intercepted navigation through its commit, while response streams can outlive that handler.
-- **Related:** D-032, D-043.
-- **Resolution:** Unresolved; formerly tracked as D-037, whose identifier is permanently retired.
-- **Status:** Open.
-
 ## OQ-006 — Server Function failure channel
 
 - **Question:** How should a Server Function handler's typed failure reach its caller?

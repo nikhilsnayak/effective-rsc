@@ -40,5 +40,5 @@ const FeaturedPage = ERSC.Page.make({
 
 export default ERSC.make({
   routes: ERSC.Routes.make({ layout: RootLayout }).page('/', FeaturedPage),
-  servicesLayer: Catalog.layer,
+  layer: Catalog.layer,
 });

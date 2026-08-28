@@ -60,14 +60,14 @@ export const resolveApplicationBuild = Effect.fnUntraced(function* ({
   return { applicationRoot, entries } as const;
 });
 
-export const build = Effect.fn('effective-rsc/rspack/build')(function* (options: BuildOptions) {
+export const build = Effect.fn('ersc/rspack/build')(function* (options: BuildOptions) {
   const { applicationRoot, entries } = yield* resolveApplicationBuild(options);
   const rspack = yield* Rspack;
 
   yield* rspack.build(makeRspackBuildConfig(applicationRoot, entries));
 });
 
-export const buildApplication = Effect.fn('effective-rsc/build/buildApplication')(function* (
+export const buildApplication = Effect.fn('ersc/build/buildApplication')(function* (
   options: BuildOptions,
 ) {
   yield* build(options).pipe(Effect.provide(Rspack.layer), Effect.scoped);

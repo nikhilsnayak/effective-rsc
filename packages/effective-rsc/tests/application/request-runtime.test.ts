@@ -7,7 +7,7 @@ import {
 } from '../../src/application/request-runtime';
 
 class RequestLabel extends Context.Service<RequestLabel, { readonly value: string }>()(
-  'effective-rsc/tests/application/request-runtime/RequestLabel',
+  'ersc/tests/application/request-runtime/RequestLabel',
 ) {}
 
 const runtimeWithLabel =

@@ -91,13 +91,17 @@ class PageDefinitionImpl<
     readonly paramNames: Types.Covariant<ParamNames>;
   };
   readonly [ERSCIdentityTypeId]: ERSCIdentity<Services>;
+  readonly component: PageComponent;
+  readonly paramsSchema: ParamsSchema;
 
   constructor(
     identity: ERSCIdentity<Services>,
-    readonly component: PageComponent,
-    readonly paramsSchema: ParamsSchema,
+    component: PageComponent,
+    paramsSchema: ParamsSchema,
   ) {
     this[ERSCIdentityTypeId] = identity;
+    this.component = component;
+    this.paramsSchema = paramsSchema;
     Object.freeze(this);
   }
 }

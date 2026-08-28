@@ -1,4 +1,4 @@
-import { Effect, Exit, Schema, Scope, Stream } from 'effect';
+import { Deferred, Effect, Exit, Schema, Scope, Stream } from 'effect';
 import { HttpBody, HttpClient, HttpClientRequest } from 'effect/unstable/http';
 import {
   createFromReadableStream,
@@ -27,6 +27,7 @@ type FlightRequest =
 
 type FlightResource = {
   readonly _tag: 'Flight';
+  readonly completed: Effect.Effect<void, FlightLoadError>;
   readonly payload: FlightPayload;
   readonly release: Effect.Effect<void>;
   readonly resolvedUrl: URL;
@@ -105,8 +106,26 @@ export const loadFlight = Effect.fnUntraced(function* (flightRequest: FlightRequ
         }),
     });
 
+    const completed = yield* Deferred.make<void, FlightLoadError>();
     const responseBody = yield* Stream.toReadableStreamEffect(
-      response.stream.pipe(Stream.ensuring(release)),
+      response.stream.pipe(
+        Stream.onExit((exit) =>
+          Deferred.done(
+            completed,
+            exit.pipe(
+              Exit.mapError(
+                (cause) =>
+                  new FlightLoadError({
+                    cause,
+                    reason: 'RequestFailed',
+                  }),
+              ),
+              Exit.asVoid,
+            ),
+          ),
+        ),
+        Stream.ensuring(release),
+      ),
     );
     const payload = yield* Effect.tryPromise({
       try: () =>
@@ -125,6 +144,7 @@ export const loadFlight = Effect.fnUntraced(function* (flightRequest: FlightRequ
 
     return {
       _tag: 'Flight',
+      completed: Deferred.await(completed),
       payload,
       release,
       resolvedUrl,

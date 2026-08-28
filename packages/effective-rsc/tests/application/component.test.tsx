@@ -6,7 +6,7 @@ import { getERSCIdentity } from '../../src/application/ersc-identity';
 import type { RequestRuntime } from '../../src/application/request-runtime';
 
 class Greeting extends Context.Service<Greeting, { readonly prefix: string }>()(
-  'effective-rsc/tests/application/component/Greeting',
+  'ersc/tests/application/component/Greeting',
 ) {}
 
 describe('ERSC.Component.make', () => {

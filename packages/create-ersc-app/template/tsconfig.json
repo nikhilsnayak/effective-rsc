@@ -6,6 +6,7 @@
     "jsx": "react-jsx",
     "noEmit": true,
     "strict": true,
+    "erasableSyntaxOnly": true,
     "exactOptionalPropertyTypes": true,
     "noUncheckedIndexedAccess": true,
     "noUncheckedSideEffectImports": true,

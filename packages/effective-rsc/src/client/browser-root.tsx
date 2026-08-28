@@ -1,35 +1,19 @@
 import { Effect, Schema } from 'effect';
-import { StrictMode, useLayoutEffect, useState } from 'react';
+import { StrictMode, useLayoutEffect, useRef, useState } from 'react';
 import { hydrateRoot } from 'react-dom/client';
 
 import type { FlightPayload } from '../rsc/flight';
-import type { RouteTreeModel } from '../rsc/route-tree';
-import { retainSharedLayoutContent, RouteTree } from './route-tree';
+import {
+  type BrowserRender,
+  type BrowserRootController,
+  makeBrowserRenderer,
+} from './browser-renderer';
+import { RouteTree } from './route-tree';
 
 export class BrowserRootHydrationError extends Schema.TaggedError<BrowserRootHydrationError>()(
   'BrowserRootHydrationError',
   { cause: Schema.Defect() },
 ) {}
-
-export type BrowserRenderRequest = {
-  readonly _tag: 'Navigation' | 'ServerFunction';
-  readonly routeTree: RouteTreeModel;
-};
-
-type PendingBrowserRender = BrowserRenderRequest & {
-  readonly onCommit: () => void;
-};
-
-type BrowserRender =
-  | {
-      readonly _tag: 'Initial';
-      readonly routeTree: RouteTreeModel;
-    }
-  | PendingBrowserRender;
-
-export type BrowserRootController = {
-  readonly render: (request: BrowserRenderRequest) => Promise<void>;
-};
 
 export const hydrateBrowserRoot = Effect.fnUntraced(function* (
   container: Element | Document,
@@ -38,48 +22,41 @@ export const hydrateBrowserRoot = Effect.fnUntraced(function* (
   const browserRootReady = Promise.withResolvers<BrowserRootController>();
 
   function BrowserRoot() {
-    const [render, setRender] = useState<BrowserRender>({
+    const [render, setRender] = useState<BrowserRender>(() => ({
       _tag: 'Initial',
       routeTree: initialPayload.routeTree,
-    });
+    }));
+    const rendererRef = useRef<ReturnType<typeof makeBrowserRenderer> | null>(null);
+    if (rendererRef.current === null) {
+      // oxlint-disable-next-line react/refs -- guarded lazy initialization is stable after the first render
+      rendererRef.current = makeBrowserRenderer(initialPayload.routeTree, setRender);
+    }
 
     useLayoutEffect(() => {
-      browserRootReady.resolve({
-        render: (request) => {
-          const committed = Promise.withResolvers<void>();
-          setRender((current) => ({
-            ...request,
-            onCommit: committed.resolve,
-            routeTree:
-              request._tag === 'Navigation'
-                ? retainSharedLayoutContent(current.routeTree, request.routeTree)
-                : request.routeTree,
-          }));
-          return committed.promise;
-        },
-      });
+      browserRootReady.resolve(rendererRef.current!.controller);
     }, []);
 
     useLayoutEffect(() => {
-      if (render._tag === 'Navigation' || render._tag === 'ServerFunction') {
-        render.onCommit();
-      }
+      rendererRef.current!.commit(render);
     }, [render]);
 
     return <RouteTree root={render.routeTree} />;
   }
 
-  yield* Effect.try({
-    try: () =>
-      hydrateRoot(
-        container,
-        <StrictMode>
-          <BrowserRoot />
-        </StrictMode>,
-        { formState: initialPayload.formState },
-      ),
-    catch: (cause) => new BrowserRootHydrationError({ cause }),
-  });
+  yield* Effect.acquireRelease(
+    Effect.try({
+      try: () =>
+        hydrateRoot(
+          container,
+          <StrictMode>
+            <BrowserRoot />
+          </StrictMode>,
+          { formState: initialPayload.formState },
+        ),
+      catch: (cause) => new BrowserRootHydrationError({ cause }),
+    }),
+    (root) => Effect.sync(() => root.unmount()),
+  );
   const browserRoot = yield* Effect.promise(() => browserRootReady.promise);
 
   return browserRoot;

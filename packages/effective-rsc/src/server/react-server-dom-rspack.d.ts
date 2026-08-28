@@ -29,6 +29,7 @@ declare module 'react-server-dom-rspack/server.node' {
   export function renderToReadableStream(
     model: unknown,
     options?: {
+      readonly onError?: (error: unknown) => void;
       readonly signal?: AbortSignal;
       readonly temporaryReferences?: TemporaryReferenceSet;
     },

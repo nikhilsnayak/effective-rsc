@@ -16,7 +16,7 @@ export class HtmlRenderError extends Schema.TaggedError<HtmlRenderError>()('Html
 }) {}
 
 export class HtmlRenderer extends Context.Service<HtmlRenderer>()(
-  'effective-rsc/server/html-renderer/HtmlRenderer',
+  'ersc/server/html-renderer/HtmlRenderer',
   {
     make: Effect.gen(function* () {
       const { clientBootstrapScripts, clientStylesheets } = yield* ServerConfig;

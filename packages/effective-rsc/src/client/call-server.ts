@@ -1,21 +1,27 @@
-import { Effect, FiberSet, Schema, Scope } from 'effect';
-import { HttpClient } from 'effect/unstable/http';
+import { Effect, Schema } from 'effect';
 import {
   createTemporaryReferenceSet,
   encodeReply,
   setServerCallback,
 } from 'react-server-dom-rspack/client.browser';
 
-import type { BrowserRootController } from './browser-root';
+import { BrowserNavigation } from './browser-navigation';
+import type { BrowserRootController } from './browser-renderer';
+import { ClientRuntime } from './client-runtime';
 import { loadFlight } from './flight-loader';
+import type { NavigationResources } from './navigation-resource';
 
 class ServerFnCallError extends Schema.TaggedError<ServerFnCallError>()('ServerFnCallError', {
   cause: Schema.Defect(),
   message: Schema.String,
 }) {}
 
-export const installCallServer = Effect.fnUntraced(function* (browserRoot: BrowserRootController) {
-  const run = yield* FiberSet.makeRuntimePromise<HttpClient.HttpClient | Scope.Scope>();
+export const installCallServer = Effect.fnUntraced(function* (
+  browserRoot: BrowserRootController,
+  navigationResources: NavigationResources,
+) {
+  const { location } = yield* BrowserNavigation;
+  const run = yield* ClientRuntime;
   const callServer = Effect.fnUntraced(function* (id: string, args: ReadonlyArray<unknown>) {
     const temporaryReferences = createTemporaryReferenceSet();
     const body = yield* Effect.tryPromise({
@@ -25,7 +31,7 @@ export const installCallServer = Effect.fnUntraced(function* (browserRoot: Brows
     const resource = yield* loadFlight({
       _tag: 'ServerFunction',
       body,
-      destination: new URL(window.location.href),
+      destination: new URL(location.href),
       id,
       temporaryReferences,
     }).pipe(
@@ -39,11 +45,13 @@ export const installCallServer = Effect.fnUntraced(function* (browserRoot: Brows
         message: 'Server Function response was incompatible with Flight.',
       });
     }
-    const committed = browserRoot.render({
-      _tag: 'ServerFunction',
-      routeTree: resource.payload.routeTree,
-    });
-    yield* Effect.promise(() => committed).pipe(
+    const commitRefresh = navigationResources.prepareRefresh(resource.payload.routeTree);
+    const committed = browserRoot.refresh(resource.payload.routeTree);
+    yield* Effect.all([resource.completed, Effect.promise(() => committed)], {
+      concurrency: 'unbounded',
+      discard: true,
+    }).pipe(
+      Effect.andThen(Effect.sync(commitRefresh)),
       Effect.onError(() => resource.release),
       Effect.forkScoped,
     );

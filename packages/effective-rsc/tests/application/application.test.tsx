@@ -83,19 +83,19 @@ const SaturdayPage = ERSC.Page.make({ render: () => Effect.succeed(<h1>Saturday<
 const SundayPage = ERSC.Page.make({ render: () => Effect.succeed(<h1>Sunday</h1>) });
 
 class LayoutService extends Context.Service<LayoutService, object>()(
-  'effective-rsc/tests/application/LayoutService',
+  'ersc/tests/application/LayoutService',
 ) {}
 
 class PageService extends Context.Service<PageService, object>()(
-  'effective-rsc/tests/application/PageService',
+  'ersc/tests/application/PageService',
 ) {}
 
 class NestedPageService extends Context.Service<NestedPageService, object>()(
-  'effective-rsc/tests/application/NestedPageService',
+  'ersc/tests/application/NestedPageService',
 ) {}
 
 class LayerDependency extends Context.Service<LayerDependency, object>()(
-  'effective-rsc/tests/application/LayerDependency',
+  'ersc/tests/application/LayerDependency',
 ) {}
 
 describe('ERSC.make', () => {

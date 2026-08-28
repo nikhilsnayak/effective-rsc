@@ -1,4 +1,4 @@
-import { Context, Effect, FiberSet, Layer, type Scope } from 'effect';
+import { Context, Effect, Exit, FiberSet, Layer, Scope } from 'effect';
 import type { TemporaryReferenceSet } from 'react-server-dom-rspack/server.node';
 import { renderToReadableStream } from 'react-server-dom-rspack/server.node';
 
@@ -7,6 +7,11 @@ import type { FlightPayload, ServerFnResult } from '../rsc/flight';
 import type { RouteTreeModel } from '../rsc/route-tree';
 
 type FlightStream = ReadableStream<Uint8Array>;
+
+type FlightRender = {
+  readonly release: Effect.Effect<void>;
+  readonly stream: FlightStream;
+};
 
 export type FlightRenderOptions<Services> = {
   readonly formState: FlightPayload['formState'];
@@ -17,7 +22,7 @@ export type FlightRenderOptions<Services> = {
 };
 
 export class FlightRenderer extends Context.Service<FlightRenderer>()(
-  'effective-rsc/server/flight-renderer/FlightRenderer',
+  'ersc/server/flight-renderer/FlightRenderer',
   {
     make: Effect.succeed({
       render: Effect.fn('FlightRenderer.render')(function* <Services>({
@@ -27,16 +32,32 @@ export class FlightRenderer extends Context.Service<FlightRenderer>()(
         serverFnResult,
         temporaryReferences,
       }: FlightRenderOptions<Services>): Effect.fn.Return<
-        FlightStream,
+        FlightRender,
         never,
         Services | Scope.Scope
       > {
-        const signal = yield* Effect.abortSignal;
-        const runtime = yield* FiberSet.makeRuntimePromise<Services>();
-        return requestRuntime.bind(runtime, () => {
-          const payload = { formState, routeTree, serverFnResult } satisfies FlightPayload;
-          return renderToReadableStream(payload, { signal, temporaryReferences });
-        });
+        const parentScope = yield* Effect.scope;
+        const renderScope = yield* Scope.fork(parentScope);
+        const release = Scope.close(renderScope, Exit.void);
+        return yield* Effect.gen(function* () {
+          const runtime = yield* FiberSet.makeRuntimePromise<Services>().pipe(
+            Scope.provide(renderScope),
+          );
+          const signal = yield* Effect.abortSignal.pipe(Scope.provide(renderScope));
+          const stream = requestRuntime.bind(runtime, () => {
+            const payload = { formState, routeTree, serverFnResult } satisfies FlightPayload;
+            return renderToReadableStream(payload, {
+              onError: (error) => {
+                if (!signal.aborted) {
+                  void runtime(Effect.logError(error));
+                }
+              },
+              signal,
+              temporaryReferences,
+            });
+          });
+          return { release, stream } satisfies FlightRender;
+        }).pipe(Effect.onError(() => release));
       }),
     }),
   },

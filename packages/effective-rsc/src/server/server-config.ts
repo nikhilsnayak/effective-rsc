@@ -11,4 +11,4 @@ export class ServerConfig extends Context.Service<
     readonly hostname: string;
     readonly port: number;
   }
->()('effective-rsc/server/server-config/ServerConfig') {}
+>()('ersc/server/server-config/ServerConfig') {}

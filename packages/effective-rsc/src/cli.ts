@@ -17,7 +17,7 @@ export class BuildModuleLoadError extends Schema.TaggedError<BuildModuleLoadErro
   },
 ) {}
 
-const start = Effect.fn('effective-rsc/cli/start')(function* (root: string) {
+const start = Effect.fn('ersc/cli/start')(function* (root: string) {
   const bundle = yield* loadCompiledServer(root);
   const ServerLayer = yield* makeRunnableServerLayer({
     applicationPort: DefaultApplicationPort,

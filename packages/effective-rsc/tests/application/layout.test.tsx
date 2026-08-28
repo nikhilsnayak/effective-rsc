@@ -6,7 +6,7 @@ import { Application } from '../../src/application/ersc';
 import { getERSCIdentity } from '../../src/application/ersc-identity';
 
 class ShellTitle extends Context.Service<ShellTitle, { readonly value: string }>()(
-  'effective-rsc/tests/application/layout/ShellTitle',
+  'ersc/tests/application/layout/ShellTitle',
 ) {}
 
 const ERSC = Application.ersc<ShellTitle>();

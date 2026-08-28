@@ -49,10 +49,14 @@ type RenderOptions<Services> = RequestOutcome & {
   readonly request: HttpServerRequest.HttpServerRequest;
 };
 
-const fromWebStream = (stream: ReadableStream<Uint8Array>) =>
+const fromWebStream = (
+  stream: ReadableStream<Uint8Array>,
+  options?: { readonly releaseLockOnEnd?: boolean },
+) =>
   Stream.fromReadableStream({
     evaluate: () => stream,
     onError: (cause) => cause,
+    releaseLockOnEnd: options?.releaseLockOnEnd,
   });
 
 const routeMiddlewareLayer = <Services>(destination: CompiledDestination<Services>) => {
@@ -99,7 +103,7 @@ const httpLayer = <Services, ApplicationError>(
       pathname: requestUrl.value.pathname,
     });
     const flightRenderer = yield* FlightRenderer;
-    const flightStream = yield* flightRenderer.render({
+    const flight = yield* flightRenderer.render({
       formState,
       requestRuntime: identity.requestRuntime,
       routeTree,
@@ -108,20 +112,30 @@ const httpLayer = <Services, ApplicationError>(
     });
 
     if (request.headers['accept']?.includes(FlightMediaType)) {
-      return HttpServerResponse.stream(fromWebStream(flightStream), {
-        contentType: `${FlightMediaType};charset=utf-8`,
-        headers: { 'content-location': requestUrl.value.href },
-        status,
-      });
+      return HttpServerResponse.stream(
+        fromWebStream(flight.stream, { releaseLockOnEnd: true }).pipe(
+          Stream.ensuring(flight.release),
+        ),
+        {
+          contentType: `${FlightMediaType};charset=utf-8`,
+          headers: { 'content-location': requestUrl.value.href },
+          status,
+        },
+      );
     }
 
     const htmlRenderer = yield* HtmlRenderer;
-    const htmlStream = yield* htmlRenderer.render({ flightStream, formState });
+    const htmlStream = yield* htmlRenderer
+      .render({ flightStream: flight.stream, formState })
+      .pipe(Effect.onError(() => flight.release));
 
-    return HttpServerResponse.stream(fromWebStream(htmlStream), {
-      contentType: 'text/html;charset=utf-8',
-      status,
-    });
+    return HttpServerResponse.stream(
+      fromWebStream(htmlStream).pipe(Stream.ensuring(flight.release)),
+      {
+        contentType: 'text/html;charset=utf-8',
+        status,
+      },
+    );
   });
 
   const RequestLayer = Layer.mergeAll(RenderersLayer, applicationState.layer);

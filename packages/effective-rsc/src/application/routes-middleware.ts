@@ -38,12 +38,8 @@ type RoutesHttpMiddleware<Services> = HttpRouter.Middleware<{
   readonly requires: RoutesMiddlewareRequirements<Services>;
 }>;
 
-const makeHttpMiddleware = <Services>(
-  handler: RoutesMiddlewareHandler<Services>,
-): RoutesHttpMiddleware<Services> => HttpRouter.middleware(handler);
-
 export type RoutesMiddlewareImplementationState<Services> = {
-  readonly httpMiddleware: ReturnType<typeof makeHttpMiddleware<Services>>;
+  readonly httpMiddleware: RoutesHttpMiddleware<Services>;
 };
 
 class RoutesMiddlewareImpl<Services>
@@ -51,12 +47,14 @@ class RoutesMiddlewareImpl<Services>
 {
   declare readonly [RoutesMiddlewareContractTypeId]: typeof RoutesMiddlewareContractTypeId;
   readonly [ERSCIdentityTypeId]: ERSCIdentity<Services>;
+  readonly httpMiddleware: RoutesMiddlewareImplementationState<Services>['httpMiddleware'];
 
   constructor(
     identity: ERSCIdentity<Services>,
-    readonly httpMiddleware: RoutesMiddlewareImplementationState<Services>['httpMiddleware'],
+    httpMiddleware: RoutesMiddlewareImplementationState<Services>['httpMiddleware'],
   ) {
     this[ERSCIdentityTypeId] = identity;
+    this.httpMiddleware = httpMiddleware;
     Object.freeze(this);
   }
 }
@@ -84,5 +82,5 @@ export const makeRoutesMiddlewareFactory =
     if (typeof handler !== 'function') {
       throw new TypeError('Routes middleware handler must be a function.');
     }
-    return new RoutesMiddlewareImpl(identity, makeHttpMiddleware(handler));
+    return new RoutesMiddlewareImpl(identity, HttpRouter.middleware(handler));
   };

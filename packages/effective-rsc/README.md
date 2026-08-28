@@ -128,11 +128,12 @@ Then create a stylesheet, such as `src/styles.css`:
 - `Loading` is a synchronous, service-free Suspense fallback.
 - `Component` adapts an Effectful Server Component that is not itself a route.
 - `ServerFn` adds Effect and Schema to React's native Server Function protocol.
-- `Routes` immutably composes Pages and nested Layout/Loading scopes through `page` and `mount`.
+- `Routes` immutably composes Pages, inherited middleware, and nested Layout/Loading scopes.
 
 Create every Page, Layout, Loading, Component, ServerFn, and Routes value from that same ERSC
 instance. Declare the complete service universe through its `Services` type parameter and provide the
-implementations at `ERSC.make({ servicesLayer })`.
+application Layer at `ERSC.make({ layer })`. That Layer may also register native Effect HTTP routes,
+APIs, RPC, and global middleware on the same server.
 
 ## Runtime boundary
 

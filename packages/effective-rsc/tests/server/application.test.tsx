@@ -24,13 +24,13 @@ vi.doMock('react-server-dom-rspack/server.node', () => ({
 const { ServerApplication } = await import('../../src/server/application');
 
 class RequestTrace extends Context.Service<RequestTrace, { readonly events: Array<string> }>()(
-  'effective-rsc/tests/server/application/RequestTrace',
+  'ersc/tests/server/application/RequestTrace',
 ) {}
 
 const ServerConfigLayer = Layer.succeed(
   ServerConfig,
   ServerConfig.of({
-    clientAssetsRoot: '/tmp/effective-rsc-test-assets',
+    clientAssetsRoot: '/tmp/ersc-test-assets',
     clientBootstrapScripts: ['/_ersc/assets/client.js'],
     clientStylesheets: [],
     hostname: 'localhost',

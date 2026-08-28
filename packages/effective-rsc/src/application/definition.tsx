@@ -35,13 +35,17 @@ class ApplicationDefinitionImpl<Services, ApplicationError> implements Applicati
     readonly error: Types.Covariant<ApplicationError>;
   };
   readonly [ERSCIdentityTypeId]: ERSCIdentity<Services>;
+  readonly layer: Layer.Layer<Services, ApplicationError, HttpRouter.HttpRouter>;
+  readonly routes: ReadonlyArray<CompiledDestination<Services>>;
 
   constructor(
     identity: ERSCIdentity<Services>,
-    readonly routes: ReadonlyArray<CompiledDestination<Services>>,
-    readonly layer: Layer.Layer<Services, ApplicationError, HttpRouter.HttpRouter>,
+    routes: ReadonlyArray<CompiledDestination<Services>>,
+    layer: Layer.Layer<Services, ApplicationError, HttpRouter.HttpRouter>,
   ) {
     this[ERSCIdentityTypeId] = identity;
+    this.layer = layer;
+    this.routes = routes;
   }
 }
 

@@ -4,7 +4,7 @@ import { makeRequestRuntimeContext, type RequestRuntimeContext } from './request
 
 declare const ERSCServicesTypeId: unique symbol;
 
-export const ERSCIdentityTypeId: unique symbol = Symbol.for('effective-rsc/ERSCIdentity');
+export const ERSCIdentityTypeId: unique symbol = Symbol.for('ersc/ERSCIdentity');
 
 export type ERSCIdentity<Services> = {
   readonly [ERSCServicesTypeId]?: Types.Invariant<Services>;

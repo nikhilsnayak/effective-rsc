@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 
 import { attachERSCIdentity, type ERSCIdentity, type ERSCMember } from './ersc-identity';
 
-const LayoutTypeId: unique symbol = Symbol.for('effective-rsc/LayoutConcern');
+const LayoutTypeId: unique symbol = Symbol.for('ersc/LayoutConcern');
 
 export type LayoutConcern = {
   readonly [LayoutTypeId]: typeof LayoutTypeId;

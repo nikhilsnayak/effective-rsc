@@ -2,7 +2,7 @@ import { Effect, Predicate, Schema } from 'effect';
 
 import { attachERSCIdentity, type ERSCIdentity, type ERSCMember } from './ersc-identity';
 
-const ServerFnInvocationTypeId: unique symbol = Symbol('effective-rsc/ServerFnInvocation');
+const ServerFnInvocationTypeId: unique symbol = Symbol('ersc/ServerFnInvocation');
 
 class ServerFnOperationError extends Schema.TaggedError<ServerFnOperationError>()(
   'ServerFnOperationError',
@@ -10,15 +10,22 @@ class ServerFnOperationError extends Schema.TaggedError<ServerFnOperationError>(
 ) {}
 
 abstract class ServerFnInvocationMetadataBase {
-  constructor(readonly identity: object) {}
+  readonly identity: object;
+
+  constructor(identity: object) {
+    this.identity = identity;
+  }
 }
 
 class ServerFnInvocationMetadata<Output, Services> extends ServerFnInvocationMetadataBase {
+  readonly effect: Effect.Effect<Output, ServerFnOperationError, Services>;
+
   constructor(
-    readonly effect: Effect.Effect<Output, ServerFnOperationError, Services>,
+    effect: Effect.Effect<Output, ServerFnOperationError, Services>,
     identity: ERSCIdentity<Services>,
   ) {
     super(identity);
+    this.effect = effect;
   }
 }
 

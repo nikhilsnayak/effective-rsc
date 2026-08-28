@@ -6,7 +6,7 @@ import { type ERSCIdentity, getERSCIdentity } from '../../src/application/ersc-i
 import { matchServerFnInvocation } from '../../src/application/server-fn';
 
 class Greeting extends Context.Service<Greeting, { readonly prefix: string }>()(
-  'effective-rsc/tests/application/server-fn/Greeting',
+  'ersc/tests/application/server-fn/Greeting',
 ) {}
 
 const invocationEffect = <Output, Services>(

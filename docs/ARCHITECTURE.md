@@ -64,7 +64,7 @@ into the document head.
 
 `Application.ersc<Services>()` creates one application-scoped ERSC authoring module. It owns a service
 universe, runtime identity, and request-runner context. Feature modules use its factories, then
-`ERSC.make({ routes, servicesLayer })` closes the module into the executable application exported from
+`ERSC.make({ routes, layer })` closes the module into the executable application exported from
 `src/application.tsx`.
 
 | Value       | Role                                                                                  |
@@ -74,13 +74,14 @@ universe, runtime identity, and request-runner context. Feature modules use its 
 | `Loading`   | Synchronous, service-free fallback directly below its Layout.                         |
 | `Component` | Effectful Server Component that is not a route concern.                               |
 | `ServerFn`  | Promise-shaped native React reference backed by a lazy Effect on the server.          |
-| `Routes`    | Immutable route graph owned by the same ERSC identity as its concerns.                |
+| `Routes`    | Immutable route graph with inherited Page HTTP middleware.                            |
 
 Each effectful operation infers its own requirements and must fit within `Services`. JSX erases nested
 requirements, so the universe is declared once. `ERSC.make` receives a closed Layer for that universe;
-service-free applications call `Application.ersc()`. The HTTP server builds the application Layer
-once in its server scope, shares the resulting services across requests, and releases them when that
-scope closes. Request Effects retain their independent interruption lifetime.
+service-free applications call `Application.ersc()`. The application Layer may also register native
+Effect HTTP routes, APIs, RPC, and global middleware on the framework router. The HTTP server builds
+it once in its server scope, shares the resulting services across requests, and releases them when
+that scope closes. Request Effects retain their independent interruption lifetime.
 
 Every authored value carries its ERSC identity. Route composition rejects the wrong concern role or a
 value from another ERSC instance. Server Functions retain that identity across native invocation and
@@ -124,8 +125,8 @@ Any pattern capable of matching the reserved `/_ersc/assets` namespace is reject
 parameterized overlap. The compiler registers authored patterns directly with Effect HTTP, with no
 second runtime matcher.
 
-Compilation flattens the route graph into destination values containing only the Effect HTTP pattern,
-Page, and ordered Layout/Loading ancestry. A mounted Routes value can appear under more than one
+Compilation flattens the route graph into destination values containing the Effect HTTP pattern,
+Page, ordered middleware, and ordered Layout/Loading ancestry. A mounted Routes value can appear under more than one
 parameter-free prefix, so each destination owns its ancestry. Each registered Effect HTTP handler
 closes over its destination. Parameter-free Pages use an empty parameter record without reading
 router context; parameterized Pages receive the parameters captured by Effect HTTP and decode them
@@ -141,6 +142,15 @@ encode identity for reconciliation but are not parsed as protocol data. Every re
 one complete route tree; there is no partial patch transport. Unknown patterns retain Effect HTTP's
 native `404`. Mapping a matched Page's Schema rejection to NotFound or another expected failure
 remains open.
+
+Routes middleware is an opaque same-ERSC ownership adapter over Effect `HttpRouter.Middleware`.
+ERSC resolves ancestor lists before descendant lists and combines their native descriptors once
+while building the Page routes. Effect owns middleware composition and layer application, including
+request-order execution and reverse response unwinding. The resulting layer wraps matched Page GET
+and native HEAD fallback; Server Function POST, userland HTTP, assets, and unmatched paths remain
+outside it. Native global Effect HTTP middleware registered by the application Layer surrounds the
+whole router. Middleware may short-circuit with any native response but cannot introduce a typed
+failure.
 
 ## Initial document
 
@@ -173,13 +183,21 @@ The router uses `window.navigation` without a History API fallback. The Navigati
 `NavigationPrecommitController` are mandatory. Native focus and scroll remain enabled, and closing
 the browser Effect scope removes the listener.
 
-`NavigateEvent.signal` owns an intercepted navigation through its exact Layout commit. The Flight
-response owns a child Effect scope and remains alive while nested rows stream. A later navigation does
-not automatically retire an earlier response after its handler has settled; OQ-005 owns that policy.
+`NavigateEvent.signal` owns the Flight request and its child Effect scope. The precommit handler
+settles at the exact Layout commit, while a post-commit handler keeps the browser navigation active
+until the Flight stream reaches EOF. Cancellation interrupts the transport and request-scoped server
+Effects, then restores the last stable route tree and history entry. A superseding navigation retires
+the earlier response after its successor starts rendering without briefly restoring the previous UI.
 
-The browser retains only the currently revealed common Layout prefix. It has no route cache:
-Back/Forward traversal, pushes, and replacements fetch whole trees. Server Function refresh replaces
-the complete tree.
+The Flight payload carries the final request URL. After a followed redirect, cancelable navigation
+uses `NavigationPrecommitController.redirect`; non-cancelable traversal uses `location.replace`.
+Non-Flight or non-success navigation responses promote to a full-document navigation.
+
+The browser retains the currently revealed common Layout prefix. It caches only completed whole-tree
+navigation payloads by `NavigationHistoryEntry.id`; Back/Forward traversal reuses those payloads,
+while pushes, replacements, and uncached traversals fetch Flight. Disposing a history entry evicts its
+payload. A Server Function refresh invalidates the traversal cache and stores the refreshed current
+entry because application mutations may affect other routes.
 
 ## Server Functions
 

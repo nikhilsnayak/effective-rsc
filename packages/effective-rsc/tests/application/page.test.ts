@@ -17,7 +17,7 @@ import { getERSCIdentity } from '../../src/application/ersc-identity';
 import { getPageState } from '../../src/application/page';
 
 class Greeting extends Context.Service<Greeting, { readonly value: string }>()(
-  'effective-rsc/tests/application/page/Greeting',
+  'ersc/tests/application/page/Greeting',
 ) {}
 
 const ERSC = Application.ersc<Greeting>();

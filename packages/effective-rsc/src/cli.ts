@@ -1,5 +1,3 @@
-#!/usr/bin/env bun
-
 import * as BunRuntime from '@effect/platform-bun/BunRuntime';
 import * as BunServices from '@effect/platform-bun/BunServices';
 import { Config, Effect, Layer, Schema } from 'effect';

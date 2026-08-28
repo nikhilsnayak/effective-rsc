@@ -73,6 +73,7 @@ it('publishes compiled entries while preserving package boundaries', async () =>
   ]);
   expect(manifest.license).toBe('MIT');
   expect(binModule).toBe("#!/usr/bin/env bun\n\nimport '../dist/cli.js';\n");
+  expect(cliModule).not.toMatch(/^#!/);
   expect(cliModule).toContain('import("./build/build.js")');
   expect(cliModule).not.toContain('@rspack/core');
   expect(cliModule).not.toContain('@tailwindcss/webpack');

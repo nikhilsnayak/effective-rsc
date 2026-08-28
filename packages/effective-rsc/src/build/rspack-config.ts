@@ -160,7 +160,7 @@ export const makeRspackBuildConfig = (
 
   const server: Configuration = {
     context: root,
-    devtool: false,
+    devtool: 'source-map',
     entry: {
       [ServerEntryName]: entries.rsc,
     },

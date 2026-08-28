@@ -77,6 +77,8 @@ it.effect('uses real framework entries and private aliases for application sourc
     expect(client.resolve?.alias).toBeUndefined();
     expect(client.output?.path).toBe('/workspace/.ersc/client');
     expect(server.output?.path).toBe('/workspace/.ersc/server');
+    expect(client.devtool).toBe(false);
+    expect(server.devtool).toBe('source-map');
   }).pipe(Effect.provide(Path.layer)),
 );
 

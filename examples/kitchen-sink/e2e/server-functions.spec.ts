@@ -24,12 +24,12 @@ test.describe.serial('Server Functions', () => {
         );
       await session.getByRole('button', { name: 'Add to the agenda' }).click();
 
-      await expect(session.getByRole('button', { name: 'Remove from the agenda' })).toBeVisible();
-      expect(await fallbackAppeared).toBe(false);
       await expect(session.getByText('Added to the agenda.')).toBeVisible();
-      await expect(
-        page.locator('section[aria-labelledby="conference-agenda-heading"]'),
-      ).toContainText(title);
+      await expect(session.getByRole('button', { name: 'Remove from the agenda' })).toBeVisible();
+      const agenda = page.locator('section[aria-labelledby="conference-agenda-heading"]');
+      await expect(agenda).not.toContainText(title);
+      expect(await fallbackAppeared).toBe(false);
+      await expect(agenda).toContainText(title);
 
       await page.reload();
       session = sessionCard(page, title);

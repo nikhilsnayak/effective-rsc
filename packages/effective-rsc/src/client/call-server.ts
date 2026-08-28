@@ -23,7 +23,11 @@ export const installCallServer = Effect.fnUntraced(function* (
 ) {
   const { location } = yield* BrowserNavigation;
   const run = yield* ClientRuntime;
-  const callServer = Effect.fnUntraced(function* (id: string, args: ReadonlyArray<unknown>) {
+  const callServer = Effect.fnUntraced(function* (
+    id: string,
+    args: ReadonlyArray<unknown>,
+    actionResult: PromiseWithResolvers<unknown>,
+  ) {
     const temporaryReferences = createTemporaryReferenceSet();
     const body = yield* Effect.tryPromise({
       try: () => encodeReply(args, { temporaryReferences }),
@@ -46,6 +50,34 @@ export const installCallServer = Effect.fnUntraced(function* (
         message: 'Server Function response was incompatible with Flight.',
       });
     }
+    const serverFnResult = resource.payload.serverFnResult;
+    if (serverFnResult === null) {
+      return yield* new ServerFnCallError({
+        cause: new Error('The Flight payload omitted the Server Function return value.'),
+        message: 'Server Function response was incomplete.',
+      });
+    }
+    switch (serverFnResult._tag) {
+      case 'Failure':
+        actionResult.reject(
+          new ServerFnCallError({
+            cause: serverFnResult.error,
+            message: 'Server Function execution failed.',
+          }),
+        );
+        break;
+      case 'Success':
+        actionResult.resolve(serverFnResult.value);
+        break;
+    }
+    // React registered its Action reactions before the request completed. Registering ERSC's
+    // continuation after settlement lets React close that Action before the refresh Transition.
+    yield* Effect.promise(() =>
+      actionResult.promise.then(
+        () => undefined,
+        () => undefined,
+      ),
+    );
     const commitRefresh = navigationResources.prepareRefresh(resource.payload.routeTree);
     const committed = Promise.withResolvers<void>();
     startTransition(() => {
@@ -61,25 +93,13 @@ export const installCallServer = Effect.fnUntraced(function* (
       Effect.onError(() => resource.release),
       Effect.forkScoped,
     );
-    const serverFnResult = resource.payload.serverFnResult;
-    if (serverFnResult === null) {
-      return yield* new ServerFnCallError({
-        cause: new Error('The Flight payload omitted the Server Function return value.'),
-        message: 'Server Function response was incomplete.',
-      });
-    }
-    switch (serverFnResult._tag) {
-      case 'Failure':
-        return yield* new ServerFnCallError({
-          cause: serverFnResult.error,
-          message: 'Server Function execution failed.',
-        });
-      case 'Success':
-        return serverFnResult.value;
-    }
   });
 
   yield* Effect.sync(() => {
-    setServerCallback((id, args) => run(callServer(id, args)));
+    setServerCallback((id, args) => {
+      const actionResult = Promise.withResolvers<unknown>();
+      run(callServer(id, args, actionResult)).then(undefined, actionResult.reject);
+      return actionResult.promise;
+    });
   });
 });

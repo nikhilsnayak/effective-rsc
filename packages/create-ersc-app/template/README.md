@@ -21,7 +21,7 @@ For deployment, `ersc start` accepts `--hostname` and `--port`. Command-line fla
 over `HOST` and `PORT`.
 
 The starter application lives in `src/application.tsx`. Its Tailwind stylesheet is
-`src/styles.css`.
+`src/styles.css`. Files in `public/` are served from `/`.
 
 Framework documentation is installed at `node_modules/effective-rsc/docs`; the combined reference
 is `node_modules/effective-rsc/LLMS.md`.

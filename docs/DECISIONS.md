@@ -57,6 +57,7 @@ implemented, accepted but not implemented, and intentionally outside the current
 | D-055 | Interrupt canceled and superseded Flight from browser to server; restore URL and UI for cancellation, while a successor retires the earlier render without rollback flicker.                                                                                      |
 | D-056 | Cache completed whole-tree payloads by Navigation API history-entry id for Back/Forward traversal, evict on entry disposal, and invalidate across Server Function refreshes.                                                                                      |
 | D-057 | Externalize `effect` and `@effect/*` from the server bundle so Bun loads the application's exact shared peers and runtime dynamic imports retain their native semantics.                                                                                          |
+| D-058 | Serve the conventional application-root `public/` directory from `/` through Effect `HttpStaticServer`, with revalidation-friendly `Cache-Control: public, max-age=0`; keep compiler assets under `/_ersc/assets`.                                                |
 
 ## Planned
 

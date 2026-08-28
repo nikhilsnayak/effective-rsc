@@ -28,6 +28,8 @@ Run `bun run check`, `bun run build`, and `bun run start`. The default URL is
 `http://localhost:18193`. `ersc start` accepts `--hostname` and `--port`; command-line flags take
 precedence over `HOST` and `PORT`. See the package README for requirements and manual installation.
 
+Files in `public/` are served from `/` with `Cache-Control: public, max-age=0`.
+
 ### A minimal application
 
 Create all values from one ERSC instance and close it with ERSC.make.

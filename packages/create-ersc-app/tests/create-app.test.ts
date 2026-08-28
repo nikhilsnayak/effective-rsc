@@ -76,6 +76,9 @@ describe('createApplication', () => {
       );
       expect(yield* fileSystem.exists(path.join(target, '.gitignore'))).toBe(true);
       expect(yield* fileSystem.exists(path.join(target, 'gitignore'))).toBe(false);
+      expect(yield* fileSystem.readFileString(path.join(target, 'public', 'robots.txt'))).toBe(
+        'User-agent: *\nAllow: /\n',
+      );
       expect(application).toContain("import './styles.css';");
     }).pipe(Effect.provide(BunServices.layer), Effect.scoped),
   );

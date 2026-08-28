@@ -62,6 +62,9 @@ CSS stays in Rspack's native pipeline. `@tailwindcss/webpack` compiles Tailwind 
 application root; applications install `tailwindcss` explicitly. React hoists emitted stylesheets
 into the document head.
 
+At runtime, Effect `HttpStaticServer` serves the application root's `public/` directory from `/`
+with `Cache-Control: public, max-age=0`. Compiler assets remain isolated under `/_ersc/assets`.
+
 ## Application model
 
 `Application.ersc<Services>()` creates one application-scoped ERSC authoring module. It owns a service

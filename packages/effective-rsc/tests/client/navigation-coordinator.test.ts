@@ -53,7 +53,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it.effect('retires a superseded render after its successor starts rendering', () =>
+it.effect('retires a superseded render when its successor arrives after abort microtasks', () =>
   Effect.gen(function* () {
     const navigation = new TestNavigationHistory();
     const coordinator = yield* makeCoordinator(navigation);
@@ -65,6 +65,7 @@ it.effect('retires a superseded render after its successor starts rendering', ()
       retired.push('first');
       return Promise.resolve();
     });
+    yield* Effect.promise(() => Promise.resolve());
     const second = coordinator.begin('push');
 
     yield* Effect.promise(() => Promise.resolve());

@@ -48,6 +48,13 @@ export type NavigationAttempt = {
 
 const navigationFinished = (result: NavigationResult) => result.finished ?? Promise.resolve();
 
+const navigationDispatchCompleted = () =>
+  // oxlint-disable-next-line effecttsgo/new-promise -- Browser task scheduling is a native Promise boundary.
+  new Promise<void>((resolve) => {
+    // oxlint-disable-next-line effecttsgo/global-timers -- A task, rather than a microtask, lets the browser dispatch a superseding NavigateEvent.
+    setTimeout(resolve, 0);
+  });
+
 const attemptOutcome = (attempt: NavigationAttemptData): Promise<NavigationAttemptOutcome> => {
   const state = MutableRef.get(attempt.state);
   switch (state._tag) {
@@ -136,9 +143,10 @@ export class BrowserNavigationCoordinator {
   ) {
     if (reason === 'Aborted') {
       // The Navigation API aborts the ongoing NavigateEvent before dispatching its successor.
-      // One microtask lets begin() observe that successor before deciding whether to restore.
+      // Let that dispatch finish so begin() can observe the successor before deciding whether to
+      // restore. A microtask is too early because aborting fires navigateerror synchronously.
       // https://html.spec.whatwg.org/multipage/nav-history-apis.html#fire-a-push/replace/reload-navigate-event
-      await Promise.resolve();
+      await navigationDispatchCompleted();
     }
 
     const state = MutableRef.get(attempt.state);

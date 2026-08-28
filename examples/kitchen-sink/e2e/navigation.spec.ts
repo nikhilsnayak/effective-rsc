@@ -78,6 +78,97 @@ test('reuses completed route trees for back and forward navigation', async ({ pa
   expect(browserErrors).toEqual([]);
 });
 
+test('supersedes a streaming navigation with a fresh push to the stable URL', async ({ page }) => {
+  const browserErrors = observeBrowserErrors(page);
+  const saturdayFlightRequests: Array<Request> = [];
+  page.on('request', (request) => {
+    if (
+      new URL(request.url()).pathname === '/schedule/saturday' &&
+      isNavigationFlightRequest(request)
+    ) {
+      saturdayFlightRequests.push(request);
+    }
+  });
+
+  await page.goto('/schedule/saturday');
+  const initialStartedAt = await page
+    .locator('main[data-schedule-started-at]')
+    .getAttribute('data-schedule-started-at');
+  await page
+    .getByRole('link', { name: 'See Sunday' })
+    .evaluate((element: HTMLAnchorElement) => element.click());
+  await expect(page.getByRole('main', { name: 'Loading schedule' })).toBeVisible({
+    timeout: 1_500,
+  });
+  await expect(page).toHaveURL('/schedule/sunday');
+
+  await page
+    .getByRole('navigation', { name: 'Conference schedule' })
+    .getByRole('link', { name: 'Saturday 22 Aug' })
+    .evaluate((element: HTMLAnchorElement) => element.click());
+
+  await expect(page).toHaveURL('/schedule/saturday');
+  await expect(page.getByRole('main', { name: 'Loading schedule' })).toBeVisible({
+    timeout: 1_500,
+  });
+  await expect(page.getByRole('heading', { level: 1, name: 'Saturday schedule' })).toBeHidden();
+  await expect(page.getByRole('heading', { level: 1, name: 'Saturday schedule' })).toBeVisible();
+  await page.waitForFunction(() => window.navigation.transition === null);
+  expect(
+    await page.locator('main[data-schedule-started-at]').getAttribute('data-schedule-started-at'),
+  ).not.toBe(initialStartedAt);
+  expect(saturdayFlightRequests).toHaveLength(1);
+  expect(browserErrors).toEqual([]);
+});
+
+test('lets Back supersede a streaming push without restoring over it', async ({ page }) => {
+  const browserErrors = observeBrowserErrors(page);
+
+  await page.goto('/schedule/saturday');
+  await page
+    .getByRole('link', { name: 'See Sunday' })
+    .evaluate((element: HTMLAnchorElement) => element.click());
+  await expect(page.getByRole('main', { name: 'Loading schedule' })).toBeVisible({
+    timeout: 1_500,
+  });
+  await expect(page).toHaveURL('/schedule/sunday');
+
+  const outcome = await page.evaluate(() => {
+    const finished = window.navigation.back().finished;
+    return finished === undefined
+      ? ('unavailable' as const)
+      : finished.then(
+          () => 'finished' as const,
+          () => 'rejected' as const,
+        );
+  });
+
+  expect(outcome).toBe('finished');
+  await expect(page).toHaveURL('/schedule/saturday');
+  await expect(page.getByRole('heading', { level: 1, name: 'Saturday schedule' })).toBeVisible();
+  expect(browserErrors).toEqual([]);
+});
+
+test('restores stable URL and UI when a streaming navigation is stopped', async ({ page }) => {
+  const browserErrors = observeBrowserErrors(page);
+
+  await page.goto('/schedule/saturday');
+  await page
+    .getByRole('link', { name: 'See Sunday' })
+    .evaluate((element: HTMLAnchorElement) => element.click());
+  await expect(page.getByRole('main', { name: 'Loading schedule' })).toBeVisible({
+    timeout: 1_500,
+  });
+  await expect(page).toHaveURL('/schedule/sunday');
+
+  await page.evaluate(() => window.stop());
+
+  await expect(page).toHaveURL('/schedule/saturday');
+  await expect(page.getByRole('heading', { level: 1, name: 'Saturday schedule' })).toBeVisible();
+  await page.waitForFunction(() => window.navigation.transition === null);
+  expect(browserErrors).toEqual([]);
+});
+
 test('aborts a committed streaming navigation when it is superseded', async ({ page }) => {
   const browserErrors = observeBrowserErrors(page);
   const sundayFlightOutcome = Promise.withResolvers<'failed' | 'finished'>();

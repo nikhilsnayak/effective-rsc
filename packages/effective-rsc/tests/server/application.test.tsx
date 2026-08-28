@@ -6,6 +6,7 @@ import { Context, Effect, Layer } from 'effect';
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from 'effect/unstable/http';
 
 import { Application } from '../../src/application/ersc';
+import { ServerFnIdHeader } from '../../src/rsc/flight';
 import { ServerConfig } from '../../src/server/server-config';
 
 vi.doMock('react-server-dom-rspack/server.node', () => ({
@@ -154,9 +155,51 @@ describe('ServerApplication.httpLayer', () => {
           ]);
 
           events.length = 0;
+          const missingOriginResponse = yield* Effect.promise(() =>
+            handler(
+              new Request('http://effective-rsc.test/protected', {
+                headers: { host: 'effective-rsc.test' },
+                method: 'POST',
+              }),
+            ),
+          );
+          expect(missingOriginResponse.status).toBe(403);
+
+          const crossOriginResponse = yield* Effect.promise(() =>
+            handler(
+              new Request('http://effective-rsc.test/protected', {
+                headers: {
+                  host: 'effective-rsc.test',
+                  origin: 'https://cross-origin.example',
+                },
+                method: 'POST',
+              }),
+            ),
+          );
+          expect(crossOriginResponse.status).toBe(403);
+
+          const oversizedResponse = yield* Effect.promise(() =>
+            handler(
+              new Request('http://effective-rsc.test/protected', {
+                body: 'x'.repeat(10 * 1024 * 1024 + 1),
+                headers: {
+                  host: 'effective-rsc.test',
+                  origin: 'http://effective-rsc.test',
+                  [ServerFnIdHeader]: 'oversized',
+                },
+                method: 'POST',
+              }),
+            ),
+          );
+          expect(oversizedResponse.status).toBe(413);
+
           const serverFnResponse = yield* Effect.promise(() =>
             handler(
               new Request('http://effective-rsc.test/protected', {
+                headers: {
+                  host: 'effective-rsc.test',
+                  origin: 'http://effective-rsc.test',
+                },
                 method: 'POST',
               }),
             ),
@@ -183,7 +226,7 @@ describe('ServerApplication.httpLayer', () => {
           );
           expect(missingResponse.status).toBe(404);
           expect(missingResponse.headers.get('x-global-middleware')).toBe('true');
-          expect(globalRequests).toBe(5);
+          expect(globalRequests).toBe(8);
           expect(acquisitions).toBe(1);
         }),
       ({ dispose }) => Effect.promise(dispose),

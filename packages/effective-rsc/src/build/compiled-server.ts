@@ -43,15 +43,19 @@ export type ServerBundle = typeof ServerBundle.Type;
 
 export const decodeServerBundle = Schema.decodeUnknownEffect(ServerBundle);
 
-const makeServerConfigLayer = Effect.fnUntraced(function* ({
-  applicationPort,
-  bundle,
-  root,
-}: {
-  readonly applicationPort: number;
+type RunnableLayerOptions = {
   readonly bundle: ServerBundle;
+  readonly hostname: string;
+  readonly port: number;
   readonly root: string;
-}) {
+};
+
+const makeServerConfigLayer = Effect.fnUntraced(function* ({
+  bundle,
+  hostname,
+  port,
+  root,
+}: RunnableLayerOptions) {
   const path = yield* Path.Path;
 
   return Layer.succeed(
@@ -60,36 +64,30 @@ const makeServerConfigLayer = Effect.fnUntraced(function* ({
       clientAssetsRoot: path.resolve(root, ClientOutputDir),
       clientBootstrapScripts: bundle[CompiledServerExportNames.application].entryJsFiles,
       clientStylesheets: bundle[CompiledServerExportNames.application].entryCssFiles,
-      hostname: 'localhost',
-      port: applicationPort,
+      hostname,
+      port,
     }),
   );
 });
 
 export const makeRunnableServerLayer = Effect.fnUntraced(function* ({
-  applicationPort,
   bundle,
+  hostname,
+  port,
   root,
-}: {
-  readonly applicationPort: number;
-  readonly bundle: ServerBundle;
-  readonly root: string;
-}) {
-  const ServerConfigLayer = yield* makeServerConfigLayer({ applicationPort, bundle, root });
+}: RunnableLayerOptions) {
+  const ServerConfigLayer = yield* makeServerConfigLayer({ bundle, hostname, port, root });
 
   return bundle[CompiledServerExportNames.serverLayer].pipe(Layer.provide(ServerConfigLayer));
 });
 
 export const makeRunnableHttpLayer = Effect.fnUntraced(function* ({
-  applicationPort,
   bundle,
+  hostname,
+  port,
   root,
-}: {
-  readonly applicationPort: number;
-  readonly bundle: ServerBundle;
-  readonly root: string;
-}) {
-  const ServerConfigLayer = yield* makeServerConfigLayer({ applicationPort, bundle, root });
+}: RunnableLayerOptions) {
+  const ServerConfigLayer = yield* makeServerConfigLayer({ bundle, hostname, port, root });
 
   return bundle[CompiledServerExportNames.httpLayer].pipe(Layer.provide(ServerConfigLayer));
 });

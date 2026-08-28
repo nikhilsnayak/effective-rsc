@@ -36,6 +36,11 @@ it('publishes compiled entries while preserving package boundaries', async () =>
     binPath,
     '--version',
   ]);
+  const { stderr: startHelpError, stdout: startHelpOutput } = await execFileAsync('bun', [
+    binPath,
+    'start',
+    '--help',
+  ]);
   const defaultImport = await execFileAsync(
     'bun',
     ['--eval', "import('effective-rsc').catch((error) => process.stdout.write(error.message))"],
@@ -73,6 +78,11 @@ it('publishes compiled entries while preserving package boundaries', async () =>
   expect(cliModule).not.toContain('@tailwindcss/webpack');
   expect(versionError).toBe('');
   expect(versionOutput.trim()).toBe(`ersc v${manifest.version}`);
+  expect(startHelpError).toBe('');
+  expect(startHelpOutput).toContain('--hostname string');
+  expect(startHelpOutput).toContain('--port integer');
+  expect(startHelpOutput).toContain('defaults to HOST or localhost');
+  expect(startHelpOutput).toContain('defaults to PORT or 18193');
   expect(defaultImport.stdout).toContain('React Server Components environment');
   expect(reactServerImport.stdout).toBe('object');
   expect(rscEntry).toMatch(/^['"]use server-entry['"];?\r?\n/);

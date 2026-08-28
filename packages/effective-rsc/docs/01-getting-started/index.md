@@ -10,4 +10,5 @@ In `src/application.tsx`, create one ERSC instance, define a root Layout and Pag
 and export `ERSC.make(...)`.
 
 Run `bun run check`, `bun run build`, and `bun run start`. The default URL is
-`http://localhost:18193`. See the package README for requirements and manual installation.
+`http://localhost:18193`. `ersc start` accepts `--hostname` and `--port`; command-line flags take
+precedence over `HOST` and `PORT`. See the package README for requirements and manual installation.

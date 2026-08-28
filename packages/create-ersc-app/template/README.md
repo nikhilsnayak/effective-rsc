@@ -17,6 +17,9 @@ bun run start
 
 Open `http://localhost:18193`.
 
+For deployment, `ersc start` accepts `--hostname` and `--port`. Command-line flags take precedence
+over `HOST` and `PORT`.
+
 The starter application lives in `src/application.tsx`. Its Tailwind stylesheet is
 `src/styles.css`.
 

@@ -1,6 +1,7 @@
 import { Context } from 'effect';
 
 export const DefaultApplicationPort = 18193;
+export const DefaultApplicationHostname = 'localhost';
 
 export class ServerConfig extends Context.Service<
   ServerConfig,

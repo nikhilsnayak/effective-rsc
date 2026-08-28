@@ -2,12 +2,13 @@
 
 import * as BunRuntime from '@effect/platform-bun/BunRuntime';
 import * as BunServices from '@effect/platform-bun/BunServices';
-import { Effect, Layer, Schema } from 'effect';
+import { Config, Effect, Layer, Schema } from 'effect';
 import * as Command from 'effect/unstable/cli/Command';
+import * as Flag from 'effect/unstable/cli/Flag';
 
 import PackageJson from '../package.json' with { type: 'json' };
 import { loadCompiledServer, makeRunnableServerLayer } from './build/compiled-server';
-import { DefaultApplicationPort } from './server/server-config';
+import { DefaultApplicationHostname, DefaultApplicationPort } from './server/server-config';
 
 export class BuildModuleLoadError extends Schema.TaggedError<BuildModuleLoadError>()(
   'BuildModuleLoadError',
@@ -17,11 +18,20 @@ export class BuildModuleLoadError extends Schema.TaggedError<BuildModuleLoadErro
   },
 ) {}
 
-const start = Effect.fn('ersc/cli/start')(function* (root: string) {
+const start = Effect.fn('ersc/cli/start')(function* ({
+  hostname,
+  port,
+  root,
+}: {
+  readonly hostname: string;
+  readonly port: number;
+  readonly root: string;
+}) {
   const bundle = yield* loadCompiledServer(root);
   const ServerLayer = yield* makeRunnableServerLayer({
-    applicationPort: DefaultApplicationPort,
     bundle,
+    hostname,
+    port,
     root,
   });
 
@@ -46,9 +56,30 @@ const buildCommand = Command.make('build').pipe(
   Command.withHandler(runBuild),
 );
 
-const startCommand = Command.make('start').pipe(
+const hostname = Flag.string('hostname').pipe(
+  Flag.withDescription('Hostname to bind (defaults to HOST or localhost)'),
+  Flag.withFallbackConfig(
+    Config.string('HOST').pipe(Config.withDefault(DefaultApplicationHostname)),
+  ),
+  Flag.withSchema(Schema.NonEmptyString),
+);
+
+const port = Flag.integer('port').pipe(
+  Flag.withDescription(`Port to bind (defaults to PORT or ${DefaultApplicationPort})`),
+  Flag.withFallbackConfig(Config.int('PORT').pipe(Config.withDefault(DefaultApplicationPort))),
+  Flag.withSchema(
+    Schema.Int.check(
+      Schema.isBetween({
+        minimum: 1,
+        maximum: 65_535,
+      }),
+    ),
+  ),
+);
+
+const startCommand = Command.make('start', { hostname, port }).pipe(
   Command.withDescription('Start the compiled application with Bun.'),
-  Command.withHandler(() => start(process.cwd())),
+  Command.withHandler(({ hostname, port }) => start({ hostname, port, root: process.cwd() })),
 );
 
 const cli = Command.make('ersc').pipe(

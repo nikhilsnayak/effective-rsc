@@ -98,6 +98,9 @@ bun run start
 
 Open `http://localhost:18193`.
 
+For deployment, `ersc start` accepts `--hostname` and `--port`. Command-line flags take precedence
+over `HOST` and `PORT`; the defaults are `localhost` and `18193`.
+
 ## Styling
 
 Stylesheets have no special filename or framework entry point. Import them from the modules that use

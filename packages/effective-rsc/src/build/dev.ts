@@ -1,9 +1,11 @@
 import { Deferred, Effect, Layer, Path, Ref, Schema, ScopedRef, Stream } from 'effect';
 import { HttpRouter, HttpServer } from 'effect/unstable/http';
 
+import { DevHmrPath } from '../dev/hmr';
 import { resolveApplicationBuild } from './build';
 import { loadServerBundle, makeRunnableHttpLayer } from './compiled-server';
 import { DevClientOutputDir } from './contract';
+import { makeDevHmr } from './dev-hmr';
 import { Rspack, type RspackError, type RspackWatchEvent } from './rspack';
 import { makeRspackDevConfig } from './rspack-config';
 import { formatDuration, Terminal } from './terminal';
@@ -128,6 +130,7 @@ export const makeDevApplication = Effect.fnUntraced(function* ({
   const { applicationRoot, entries } = yield* resolveApplicationBuild({ root });
   const path = yield* Path.Path;
   const rspack = yield* Rspack;
+  const hmr = yield* makeDevHmr;
   const generationStore = yield* makeDevGenerationStore({
     hostname,
     port,
@@ -179,9 +182,15 @@ export const makeDevApplication = Effect.fnUntraced(function* ({
   const watch = rspack
     .watch(makeRspackDevConfig(applicationRoot, entries))
     .pipe(Stream.runForEach(update));
+  const httpEffect = yield* HttpRouter.toHttpEffect(
+    HttpRouter.addAll([
+      HttpRouter.route('GET', DevHmrPath, hmr.httpEffect),
+      HttpRouter.route('*', '/*', generationStore.httpEffect),
+    ]),
+  );
 
   return {
-    httpEffect: generationStore.httpEffect,
+    httpEffect,
     watch,
   };
 });

@@ -5,7 +5,7 @@ import { type DevHmrMessage, DevHmrMessageJson } from '../dev/hmr';
 
 type DevHmrState = { readonly _tag: 'Initial' } | DevHmrMessage;
 
-export const makeDevHmr = Effect.fnUntraced(function* () {
+export const makeDevHmr = Effect.gen(function* () {
   const state = yield* SubscriptionRef.make<DevHmrState>({ _tag: 'Initial' });
   const encode = Schema.encodeEffect(DevHmrMessageJson);
   const updates = SubscriptionRef.changes(state).pipe(

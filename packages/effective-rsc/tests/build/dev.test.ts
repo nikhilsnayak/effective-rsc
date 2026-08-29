@@ -3,6 +3,7 @@ import { expect, it } from '@effect/vitest';
 import { Deferred, Effect, Fiber, FileSystem, Layer, Logger, Path, Ref, Stream } from 'effect';
 import { HttpServer, HttpServerRequest } from 'effect/unstable/http';
 
+import { DevHmrPath } from '../../src/dev/hmr';
 import {
   acquireDevGeneration,
   launchDevApplication,
@@ -233,6 +234,14 @@ it.effect('continues watching after a generation fails to start', () =>
     );
 
     expect(response.status).toBe(204);
+    const hmrError = yield* application.httpEffect.pipe(
+      Effect.provideService(
+        HttpServerRequest.HttpServerRequest,
+        HttpServerRequest.fromWeb(new Request(`http://localhost${DevHmrPath}`)),
+      ),
+      Effect.flip,
+    );
+    expect(hmrError).toMatchObject({ _tag: 'HttpServerError' });
     expect(messages).toHaveLength(4);
     expect(messages[0]).toEqual([`${Terminal.cyan('●')} Compiling application...`]);
     expect(messages[1]).toMatchObject([

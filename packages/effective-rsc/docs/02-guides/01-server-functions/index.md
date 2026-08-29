@@ -6,7 +6,7 @@ transition, retaining the revealed route while refreshed content suspends.
 
 - Export it by name from a `'use server'` module.
 - Invoke it only through its client reference; direct server invocation throws.
-- Bind serializable input before passing it to a form action.
+- Bind serializable input in a Server Component, then pass the action to a Client Component.
 - Let `input` infer the handler parameter; do not annotate it.
 - The returned client reference resolves `Promise<Output>`.
 - Browser requests require an `Origin` matching the application host and may contain at most 10 MiB.

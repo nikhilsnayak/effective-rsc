@@ -41,9 +41,7 @@ test.describe.serial('Server Functions', () => {
     }
   });
 
-  // The mutation executes, but the full-document response does not complete yet.
-  // Keep the intended contract executable while the Working checkpoint remains unresolved.
-  test.fixme('returns a complete document when submitted before hydration', async ({ page }) => {
+  test('returns a complete document when submitted before hydration', async ({ page }) => {
     const title = 'A router that waits for the UI';
     await page.goto('/schedule/saturday');
     await setAgendaSelection(page, title, false);

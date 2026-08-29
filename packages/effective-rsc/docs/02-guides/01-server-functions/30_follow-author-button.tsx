@@ -1,16 +1,19 @@
 /**
- * @title Calling a Server Function from a Client Component
+ * @title Rendering a Server Function form
  *
- * Bind the input before passing the client reference to React.
+ * Receive the server-bound action as a Client Component prop.
  */
 'use client';
 
 import { useActionState } from 'react';
 
-import { followAuthor, type FollowAuthorState } from './20_follow-author';
+import type { FollowAuthorState } from './20_follow-author';
 
-export function FollowAuthorButton({ authorId }: { readonly authorId: string }) {
-  const action = followAuthor.bind(null, { authorId });
+export function FollowAuthorButton({
+  action,
+}: {
+  readonly action: () => Promise<FollowAuthorState>;
+}) {
   const [state, formAction, pending] = useActionState<FollowAuthorState | null>(action, null);
 
   return (

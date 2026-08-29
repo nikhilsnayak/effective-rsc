@@ -6,6 +6,7 @@
 import { Effect } from 'effect';
 
 import { ERSC } from './01_application';
+import { followAuthor } from './20_follow-author';
 import { FollowAuthorButton } from './30_follow-author-button';
 
 const RootLayout = ERSC.Layout.make({
@@ -18,13 +19,16 @@ const RootLayout = ERSC.Layout.make({
 });
 
 const AuthorPage = ERSC.Page.make({
-  render: () =>
-    Effect.succeed(
+  render: () => {
+    const action = followAuthor.bind(null, { authorId: 'grace-hopper' });
+
+    return Effect.succeed(
       <main>
         <h1>Grace Hopper</h1>
-        <FollowAuthorButton authorId='grace-hopper' />
+        <FollowAuthorButton action={action} />
       </main>,
-    ),
+    );
+  },
 });
 
 export default ERSC.make({

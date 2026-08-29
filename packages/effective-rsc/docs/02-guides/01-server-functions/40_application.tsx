@@ -1,11 +1,9 @@
 /**
  * @title Closing the Server Function application
- *
- * Close the application with the ERSC value that created the Server Function.
  */
 import { Effect } from 'effect';
 
-import { ERSC } from './01_application';
+import { ERSC } from './10_ersc';
 import { followAuthor } from './20_follow-author';
 import { FollowAuthorButton } from './30_follow-author-button';
 

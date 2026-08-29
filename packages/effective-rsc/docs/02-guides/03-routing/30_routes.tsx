@@ -3,7 +3,7 @@
  *
  * Mounting retains the child graph's Layout and Loading ancestry.
  */
-import { ERSC } from './01_application';
+import { ERSC } from './10_ersc';
 import { ArticleLayout, ArticleLoading, RootLayout } from './10_layouts';
 import { ArticlePage, HomePage } from './20_pages';
 import { ArticleResponsePolicy } from './25_middleware';

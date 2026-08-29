@@ -5,7 +5,7 @@
  */
 import { Effect } from 'effect';
 
-import { ERSC } from './01_application';
+import { ERSC } from './10_ersc';
 
 export const RootLayout = ERSC.Layout.make({
   render: ({ children }) =>

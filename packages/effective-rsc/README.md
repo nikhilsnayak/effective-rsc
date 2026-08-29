@@ -1,7 +1,7 @@
 # effective-rsc ![Experimental](https://img.shields.io/badge/status-experimental-orange)
 
-An experimental React Server Components framework where React owns the UI protocol and Effect owns
-the application runtime. It uses Rspack's native RSC support and targets Bun.
+A React Server Components framework where React owns the UI protocol and Effect owns the application
+runtime. It uses Rspack's native RSC support and targets Bun.
 
 ## Requirements
 
@@ -13,8 +13,6 @@ the application runtime. It uses Rspack's native RSC support and targets Bun.
 
 ## Create an application
 
-Bootstrap a complete application with the compatible dependency versions:
-
 ```sh
 bunx create-ersc-app my-effective-rsc-app
 cd my-effective-rsc-app
@@ -24,6 +22,17 @@ bun run start
 ```
 
 Run `bunx create-ersc-app` without a directory for the interactive flow.
+
+## Why effective-rsc
+
+- **[Effect is the application runtime](./docs/03-advanced/01-request-runtime-and-lifetimes/index.md).**
+  Pages, Layouts, Components, and Server Functions retain inferred service requirements and run as
+  request-scoped Effects. Provide the application Layer once; native Effect HTTP routes, APIs, RPC,
+  and middleware share the same Bun server and lifetime.
+- **[Navigation owns the full request lifetime](./docs/03-advanced/02-client-navigation/index.md).**
+  The URL commits with visible UI while navigation remains active through Flight EOF. Cancellation
+  and supersession interrupt obsolete browser and server work without desynchronizing the URL and
+  visible UI.
 
 ## Manual installation
 
@@ -44,7 +53,7 @@ bun add --dev \
   typescript@7.0.2 \
   @types/bun@^1.4.0 \
   @types/react@19.2.18 \
-  @types/react-dom@19.2.4
+  @types/react-dom@19.2.5
 ```
 
 Add the framework commands to `package.json`:
@@ -88,23 +97,14 @@ export default ERSC.make({
 });
 ```
 
-Type-check, build, and start the application:
-
-```sh
-bun run check
-bun run build
-bun run start
-```
-
-Open `http://localhost:18193`.
+Run `bun run check`, `bun run build`, and `bun run start`, then open `http://localhost:18193`.
 
 For deployment, `ersc start` accepts `--hostname` and `--port`. Command-line flags take precedence
 over `HOST` and `PORT`; the defaults are `localhost` and `18193`.
 
 ## Styling
 
-Stylesheets have no special filename or framework entry point. Import them from the modules that use
-them:
+Import stylesheets from the modules that use them; there is no framework stylesheet entry point:
 
 ```tsx
 import './styles.css';
@@ -124,19 +124,18 @@ Then create a stylesheet, such as `src/styles.css`:
 
 ## Authoring model
 
-`Application.ersc<Services>()` creates one application-scoped authoring module with six concepts:
+`Application.ersc<Services>()` creates one application-scoped authoring module:
 
 - `Page` is an Effectful route leaf and may decode typed path parameters with Schema.
 - `Layout` is an Effectful wrapper with one `children` outlet; the root Layout owns the document.
 - `Loading` is a synchronous, service-free Suspense fallback.
-- `Component` adapts an Effectful Server Component that is not itself a route.
+- `Component` defines an Effectful Server Component that is not itself a route.
 - `ServerFn` adds Effect and Schema to React's native Server Function protocol.
 - `Routes` immutably composes Pages, inherited middleware, and nested Layout/Loading scopes.
 
 Create every Page, Layout, Loading, Component, ServerFn, and Routes value from that same ERSC
 instance. Declare the complete service universe through its `Services` type parameter and provide the
-application Layer at `ERSC.make({ layer })`. That Layer may also register native Effect HTTP routes,
-APIs, RPC, and global middleware on the same server.
+application Layer at `ERSC.make({ layer })`.
 
 ## Runtime boundary
 
@@ -147,11 +146,12 @@ runtime, including a Client Component, throws immediately.
 ## Example and documentation
 
 The [kitchen-sink conference](https://github.com/nikhilsnayak/effective-rsc/tree/main/examples/kitchen-sink)
-is the complete application example and end-to-end integration fixture.
+is the complete application example.
 
 - [Getting started](./docs/01-getting-started/index.md)
 - [Guides](./docs/02-guides/index.md)
-- [API reference](./docs/03-api-reference/index.md)
+- [Advanced](./docs/03-advanced/index.md)
+- [API reference](./docs/04-api-reference/index.md)
 - [Combined LLM reference](./LLMS.md)
 
 ## Credits

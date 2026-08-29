@@ -2,16 +2,15 @@
 
 # effective-rsc documentation
 
-These docs cover effective-rsc APIs and conventions. Use the React and Effect documentation for
-their underlying concepts.
+Use the React and Effect documentation for their underlying concepts. ERSC conventions:
 
 - Only `src/application.tsx` has framework filename semantics.
 - Create every authoring value in an application from one ERSC instance.
 - Provide application services and export the result at `ERSC.make`.
 - Import the package root only from the RSC graph.
 
-Start with Getting started. Use the guides for composition examples and the API reference for exact
-contracts.
+Start with Getting started, then use Guides for composition, Advanced for runtime behavior, and API
+reference for exact contracts.
 
 ## Getting started
 
@@ -64,55 +63,33 @@ export default ERSC.make({
 
 ## Guides
 
-These guides cover Server Functions, service composition, routing, Routes middleware, and userland
-Effect HTTP. They assume familiarity with React Server Components and Effect.
+Authoring examples for Server Functions, service composition, routing, middleware, and userland
+Effect HTTP. Familiarity with React Server Components and Effect is assumed.
 
 ## Server Functions
 
-`ERSC.ServerFn.make` adds Schema input decoding, an Effect handler, request cancellation, application
-services, and a whole-tree refresh to React's Server Function protocol. The refresh runs in a React
-transition, retaining the revealed route while refreshed content suspends.
+`ERSC.ServerFn.make` decodes Schema input and runs an Effect handler with application services.
 
-- Export it by name from a `'use server'` module.
-- Invoke it only through its client reference; direct server invocation throws.
-- Bind serializable input before passing it to a form action.
-- Let `input` infer the handler parameter; do not annotate it.
-- The returned client reference resolves `Promise<Output>`.
-- Browser requests require an `Origin` matching the application host and may contain at most 10 MiB.
-- Encode expected mutation failures in a discriminated `Output` union. The Effect error channel is
-  not exposed by the client reference yet.
+Let the input Schema infer the handler parameter. Bind input known on the server before passing the
+action to a Client Component when the form must work without JavaScript.
 
-### Creating the Server Function authoring module
+A successful invocation refreshes the current route.
 
-The Server Function and application use the same ERSC value.
-
-```ts
-import { Application } from 'effective-rsc';
-
-export const ERSC = Application.ersc();
-```
-
-### More examples
-
+- **[Creating the Server Function authoring module](./docs/02-guides/01-server-functions/10_ersc.ts)**
 - **[Defining a Server Function](./docs/02-guides/01-server-functions/20_follow-author.ts)**: ERSC decodes input before running the Effect handler.
-- **[Calling a Server Function from a Client Component](./docs/02-guides/01-server-functions/30_follow-author-button.tsx)**: Bind the input before passing the client reference to React.
-- **[Closing the Server Function application](./docs/02-guides/01-server-functions/40_application.tsx)**: Close the application with the ERSC value that created the Server Function.
+- **[Rendering a Server Function form](./docs/02-guides/01-server-functions/30_follow-author-button.tsx)**: Receive the server-bound action as a Client Component prop.
+- **[Closing the Server Function application](./docs/02-guides/01-server-functions/40_application.tsx)**
 
 ## Services
 
-ERSC does not prescribe how to define Effect services. Its convention is:
+Define services with Effect, then follow the ERSC composition convention:
 
 1. Declare the complete service union with `Application.ersc<Services>()`.
 2. Let Pages, Layouts, Components, and Server Functions require members of that union.
 3. Provide the complete Layer once with `ERSC.make({ layer })`.
 
-This keeps implementations at the application composition boundary and preserves requirements after
-React turns renderers into JSX values.
-
-The server builds `layer` once and shares its services across requests until shutdown. Layer
-finalizers run when the server closes. Keep shared mutable state concurrency-safe; in-memory state is
-process-local and is lost on restart. Acquire request-local resources inside the request Effect so
-interruption releases them with that request.
+This keeps implementations at the application composition boundary while preserving each
+renderer's inferred service requirements.
 
 - **[An application-owned service](./docs/02-guides/02-services/10_catalog.ts)**: ERSC consumes the service contract and Layer; their construction is ordinary Effect code.
 - **[Providing services at the composition boundary](./docs/02-guides/02-services/20_application.tsx)**: Declare the service union on ERSC and provide its Layer once at ERSC.make.
@@ -120,41 +97,20 @@ interruption releases them with that request.
 ## Routing, parameters, and loading
 
 - Routes are immutable and belong to one ERSC instance.
-- `page(path, page)` attaches a Page to an Effect HTTP path.
-- `mount(prefix, routes)` mounts a non-empty graph below a parameter-free prefix.
-- A Page parameter Schema must exactly match its path parameters.
-- Nested scopes may own a Layout, Loading fallback, both, or neither.
+- `page(path, page)` attaches a Page; `mount(prefix, routes)` nests a route scope.
+- Mounted scopes retain their Layout, Loading, and middleware ancestry.
 - A scope's ordered `middleware` list applies to Page GET and native HEAD fallback for every
   descendant. Ancestors run before descendants; responses unwind in reverse order.
-- ERSC resolves scope inheritance and delegates composition to native Effect
-  `HttpRouter.Middleware`.
 - Routes middleware does not apply to Server Function POST, userland HTTP, assets, or unmatched
   paths. Use native Effect HTTP global middleware for server-wide policy.
-- Loading is synchronous and service-free.
-- Root Routes require a Layout and at least one Page.
 
-An unmatched path receives Effect HTTP's native `404`. A matched Page cannot currently set an HTTP
-status or redirect. Render entity absence as Page output only when a `200` response is acceptable;
-matched-route `404` and redirect outcomes remain open framework contracts.
-
-### Creating one routing authoring module
-
-All route concerns in an application use one ERSC value.
-
-```ts
-import { Application } from 'effective-rsc';
-
-export const ERSC = Application.ersc();
-```
-
-### More examples
-
+- **[Creating one routing authoring module](./docs/02-guides/03-routing/10_ersc.ts)**
 - **[Layout and Loading concerns](./docs/02-guides/03-routing/10_layouts.tsx)**: Layout is Effectful; Loading is synchronous and service-free.
 - **[Static and parameterized Pages](./docs/02-guides/03-routing/20_pages.tsx)**: A Page Schema decodes captured path strings for render.
 - **[Defining inherited Page middleware](./docs/02-guides/03-routing/25_middleware.ts)**: The handler receives the downstream response Effect. It may short-circuit or transform the
   response, but introduces no typed failures.
 - **[Composing and mounting Routes](./docs/02-guides/03-routing/30_routes.tsx)**: Mounting retains the child graph's Layout and Loading ancestry.
-- **[Closing the route graph](./docs/02-guides/03-routing/40_application.ts)**: ERSC.make accepts the complete same-ERSC route graph.
+- **[Closing the route graph](./docs/02-guides/03-routing/40_application.ts)**
 
 ## Userland HTTP
 
@@ -166,11 +122,64 @@ Wire a raw handler's service requirements with native Effect HTTP composition. U
 the Service Layer into the application Layer.
 
 Native global middleware belongs in the same application Layer. It observes Page requests, Server
-Function requests, raw HTTP, assets, and unmatched requests. A response transform only runs when the
-downstream router produces a response; Effect HTTP converts an unhandled missing route to `404`
-outside that transform.
+Function requests, raw HTTP, assets, and unmatched requests.
 
 - **[Composing application services and userland HTTP](./docs/02-guides/04-http/10_application-layer.ts)**: Native HTTP layers register on the same router when this Layer is passed to ERSC.make.
+
+## Advanced
+
+Runtime guarantees for request lifetimes, client navigation, and Server Function refresh.
+
+## Request runtime and lifetimes
+
+The server builds the Layer passed to `ERSC.make` once and releases it at shutdown. Its services have
+application lifetime.
+
+Each HTTP request has an independent Effect scope. Pages, Layouts, Components, and Server Functions
+run their Effects within that scope.
+
+The Flight stream owns the request scope. Closing that stream interrupts its request Effects and
+runs their finalizers. Acquire request-local resources inside the request Effect so their lifetime
+follows the request automatically.
+
+Give work that must outlive a request an explicit application-owned scope.
+
+## Client navigation
+
+ERSC handles eligible document navigations through the browser Navigation API and
+`NavigationPrecommitController`. There is no History API fallback.
+
+An intercepted Page navigation has two milestones:
+
+- **UI commit:** ERSC starts the Flight request in a React transition and retains the common Layout
+  prefix. The URL commits after React displays the destination Loading or content, so the URL and
+  visible UI change together.
+- **Work completion:** the browser navigation remains active until Flight reaches EOF. A completed
+  tree is then cached for its Navigation API history-entry id.
+
+Canceling before completion interrupts the client transport and request-scoped server Effects. An
+explicit cancellation restores the last committed URL and route tree. A superseding navigation
+keeps the committed UI visible until its successor reaches the UI-commit milestone.
+
+Back/Forward traversal reuses a completed cached payload. Push, replace, and uncached traversal
+fetch fresh Flight. Disposing a history entry evicts its payload; a Server Function refresh clears
+the traversal cache because a mutation may affect any route.
+
+Flight redirects use the response's final URL. A non-success or non-Flight response is promoted to
+a full-document navigation. Native focus and scroll behavior remain enabled.
+
+## Server Function execution and refresh
+
+Hydrated invocations and progressively enhanced forms execute the same request-scoped Effect
+handler. A hydrated response contains the imperative result and a refreshed route tree; a
+progressively enhanced response contains a complete document with the refreshed tree and form state.
+
+For hydrated calls, the result Promise settles independently from the route refresh. ERSC commits
+the refreshed tree in a React transition and keeps its work active through React commit and Flight
+EOF. Canceling that work interrupts the handler Effect and response stream.
+
+After a successful mutation, ERSC clears the Back/Forward traversal cache because any route may have
+changed.
 
 ## API reference
 
@@ -194,7 +203,7 @@ services and register native Effect HTTP on the framework router.
 
 `render` returns an Effect whose requirements fit the ERSC service union. For parameterized Pages,
 the Schema's encoded keys must exactly match the path parameters and accept strings. Compose the
-opaque Page handle with `Routes.page`.
+Page with `Routes.page`.
 
 Pages currently produce React output only. They do not expose status, not-found, or redirect
 outcomes. Only an unmatched route receives a native `404`.
@@ -214,18 +223,18 @@ require services. A scope accepts at most one Loading value.
 `ERSC.Component.make({ render })` creates a non-route Effectful Server Component. Props are inferred
 from `render`; requirements must fit the ERSC service union. Use it only in the RSC graph.
 
-- **[An Effectful Server Component](./docs/03-api-reference/05-component/10_component.tsx)**: Component runs its render Effect in the current ERSC request scope.
+- **[An Effectful Server Component](./docs/04-api-reference/05-component/10_component.tsx)**: Component runs its render Effect in the current ERSC request scope.
 
 ## Routes
 
 `ERSC.Routes.make({ layout?, loading?, middleware? })` creates an immutable scope.
 
-- `ERSC.Routes.middleware({ handler })` creates an opaque same-ERSC middleware concern. `handler`
-  receives the downstream HTTP response Effect and must not introduce typed failures. The concern
-  adapts to native Effect `HttpRouter.Middleware`; Effect owns composition and layer application.
+- `ERSC.Routes.middleware({ handler })` creates middleware for the current ERSC instance. `handler`
+  receives the downstream HTTP response Effect and must not introduce typed failures. Composition
+  follows native Effect `HttpRouter.Middleware` semantics.
 - `middleware` is a non-empty ordered list. Request handling is top to bottom; response transforms
-  unwind bottom to top. Middleware is inherited by mounted descendants and duplicate middleware in a
-  resolved chain is rejected.
+  unwind bottom to top. Ancestor middleware runs before descendant middleware. Duplicate middleware
+  in a resolved chain is rejected.
 - Routes middleware wraps matched Page GET and native HEAD fallback only. It does not wrap Server
   Function POST, userland HTTP, assets, or unmatched paths.
 
@@ -235,6 +244,7 @@ from `render`; requirements must fit the ERSC service union. Use it only in the 
   parameter-free prefix.
 
 Both operations return new Routes values. Conflicting shapes and `/_ersc/assets` are rejected.
+Root Routes require a Layout and at least one Page.
 
 ## ServerFn
 
@@ -252,7 +262,7 @@ const followAuthor = ERSC.ServerFn.make({
 });
 ```
 
-Export it by name from a `'use server'` module and invoke it through the client reference. Direct
-server invocation throws. The handler's Effect error type is not part of the client Promise type.
-Encode an expected failure in a discriminated `Output` union; unexpected failures reject the
-Promise.
+Direct server invocation throws. The handler's Effect error type is not part of the client Promise
+type. Encode an expected failure in a discriminated `Output` union; unexpected failures reject the
+Promise. Browser requests require an Origin matching the application host and may contain at most
+10 MiB.

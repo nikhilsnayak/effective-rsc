@@ -21,6 +21,7 @@ export function FollowAuthorButton({
       <button disabled={pending} type='submit'>
         {pending ? 'Saving…' : state?.following ? 'Following' : 'Follow author'}
       </button>
+      {state?.following ? <p>Following {state.authorId}</p> : null}
     </form>
   );
 }

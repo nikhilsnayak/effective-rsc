@@ -8,6 +8,4 @@ Wire a raw handler's service requirements with native Effect HTTP composition. U
 the Service Layer into the application Layer.
 
 Native global middleware belongs in the same application Layer. It observes Page requests, Server
-Function requests, raw HTTP, assets, and unmatched requests. A response transform only runs when the
-downstream router produces a response; Effect HTTP converts an unhandled missing route to `404`
-outside that transform.
+Function requests, raw HTTP, assets, and unmatched requests.

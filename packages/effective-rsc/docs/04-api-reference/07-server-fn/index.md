@@ -14,7 +14,7 @@ const followAuthor = ERSC.ServerFn.make({
 });
 ```
 
-Export it by name from a `'use server'` module and invoke it through the client reference. Direct
-server invocation throws. The handler's Effect error type is not part of the client Promise type.
-Encode an expected failure in a discriminated `Output` union; unexpected failures reject the
-Promise.
+Direct server invocation throws. The handler's Effect error type is not part of the client Promise
+type. Encode an expected failure in a discriminated `Output` union; unexpected failures reject the
+Promise. Browser requests require an Origin matching the application host and may contain at most
+10 MiB.

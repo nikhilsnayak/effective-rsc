@@ -7,7 +7,7 @@
 import { Effect } from 'effect';
 import { HttpServerResponse } from 'effect/unstable/http';
 
-import { ERSC } from './01_application';
+import { ERSC } from './10_ersc';
 
 export const ArticleResponsePolicy = ERSC.Routes.middleware({
   handler: (httpEffect) =>

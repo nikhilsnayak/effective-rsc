@@ -226,6 +226,8 @@ const watchCompiler = (configs: ReadonlyArray<Configuration>) =>
   Stream.callback<RspackWatchEvent, RspackError>((queue) =>
     Effect.gen(function* () {
       const compiler = yield* acquireCompiler(configs);
+      // The RSC client plugin mutates its own ignored predicate during watch setup.
+      const watchOptions = configs.map(() => ({}));
       let watchState: 'Idle' | 'Building' = 'Idle';
 
       compiler.hooks.watchRun.tap({ name: 'ersc:watch-state', stage: -10_000 }, () => {
@@ -238,7 +240,7 @@ const watchCompiler = (configs: ReadonlyArray<Configuration>) =>
       yield* Effect.acquireRelease(
         Effect.try({
           try: () =>
-            compiler.watch({}, (cause, stats) => {
+            compiler.watch(watchOptions, (cause, stats) => {
               watchState = 'Idle';
               Queue.offerUnsafe(queue, watchEvent(cause, stats));
             }),

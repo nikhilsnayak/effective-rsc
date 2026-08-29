@@ -218,13 +218,16 @@ it.effect('continues watching after a generation fails to start', () =>
     );
 
     expect(response.status).toBe(204);
-    expect(messages).toHaveLength(1);
-    expect(messages[0]).toMatchObject([
+    expect(messages).toHaveLength(4);
+    expect(messages[0]).toEqual(['Compiling application with Rspack...']);
+    expect(messages[1]).toMatchObject([
       {
         _tag: 'DevGenerationError',
         cause: 'startup failed',
       },
     ]);
+    expect(messages[2]).toEqual(['Compiling application with Rspack...']);
+    expect(messages[3]).toEqual(['Application ready.']);
   }).pipe(Effect.provide(BunServices.layer), Effect.scoped),
 );
 

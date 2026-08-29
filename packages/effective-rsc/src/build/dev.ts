@@ -132,18 +132,26 @@ export const makeDevApplication = Effect.fnUntraced(function* ({
     root: applicationRoot,
   });
   const update = Effect.fnUntraced(function* (event: RspackWatchEvent) {
-    yield* generationStore.update(event).pipe(Effect.catch((error) => Effect.logError(error)));
-
     switch (event._tag) {
-      case 'Building':
+      case 'Building': {
+        yield* generationStore.update(event);
+        yield* Effect.logInfo('Compiling application with Rspack...');
         return;
-      case 'Failed':
+      }
+      case 'Failed': {
+        yield* generationStore.update(event);
         yield* Effect.logError(event.error);
         return;
-      case 'Compiled':
+      }
+      case 'Compiled': {
         if (event.warnings !== undefined) {
           yield* Effect.logWarning(event.warnings);
         }
+        yield* generationStore.update(event).pipe(
+          Effect.tap(() => Effect.logInfo('Application ready.')),
+          Effect.catch((error) => Effect.logError(error)),
+        );
+      }
     }
   });
   const watch = rspack
@@ -159,6 +167,8 @@ export const makeDevApplication = Effect.fnUntraced(function* ({
 type DevApplication = Effect.Success<ReturnType<typeof makeDevApplication>>;
 
 export const launchDevApplication = Effect.fnUntraced(function* (application: DevApplication) {
+  yield* HttpServer.logAddress;
+
   return yield* Effect.raceFirst(
     application.watch,
     Layer.launch(HttpServer.serve(application.httpEffect)),

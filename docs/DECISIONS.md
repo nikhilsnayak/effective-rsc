@@ -43,6 +43,9 @@ implemented, accepted but not implemented, and intentionally outside the current
 | D-038 | Define ERSC as an application-scoped authoring and execution module closed by `ERSC.make`.                                                                                                                                                                        |
 | D-039 | Give Component, Layout, Loading, and Page uniform options-object authoring interfaces.                                                                                                                                                                            |
 | D-040 | Return request/protocol failures as non-2xx; return completed Server Function outcomes with the 200 Flight refresh.                                                                                                                                               |
+| D-041 | Run development through one Bun + Effect HTTP server and Rspack watch, with generation-scoped request handling and surfaced compilation failures.                                                                                                                 |
+| D-042 | Use Rspack's HMR runtime and React Fast Refresh over `/_ersc/hmr`; apply client updates before refetching Flight after RSC changes.                                                                                                                               |
+| D-043 | Replace the whole route tree on HMR refresh, interrupt superseded refreshes, and retain successful responses through stream EOF.                                                                                                                                  |
 | D-044 | Build the package as bundleless ESM with Rslib and publish compiled JavaScript, declarations, and source maps under `dist/`.                                                                                                                                      |
 | D-045 | License the repository and published `effective-rsc` package under the MIT License.                                                                                                                                                                               |
 | D-046 | Effect HTTP alone owns pattern matching; ERSC destinations stay matcher-neutral, while Pages explicitly own either no parameter Schema or one whose keys match the path parameter names.                                                                          |
@@ -61,12 +64,6 @@ implemented, accepted but not implemented, and intentionally outside the current
 | D-059 | Require a matching browser Origin host for Server Function POST requests and reject bodies larger than 10 MiB while streaming, before React decodes them.                                                                                                         |
 | D-060 | Map HTML failures before the Fizz shell to `500`; after streaming begins, preserve committed response metadata, report render errors through the request logger, and let React and Web Streams recover or terminate.                                              |
 
-## Planned
-
-| ID    | Decision                                                                                                                                                                                                                                                                                                        |
-| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| D-041 | Run development through one Bun + Effect HTTP server and Rspack watch; reset request-visible state when aggregate compilation begins, wait for and acquire the current application generation before serving requests, surface failed current compilations, and reload browsers after a successful replacement. |
-
 ## Deferred
 
 | ID    | Decision                                                                                                                            |
@@ -74,5 +71,3 @@ implemented, accepted but not implemented, and intentionally outside the current
 | D-011 | Consider Effect RPC only for work that does not imply an RSC refresh.                                                               |
 | D-014 | Defer SSG, ISR, partial prerendering, SPA mode, alternate bundlers, and runtime adapters.                                           |
 | D-027 | Revisit StyleX only after its Rspack CSS-emission hook ships and MultiCompiler RSC CSS ownership and watch invalidation are proven. |
-| D-042 | Use Rspack's HMR runtime and React Fast Refresh over `/_ersc/hmr`; apply client updates before refetching Flight after RSC changes. |
-| D-043 | Replace the whole route tree on HMR refresh, interrupt superseded refreshes, and retain successful responses through stream EOF.    |

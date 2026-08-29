@@ -1,9 +1,11 @@
-import { Deferred, Effect, Path, Ref, Schema, ScopedRef } from 'effect';
+import { Deferred, Effect, Path, Ref, Schema, ScopedRef, Stream } from 'effect';
 import { HttpRouter } from 'effect/unstable/http';
 
+import { resolveApplicationBuild } from './build';
 import { loadServerBundle, makeRunnableHttpLayer } from './compiled-server';
 import { DevClientOutputDir } from './contract';
-import type { RspackError, RspackWatchEvent } from './rspack';
+import { Rspack, type RspackError, type RspackWatchEvent } from './rspack';
+import { makeRspackDevConfig } from './rspack-config';
 
 type RspackCompilation = Extract<RspackWatchEvent, { readonly _tag: 'Compiled' }>;
 
@@ -23,6 +25,8 @@ type AcquireDevGenerationOptions = {
 };
 
 type DevGenerationOptions = Omit<AcquireDevGenerationOptions, 'compilation'>;
+
+export type DevApplicationOptions = DevGenerationOptions;
 
 export const acquireDevGeneration = Effect.fnUntraced(function* ({
   compilation,
@@ -112,5 +116,42 @@ export const makeDevGenerationStore = Effect.fnUntraced(function* (options: DevG
   return {
     httpEffect,
     update,
+  };
+});
+
+export const makeDevApplication = Effect.fnUntraced(function* ({
+  hostname,
+  port,
+  root,
+}: DevApplicationOptions) {
+  const { applicationRoot, entries } = yield* resolveApplicationBuild({ root });
+  const rspack = yield* Rspack;
+  const generationStore = yield* makeDevGenerationStore({
+    hostname,
+    port,
+    root: applicationRoot,
+  });
+  const update = Effect.fnUntraced(function* (event: RspackWatchEvent) {
+    yield* generationStore.update(event).pipe(Effect.catch((error) => Effect.logError(error)));
+
+    switch (event._tag) {
+      case 'Building':
+        return;
+      case 'Failed':
+        yield* Effect.logError(event.error);
+        return;
+      case 'Compiled':
+        if (event.warnings !== undefined) {
+          yield* Effect.logWarning(event.warnings);
+        }
+    }
+  });
+  const watch = rspack
+    .watch(makeRspackDevConfig(applicationRoot, entries))
+    .pipe(Stream.runForEach(update));
+
+  return {
+    httpEffect: generationStore.httpEffect,
+    watch,
   };
 });

@@ -1,5 +1,5 @@
-import { Deferred, Effect, Path, Ref, Schema, ScopedRef, Stream } from 'effect';
-import { HttpRouter } from 'effect/unstable/http';
+import { Deferred, Effect, Layer, Path, Ref, Schema, ScopedRef, Stream } from 'effect';
+import { HttpRouter, HttpServer } from 'effect/unstable/http';
 
 import { resolveApplicationBuild } from './build';
 import { loadServerBundle, makeRunnableHttpLayer } from './compiled-server';
@@ -154,4 +154,15 @@ export const makeDevApplication = Effect.fnUntraced(function* ({
     httpEffect: generationStore.httpEffect,
     watch,
   };
+});
+
+export const devApplication = Effect.fn('ersc/build/devApplication')(function* (
+  options: DevApplicationOptions,
+) {
+  const application = yield* makeDevApplication(options);
+
+  return yield* Effect.raceFirst(
+    application.watch,
+    Layer.launch(HttpServer.serve(application.httpEffect)),
+  );
 });

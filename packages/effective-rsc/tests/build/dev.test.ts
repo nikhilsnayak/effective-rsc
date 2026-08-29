@@ -1,10 +1,11 @@
 import * as BunServices from '@effect/platform-bun/BunServices';
 import { expect, it } from '@effect/vitest';
-import { Effect, Fiber, FileSystem, Layer, Logger, Path, Stream } from 'effect';
-import { HttpServerRequest } from 'effect/unstable/http';
+import { Deferred, Effect, Fiber, FileSystem, Layer, Logger, Path, Ref, Stream } from 'effect';
+import { HttpServer, HttpServerRequest } from 'effect/unstable/http';
 
 import {
   acquireDevGeneration,
+  devApplication,
   makeDevApplication,
   makeDevGenerationStore,
 } from '../../src/build/dev';
@@ -224,5 +225,84 @@ it.effect('continues watching after a generation fails to start', () =>
         cause: 'startup failed',
       },
     ]);
+  }).pipe(Effect.provide(BunServices.layer), Effect.scoped),
+);
+
+it.effect('keeps one HTTP server across successful generations', () =>
+  Effect.gen(function* () {
+    const fileSystem = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const directory = yield* fileSystem.makeTempDirectoryScoped({
+      prefix: 'ersc-dev-server-',
+    });
+    const firstFilename = 'main.first.js';
+    const secondFilename = 'main.second.js';
+
+    yield* fileSystem.writeFileString(
+      path.join(directory, firstFilename),
+      serverBundleSource("HttpRouter.add('GET', '/first', HttpServerResponse.empty())"),
+    );
+    yield* fileSystem.writeFileString(
+      path.join(directory, secondFilename),
+      serverBundleSource("HttpRouter.add('GET', '/second', HttpServerResponse.empty())"),
+    );
+
+    const serverStarted = yield* Deferred.make<void>();
+    const serverStopped = yield* Deferred.make<void>();
+    const serveCount = yield* Ref.make(0);
+    const HttpServerLayer = Layer.succeed(
+      HttpServer.HttpServer,
+      HttpServer.make({
+        address: { _tag: 'TcpAddress', hostname: 'localhost', port: 18193 },
+        serve: () =>
+          Effect.gen(function* () {
+            yield* Ref.update(serveCount, (count) => count + 1);
+            yield* Deferred.succeed(serverStarted, undefined);
+            yield* Effect.addFinalizer(() => Deferred.succeed(serverStopped, undefined));
+          }),
+      }),
+    );
+    const RspackLayer = Layer.succeed(
+      Rspack,
+      Rspack.of({
+        build: () => Effect.void,
+        watch: () =>
+          Stream.unwrap(
+            Deferred.await(serverStarted).pipe(
+              Effect.as(
+                Stream.make(
+                  { _tag: 'Building' },
+                  {
+                    _tag: 'Compiled',
+                    hash: 'first',
+                    serverBundle: {
+                      filename: firstFilename,
+                      outputPath: directory,
+                    },
+                  },
+                  { _tag: 'Building' },
+                  {
+                    _tag: 'Compiled',
+                    hash: 'second',
+                    serverBundle: {
+                      filename: secondFilename,
+                      outputPath: directory,
+                    },
+                  },
+                ),
+              ),
+            ),
+          ),
+      }),
+    );
+
+    yield* devApplication({
+      hostname: 'localhost',
+      port: 18193,
+      root: directory,
+    }).pipe(Effect.provide(Layer.merge(HttpServerLayer, RspackLayer)));
+
+    expect(yield* Ref.get(serveCount)).toBe(1);
+    expect(yield* Deferred.isDone(serverStopped)).toBe(true);
   }).pipe(Effect.provide(BunServices.layer), Effect.scoped),
 );

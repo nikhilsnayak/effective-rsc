@@ -98,9 +98,8 @@ export const makeRunnableHttpLayer = Effect.fnUntraced(function* ({
   return bundle[CompiledServerExportNames.httpLayer].pipe(Layer.provide(ServerConfigLayer));
 });
 
-export const loadCompiledServer = Effect.fnUntraced(function* (root: string) {
+export const loadServerBundle = Effect.fnUntraced(function* (serverBundlePath: string) {
   const path = yield* Path.Path;
-  const serverBundlePath = path.resolve(root, BuildServerBundlePath);
   const serverBundleUrl = yield* path.toFileUrl(serverBundlePath).pipe(
     Effect.mapError(
       (cause) =>
@@ -128,4 +127,10 @@ export const loadCompiledServer = Effect.fnUntraced(function* (root: string) {
         }),
     ),
   );
+});
+
+export const loadCompiledServer = Effect.fnUntraced(function* (root: string) {
+  const path = yield* Path.Path;
+
+  return yield* loadServerBundle(path.resolve(root, BuildServerBundlePath));
 });

@@ -156,13 +156,19 @@ export const makeDevApplication = Effect.fnUntraced(function* ({
   };
 });
 
-export const devApplication = Effect.fn('ersc/build/devApplication')(function* (
-  options: DevApplicationOptions,
-) {
-  const application = yield* makeDevApplication(options);
+type DevApplication = Effect.Success<ReturnType<typeof makeDevApplication>>;
 
+export const launchDevApplication = Effect.fnUntraced(function* (application: DevApplication) {
   return yield* Effect.raceFirst(
     application.watch,
     Layer.launch(HttpServer.serve(application.httpEffect)),
   );
+});
+
+export const devApplication = Effect.fn('ersc/build/devApplication')(function* (
+  options: DevApplicationOptions,
+) {
+  const application = yield* makeDevApplication(options).pipe(Effect.provide(Rspack.layer));
+
+  return yield* launchDevApplication(application);
 });

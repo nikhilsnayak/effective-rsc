@@ -5,7 +5,7 @@ import { HttpServer, HttpServerRequest } from 'effect/unstable/http';
 
 import {
   acquireDevGeneration,
-  devApplication,
+  launchDevApplication,
   makeDevApplication,
   makeDevGenerationStore,
 } from '../../src/build/dev';
@@ -296,11 +296,13 @@ it.effect('keeps one HTTP server across successful generations', () =>
       }),
     );
 
-    yield* devApplication({
+    const application = yield* makeDevApplication({
       hostname: 'localhost',
       port: 18193,
       root: directory,
-    }).pipe(Effect.provide(Layer.merge(HttpServerLayer, RspackLayer)));
+    }).pipe(Effect.provide(RspackLayer));
+
+    yield* launchDevApplication(application).pipe(Effect.provide(HttpServerLayer));
 
     expect(yield* Ref.get(serveCount)).toBe(1);
     expect(yield* Deferred.isDone(serverStopped)).toBe(true);

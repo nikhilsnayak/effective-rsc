@@ -22,6 +22,22 @@ const invocationEffect = <Output, Services>(
 };
 
 describe('ServerFn.make', () => {
+  it.effect('rejects direct invocation in the server graph', () =>
+    Effect.gen(function* () {
+      const ERSC = Application.ersc();
+      const serverFn = ERSC.ServerFn.make({
+        input: Schema.String,
+        handler: Effect.succeed,
+      });
+
+      yield* Effect.promise(() =>
+        expect(serverFn('value')).rejects.toThrow(
+          'An ERSC ServerFn is a framework intrinsic and cannot be invoked directly in the server graph.',
+        ),
+      );
+    }),
+  );
+
   it.effect('validates input and runs the handler with request services', () =>
     Effect.gen(function* () {
       const ERSC = Application.ersc<Greeting>();

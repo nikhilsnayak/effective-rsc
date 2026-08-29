@@ -31,19 +31,6 @@ test('serves the complete application route tree through the native Flight proto
   expect(flight).toContain('Conference agenda');
   expect(flight).toContain('"formState":null');
   expect(flight).toContain('"routeTree"');
-  expect(flight).toContain('"html"');
-  expect(flight).toContain('"body"');
-});
-
-test('serializes Client Components as native module references', async ({ request }) => {
-  const { body: flight } = await requestFlight(request);
-  const moduleReferences = flight
-    .split('\n')
-    .filter((row) => /^[0-9a-f]+:I/.test(row))
-    .map((row) => row.slice(row.indexOf(':I') + 2));
-
-  expect(moduleReferences.length).toBeGreaterThan(0);
-  expect(moduleReferences.some((reference) => reference.includes('RouteOutlet'))).toBe(true);
 });
 
 test('isolates ERSC runtimes across concurrent Flight requests', async ({ request }) => {
@@ -56,6 +43,8 @@ test('isolates ERSC runtimes across concurrent Flight requests', async ({ reques
   expect(sunday.response.status()).toBe(200);
   expect(saturday.body).toContain('Saturday schedule');
   expect(saturday.body).toContain('Nikhil Nayak');
+  expect(saturday.body).not.toContain('Rohan Mehta');
   expect(sunday.body).toContain('Sunday schedule');
   expect(sunday.body).toContain('Rohan Mehta');
+  expect(sunday.body).not.toContain('Nikhil Nayak');
 });

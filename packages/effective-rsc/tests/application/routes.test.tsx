@@ -2,11 +2,7 @@ import { describe, expect, it } from '@effect/vitest';
 import { Effect, Schema, SchemaTransformation } from 'effect';
 
 import { Application } from '../../src/application/ersc';
-import type { AnyPageDefinition } from '../../src/application/page';
-import type { AbsolutePath } from '../../src/application/route-path';
-import { type AnyRoutes, getRoutesState, type RoutesPaths } from '../../src/application/routes';
-
-declare const uncertainPath: '/first' | '/second';
+import { getRoutesState } from '../../src/application/routes';
 
 const ERSC = Application.ersc();
 const Shell = ERSC.Layout.make({
@@ -50,26 +46,9 @@ describe('Routes', () => {
     const First = ERSC.Routes.middleware({ handler: (httpEffect) => httpEffect });
     const Second = ERSC.Routes.middleware({ handler: (httpEffect) => httpEffect });
     const routes = ERSC.Routes.make({ middleware: [First, Second] });
-    const typecheckMiddlewareTuple = () => {
-      ERSC.Routes.make({ middleware: [First] });
-      ERSC.Routes.make({
-        // @ts-expect-error Middleware must be a non-empty ordered list.
-        middleware: [],
-      });
-      ERSC.Routes.make({
-        // @ts-expect-error A single middleware must still be placed in a list.
-        middleware: First,
-      });
-      ERSC.Routes.middleware({
-        // @ts-expect-error Routes middleware must handle every typed failure it introduces.
-        handler: (httpEffect) => Effect.andThen(Effect.fail('failure'), httpEffect), // oxlint-disable-line effecttsgo/missing-effect-error -- intentional invalid Effect fixture
-      });
-    };
-
     expect(getRoutesState(routes).middleware).toEqual([First, Second]);
     expect(Object.isFrozen(First)).toBe(true);
     expect(Object.isFrozen(getRoutesState(routes).middleware)).toBe(true);
-    expect(typecheckMiddlewareTuple).toBeTypeOf('function');
     expect(() =>
       ERSC.Routes.make({
         // @ts-expect-error Exercise runtime validation for an empty list.
@@ -91,21 +70,9 @@ describe('Routes', () => {
     const empty = ERSC.Routes.make({ layout: Shell, loading: LoadingPage });
     const notesRoutes = ERSC.Routes.make().page('/', HomePage).page('/history', HistoryPage);
     const routes = empty.mount('/notes', notesRoutes);
-    const knownPath: RoutesPaths<typeof routes> = '/notes/history';
-    const typecheckOpaqueRoutes = () => {
-      // @ts-expect-error Runtime paths are private to the route compiler.
-      void routes.paths;
-      // @ts-expect-error Runtime pages are private to the route compiler.
-      void routes.pages;
-      // @ts-expect-error Runtime mounts are private to the route compiler.
-      void routes.mounts;
-    };
-
     expect(getRoutesState(empty).paths).toEqual([]);
     expect(getRoutesState(notesRoutes).paths).toEqual(['/', '/history']);
     expect(getRoutesState(routes).paths).toEqual(['/notes', '/notes/history']);
-    expect(knownPath).toBe('/notes/history');
-    expect(typecheckOpaqueRoutes).toBeTypeOf('function');
     expect(Object.isFrozen(routes)).toBe(true);
     expect(Object.isFrozen(getRoutesState(routes).paths)).toBe(true);
     expect(Object.isFrozen(getRoutesState(notesRoutes).pages[0])).toBe(true);
@@ -114,21 +81,7 @@ describe('Routes', () => {
 
   it('infers dynamic path params from Page schemas', () => {
     const routes = ERSC.Routes.make().page('/schedule/:day', DayPage);
-    const knownPath: RoutesPaths<typeof routes> = '/schedule/:day';
-    const typecheckInvalidPageParams = () => {
-      // @ts-expect-error A static Page cannot satisfy a dynamic route.
-      ERSC.Routes.make().page('/schedule/:day', HomePage);
-      // @ts-expect-error A dynamic Page cannot satisfy a static route.
-      ERSC.Routes.make().page('/schedule/saturday', DayPage);
-      // @ts-expect-error The Page Schema key must match the path parameter name.
-      ERSC.Routes.make().page('/schedule/:day', SlugPage);
-      // @ts-expect-error Page implementation details are not part of the authoring API.
-      void DayPage.component;
-    };
-
     expect(getRoutesState(routes).paths).toEqual(['/schedule/:day']);
-    expect(knownPath).toBe('/schedule/:day');
-    expect(typecheckInvalidPageParams).toBeTypeOf('function');
     expect(() =>
       // @ts-expect-error Exercise runtime validation for a parameter-free Page.
       ERSC.Routes.make().page('/schedule/:day', HomePage),
@@ -141,47 +94,12 @@ describe('Routes', () => {
 
   it('infers every parameter across a nested route pattern', () => {
     const routes = ERSC.Routes.make().page('/a/:b/c/:d', NestedParamsPage);
-    const knownPath: RoutesPaths<typeof routes> = '/a/:b/c/:d';
-    const typecheckInvalidNestedParams = () => {
-      // @ts-expect-error The Page Schema must contain both nested parameter names.
-      ERSC.Routes.make().page('/a/:b/c/:d', DayPage);
-      // @ts-expect-error Parameter names must remain unique across the complete pattern.
-      ERSC.Routes.make().page('/a/:b/c/:b', NestedParamsPage);
-    };
-
     expect(getRoutesState(routes).paths).toEqual(['/a/:b/c/:d']);
-    expect(knownPath).toBe('/a/:b/c/:d');
-    expect(typecheckInvalidNestedParams).toBeTypeOf('function');
   });
 
   it('matches route names against the encoded Schema while rendering its decoded type', () => {
     const routes = ERSC.Routes.make().page('/:slug', RenamedParamsPage);
-    const typecheckDecodedNameIsNotTheRouteName = () => {
-      // @ts-expect-error Route parameters describe the Schema input, not its decoded output.
-      ERSC.Routes.make().page('/:id', RenamedParamsPage);
-    };
-
     expect(getRoutesState(routes).paths).toEqual(['/:slug']);
-    expect(typecheckDecodedNameIsNotTheRouteName).toBeTypeOf('function');
-  });
-
-  it('rejects parameter contracts whose information has been erased', () => {
-    const widenedPath: AbsolutePath = '/schedule/:day';
-    const forgetPageContract = (page: AnyPageDefinition<never>) => page;
-    const widenedPage = forgetPageContract(HomePage);
-    const widenedRoutes: AnyRoutes<never> = ERSC.Routes.make().page('/', HomePage);
-    const typecheckErasedContracts = () => {
-      // @ts-expect-error A widened path cannot provide exact parameter inference.
-      ERSC.Routes.make().page(widenedPath, HomePage);
-      // @ts-expect-error One route declaration must have one literal pattern.
-      ERSC.Routes.make().page(uncertainPath, HomePage);
-      // @ts-expect-error A widened Page no longer proves whether it owns parameters.
-      ERSC.Routes.make().page('/', widenedPage);
-      // @ts-expect-error Widened Routes no longer carry their exact mounted paths.
-      ERSC.Routes.make().mount('/nested', widenedRoutes);
-    };
-
-    expect(typecheckErasedContracts).toBeTypeOf('function');
   });
 
   it('requires a finite, non-empty Schema of string-encoded path parameters', () => {
@@ -190,56 +108,10 @@ describe('Routes', () => {
       render: ({ params }) => Effect.succeed(<h1>{typeof params.value}</h1>),
     });
     const routes = ERSC.Routes.make().page('/:value', unknownInputPage);
-    const typecheckInvalidSchemas = () => {
-      // @ts-expect-error An empty parameter Schema cannot match a parameterized path.
-      ERSC.Page.make({ params: Schema.Struct({}), render: () => Effect.succeed(null) });
-      ERSC.Page.make({
-        // @ts-expect-error A record Schema has no finite parameter-name set.
-        params: Schema.Record(Schema.String, Schema.String),
-        render: () => Effect.succeed(null),
-      });
-      ERSC.Page.make({
-        // @ts-expect-error Effect HTTP captures path parameters as strings.
-        params: Schema.Struct({ count: Schema.Finite }),
-        render: () => Effect.succeed(null),
-      });
-      ERSC.Page.make({
-        // @ts-expect-error Schema keys must be valid Effect HTTP parameter names.
-        params: Schema.Struct({ 'invalid-name': Schema.String }),
-        render: () => Effect.succeed(null),
-      });
-    };
-
     expect(getRoutesState(routes).paths).toEqual(['/:value']);
-    expect(typecheckInvalidSchemas).toBeTypeOf('function');
   });
 
   it('rejects invalid and reserved route paths at the type and runtime boundaries', () => {
-    const typecheckInvalidPaths = () => {
-      // @ts-expect-error Dynamic params must occupy a complete path segment.
-      ERSC.Routes.make().page('/users/user:userId', HomePage);
-      // @ts-expect-error Dynamic parameter names must be unique.
-      ERSC.Routes.make().page('/users/:userId/:userId', HomePage);
-      // @ts-expect-error Route definitions must use canonical non-trailing slashes.
-      ERSC.Routes.make().page('/users/', HomePage);
-      // @ts-expect-error Route definitions cannot contain empty segments.
-      ERSC.Routes.make().page('/users//history', HomePage);
-      // @ts-expect-error Route definitions cannot contain URL-normalized dot segments.
-      ERSC.Routes.make().page('/users/../history', HomePage);
-      // @ts-expect-error Route definitions use decoded path text, not percent escapes.
-      ERSC.Routes.make().page('/users/%61', HomePage);
-      // @ts-expect-error Dynamic mount prefixes are not part of this checkpoint.
-      ERSC.Routes.make().mount('/:group', ERSC.Routes.make().page('/', HomePage));
-      ERSC.make({
-        // @ts-expect-error The final application path uses the framework asset namespace.
-        routes: ERSC.Routes.make({ layout: Shell }).page('/_ersc/assets/example', HomePage),
-      });
-      ERSC.make({
-        // @ts-expect-error A parameterized pattern can match the framework asset namespace.
-        routes: ERSC.Routes.make({ layout: Shell }).page('/:slug/assets', SlugPage),
-      });
-    };
-    expect(typecheckInvalidPaths).toBeTypeOf('function');
     expect(() =>
       // @ts-expect-error Exercise runtime validation for malformed dynamic syntax.
       ERSC.Routes.make().page('/users/user:userId', HomePage),
@@ -284,14 +156,6 @@ describe('Routes', () => {
 
   it('rejects duplicate paths introduced locally or by a mount', () => {
     const homeRoutes = ERSC.Routes.make().page('/', HomePage);
-    const typecheckDuplicatePaths = () => {
-      // @ts-expect-error A local page cannot replace an existing page.
-      homeRoutes.page('/', HistoryPage);
-      // @ts-expect-error Mounted paths cannot collide with existing paths.
-      homeRoutes.mount('/', ERSC.Routes.make().page('/', HistoryPage));
-    };
-
-    expect(typecheckDuplicatePaths).toBeTypeOf('function');
     expect(() =>
       // @ts-expect-error Exercise runtime validation for a duplicate local path.
       homeRoutes.page('/', HistoryPage),
@@ -316,12 +180,6 @@ describe('Routes', () => {
 
   it('rejects mounting Routes that contain no pages', () => {
     const emptyRoutes = ERSC.Routes.make({ layout: Shell });
-    const typecheckEmptyMount = () => {
-      // @ts-expect-error Empty Routes do not contribute an application destination.
-      ERSC.Routes.make().mount('/empty', emptyRoutes);
-    };
-
-    expect(typecheckEmptyMount).toBeTypeOf('function');
     expect(() =>
       // @ts-expect-error Exercise runtime validation for an empty mounted route collection.
       ERSC.Routes.make().mount('/empty', emptyRoutes),

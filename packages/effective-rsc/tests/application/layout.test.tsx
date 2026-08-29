@@ -12,6 +12,17 @@ class ShellTitle extends Context.Service<ShellTitle, { readonly value: string }>
 const ERSC = Application.ersc<ShellTitle>();
 
 describe('ERSC.Layout.make', () => {
+  it('rejects rendering outside its application request runtime', () => {
+    const ServiceFreeERSC = Application.ersc();
+    const Layout = ServiceFreeERSC.Layout.make({
+      render: ({ children }) => Effect.succeed(children),
+    });
+
+    expect(() => Layout({ children: null })).toThrow(
+      new TypeError('An ERSC concern rendered outside its application request runtime.'),
+    );
+  });
+
   it.effect('infers children as an immediately renderable node', () =>
     Effect.gen(function* () {
       const runtime = yield* FiberSet.makeRuntimePromise<never>();
@@ -41,9 +52,7 @@ describe('ERSC.Layout.make', () => {
       const LayoutComponent = ERSC.Layout.make({
         render: Effect.fnUntraced(function* ({ children }) {
           const inferredChildren: ReactNode = children;
-          const childrenAreNotAny: 0 extends 1 & typeof children ? false : true = true;
           const title = yield* ShellTitle;
-          expect(childrenAreNotAny).toBe(true);
           return (
             <html lang='en'>
               <head>

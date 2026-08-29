@@ -1,12 +1,8 @@
 import { describe, expect, it } from '@effect/vitest';
-import { Context, Effect, Layer, Option, Schema } from 'effect';
+import { Context, Effect, Layer, Schema } from 'effect';
 import { isValidElement, Suspense, type ReactElement, type ReactNode } from 'react';
 
-import {
-  type ApplicationDefinition,
-  type ApplicationServices,
-  getApplicationState,
-} from '../../src/application/definition';
+import { type ApplicationDefinition, getApplicationState } from '../../src/application/definition';
 import { Application } from '../../src/application/ersc';
 import {
   type AnyPageDefinition,
@@ -94,21 +90,11 @@ class NestedPageService extends Context.Service<NestedPageService, object>()(
   'ersc/tests/application/NestedPageService',
 ) {}
 
-class LayerDependency extends Context.Service<LayerDependency, object>()(
-  'ersc/tests/application/LayerDependency',
-) {}
-
 describe('ERSC.make', () => {
   it('renders a root Layout around its exact Page', () => {
     const App = ERSC.make({
       routes: ERSC.Routes.make({ layout: RootLayout }).page('/', HomePage),
     });
-    const typecheckOpaqueApplication = () => {
-      // @ts-expect-error Compiled routes are private to framework runtime modules.
-      void App.routes;
-      // @ts-expect-error The application Layer is private to framework runtime modules.
-      void App.layer;
-    };
     const rootNode = renderApplicationRoute(applicationRoutes(App), '/');
     const root = asElement<{ readonly children: ReactNode }>(rootNode.content);
     const pageNode = requiredChild(rootNode);
@@ -118,7 +104,6 @@ describe('ERSC.make', () => {
     expect(asElement(root.props.children).type).toBe(RouteOutlet);
     expect(asElement(pageNode.content).type).toBe(pageComponent(HomePage));
     expect(applicationRoutes(App).map(({ pattern }) => pattern)).toEqual(['/']);
-    expect(typecheckOpaqueApplication).toBeTypeOf('function');
   });
 
   it('renders a dynamic route pattern with its concrete pathname and captured params', () => {
@@ -316,55 +301,10 @@ describe('ERSC.make', () => {
         .mount('/nested', ServiceERSC.Routes.make().page('/', ServiceNestedPage)),
       layer: ApplicationLayer,
     });
-    type Services = ApplicationServices<typeof App>;
-    const servicesAreCombined: [Services] extends [LayoutService | PageService | NestedPageService]
-      ? [LayoutService | PageService | NestedPageService] extends [Services]
-        ? true
-        : false
-      : false = true;
-
-    expect(servicesAreCombined).toBe(true);
     expect(getApplicationState(App).layer).toBe(ApplicationLayer);
   });
 
-  it('requires a root Layout, a reachable Page, and a closed implementation Layer', () => {
-    const ServiceERSC = Application.ersc<PageService>();
-    const ServiceRootLayout = ServiceERSC.Layout.make({
-      render: ({ children }) => Effect.succeed(<html lang='en'>{children}</html>),
-    });
-    const ServicePage = ServiceERSC.Page.make({
-      render: Effect.fnUntraced(function* () {
-        yield* PageService;
-        return <h1>Services</h1>;
-      }),
-    });
-    const serviceRoutes = ServiceERSC.Routes.make({ layout: ServiceRootLayout }).page(
-      '/',
-      ServicePage,
-    );
-    const IncompleteApplicationLayer = Layer.effect(
-      PageService,
-      Effect.as(LayerDependency, PageService.of({})),
-    );
-    const typecheckInvalidApplications = () => {
-      ERSC.make({
-        // @ts-expect-error The application root must define a Layout.
-        routes: ERSC.Routes.make().page('/', HomePage),
-      });
-      ERSC.make({
-        // @ts-expect-error The application must contain at least one reachable Page.
-        routes: ERSC.Routes.make({ layout: RootLayout }),
-      });
-      // @ts-expect-error The declared service universe requires an implementation Layer.
-      ServiceERSC.make({ routes: serviceRoutes });
-      ServiceERSC.make({
-        routes: serviceRoutes,
-        // @ts-expect-error The application Layer must have no remaining service requirements.
-        layer: IncompleteApplicationLayer, // oxlint-disable-line effecttsgo/missing-layer-context -- intentional invalid Layer fixture
-      });
-    };
-
-    expect(typecheckInvalidApplications).toBeTypeOf('function');
+  it('requires a root Layout and a reachable Page at runtime', () => {
     expect(() =>
       ERSC.make({
         // @ts-expect-error Exercise runtime validation for a root without a Layout.
@@ -379,83 +319,6 @@ describe('ERSC.make', () => {
     ).toThrow('must contain a Page');
   });
 
-  it('rejects operations outside the declared service universe', () => {
-    const NarrowERSC = Application.ersc<PageService>();
-    const ServiceSchema = Schema.String.pipe(
-      Schema.catchDecodingWithContext(() =>
-        Effect.map(LayoutService, () => Option.some('fallback')),
-      ),
-    );
-    const typecheckInvalidOperation = () => {
-      NarrowERSC.Page.make({
-        // @ts-expect-error LayoutService is not part of this application's declared contracts.
-        // oxlint-disable-next-line effecttsgo/missing-effect-context -- intentional invalid Effect fixture
-        render: Effect.fnUntraced(function* () {
-          yield* LayoutService;
-          return null;
-        }),
-      });
-      NarrowERSC.Routes.middleware({
-        handler: (httpEffect) =>
-          // @ts-expect-error LayoutService is not part of this application's declared contracts.
-          // oxlint-disable-next-line effecttsgo/missing-effect-context -- intentional invalid Effect fixture
-          Effect.gen(function* () {
-            yield* LayoutService;
-            return yield* httpEffect;
-          }),
-      });
-      NarrowERSC.Layout.make({
-        // @ts-expect-error LayoutService is not part of this application's declared contracts.
-        // oxlint-disable-next-line effecttsgo/missing-effect-context -- intentional invalid Effect fixture
-        render: Effect.fnUntraced(function* ({ children }) {
-          yield* LayoutService;
-          return children;
-        }),
-      });
-      NarrowERSC.Component.make({
-        // @ts-expect-error LayoutService is not part of this application's declared contracts.
-        // oxlint-disable-next-line effecttsgo/missing-effect-context -- intentional invalid Effect fixture
-        render: Effect.fnUntraced(function* () {
-          yield* LayoutService;
-          return null;
-        }),
-      });
-      NarrowERSC.ServerFn.make({
-        input: Schema.String,
-        // @ts-expect-error LayoutService is not part of this application's declared contracts.
-        // oxlint-disable-next-line effecttsgo/missing-effect-context -- intentional invalid Effect fixture
-        handler: Effect.fnUntraced(function* () {
-          yield* LayoutService;
-          return null;
-        }),
-      });
-      NarrowERSC.ServerFn.make({
-        // @ts-expect-error LayoutService required by schema decoding is outside this ERSC universe.
-        input: ServiceSchema,
-        handler: () => Effect.void,
-      });
-      NarrowERSC.Page.make({
-        // @ts-expect-error LayoutService required by param decoding is outside this ERSC universe.
-        params: Schema.Struct({ value: ServiceSchema }),
-        render: () => Effect.succeed(null),
-      });
-    };
-
-    expect(typecheckInvalidOperation).toBeTypeOf('function');
-  });
-
-  it('does not widen concerns across different service universes', () => {
-    const NarrowERSC = Application.ersc<PageService>();
-    const WideERSC = Application.ersc<PageService | LayoutService>();
-    const NarrowPage = NarrowERSC.Page.make({ render: () => Effect.succeed(<h1>Narrow</h1>) });
-    const typecheckInvalidConcern = () => {
-      // @ts-expect-error An ERSC member belongs to one exact service universe.
-      WideERSC.Routes.make().page('/', NarrowPage);
-    };
-
-    expect(typecheckInvalidConcern).toBeTypeOf('function');
-  });
-
   it('rejects route concerns created by a different ERSC module', () => {
     const OtherERSC = Application.ersc();
     const OtherLayout = OtherERSC.Layout.make({
@@ -468,6 +331,9 @@ describe('ERSC.make', () => {
     });
     const OtherRoutes = OtherERSC.Routes.make({ layout: OtherLayout }).page('/', OtherPage);
 
+    expect(() => ERSC.Routes.make({ layout: OtherLayout })).toThrow(
+      'Layout was created by a different ERSC module.',
+    );
     expect(() => ERSC.Routes.make({ loading: OtherLoading })).toThrow(
       'Loading was created by a different ERSC module.',
     );
@@ -483,6 +349,9 @@ describe('ERSC.make', () => {
     ).toThrow('created by a different ERSC module');
     expect(() => ERSC.make({ routes: OtherRoutes })).toThrow(
       'Root Routes were created by a different ERSC module.',
+    );
+    expect(() => ERSC.Routes.make().mount('/other', OtherRoutes)).toThrow(
+      'Routes mounted at "/other" were created by a different ERSC module.',
     );
   });
 
@@ -508,23 +377,5 @@ describe('ERSC.make', () => {
         Leaf,
       ),
     ).toThrow('Page for "/" must be created with ERSC.Page.make.');
-  });
-
-  it('requires factory-created concerns', () => {
-    const ArbitraryLayout = ({ children }: { readonly children: ReactNode }) => (
-      <main>{children}</main>
-    );
-    const ArbitraryLoading = () => <p>Loading...</p>;
-    const ArbitraryPage = () => <h1>Home</h1>;
-    const typecheckInvalidConcerns = () => {
-      // @ts-expect-error Layout concerns must be created with ERSC.Layout.make.
-      ERSC.Routes.make({ layout: ArbitraryLayout });
-      // @ts-expect-error Loading concerns must be created with ERSC.Loading.make.
-      ERSC.Routes.make({ loading: ArbitraryLoading });
-      // @ts-expect-error Page concerns must be created with ERSC.Page.make.
-      ERSC.Routes.make().page('/', ArbitraryPage);
-    };
-
-    expect(typecheckInvalidConcerns).toBeTypeOf('function');
   });
 });

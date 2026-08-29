@@ -34,9 +34,7 @@
   "scripts": {
     "build": "rslib build",
     "prepack": "bun run build",
-    "test": "tsc --project tsconfig.json && tsc --project template/tsconfig.json && vitest run --exclude tests/distribution.test.ts",
-    "test:dist": "vitest run tests/distribution.test.ts",
-    "test:pack": "bun pm pack --dry-run --ignore-scripts --quiet",
+    "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {

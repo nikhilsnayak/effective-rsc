@@ -16,6 +16,14 @@ const runtimeWithLabel =
     Effect.runPromise(effect.pipe(Effect.provideService(RequestLabel, { value })));
 
 describe('RequestRuntimeContext', () => {
+  it('throws a programmer error when work runs outside a bound request runtime', () => {
+    const context = makeRequestRuntimeContext<RequestLabel>();
+
+    expect(() => context.run(Effect.void)).toThrow(
+      new TypeError('An ERSC concern rendered outside its application request runtime.'),
+    );
+  });
+
   it.effect('keeps interleaved asynchronous request runners isolated', () =>
     Effect.gen(function* () {
       const context = makeRequestRuntimeContext<RequestLabel>();

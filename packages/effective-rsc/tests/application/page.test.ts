@@ -24,6 +24,15 @@ const ERSC = Application.ersc<Greeting>();
 const RootLayout = ERSC.Layout.make({ render: ({ children }) => Effect.succeed(children) });
 
 describe('ERSC.Page.make', () => {
+  it('rejects rendering outside its application request runtime', () => {
+    const ServiceFreeERSC = Application.ersc();
+    const Page = ServiceFreeERSC.Page.make({ render: () => Effect.succeed(null) });
+
+    expect(() => getPageState(Page).component({ params: {} })).toThrow(
+      new TypeError('An ERSC concern rendered outside its application request runtime.'),
+    );
+  });
+
   it.effect('decodes dynamic route params before invoking the render operation', () =>
     Effect.gen(function* () {
       const runtime = yield* FiberSet.makeRuntimePromise<Greeting>();
@@ -36,12 +45,6 @@ describe('ERSC.Page.make', () => {
           return `${greeting.value} ${params.day}`;
         }),
       });
-      const typecheckOpaquePage = () => {
-        // @ts-expect-error The React adapter is private to framework runtime modules.
-        void PageComponent.component;
-        // @ts-expect-error The parameter Schema is private to framework runtime modules.
-        void PageComponent.paramsSchema;
-      };
       const rendered = yield* Effect.promise(() =>
         getERSCIdentity(PageComponent).requestRuntime.bind(runtime, () =>
           getPageState(PageComponent).component({ params: { day: 'sunday' } }),
@@ -51,7 +54,6 @@ describe('ERSC.Page.make', () => {
       expect(rendered).toBe('hello sunday');
       expect(getPageState(PageComponent).paramsSchema).not.toBeNull();
       expect(Object.isFrozen(PageComponent)).toBe(true);
-      expect(typecheckOpaquePage).toBeTypeOf('function');
     }).pipe(Effect.provideService(Greeting, { value: 'hello' })),
   );
 

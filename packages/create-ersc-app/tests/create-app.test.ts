@@ -1,6 +1,7 @@
 import * as BunServices from '@effect/platform-bun/BunServices';
 import { describe, expect, it } from '@effect/vitest';
-import { Effect, FileSystem, Path } from 'effect';
+import { Effect, FileSystem, Path, Schema } from 'effect';
+import { ChildProcess, ChildProcessSpawner } from 'effect/unstable/process';
 
 import RootPackageJson from '../../../package.json' with { type: 'json' };
 import FrameworkPackageJson from '../../effective-rsc/package.json' with { type: 'json' };
@@ -9,6 +10,12 @@ import { createApplication } from '../src/create-app';
 import TemplatePackageJson from '../template/package.json' with { type: 'json' };
 
 const TemplateUrl = new URL('../template/', import.meta.url);
+const ConfiguredPackageJson = Schema.fromJsonString(
+  Schema.Struct({
+    dependencies: Schema.Record(Schema.String, Schema.String),
+    name: Schema.String,
+  }),
+);
 
 describe('createApplication', () => {
   it('keeps the template aligned with the compatible workspace versions', () => {
@@ -63,23 +70,60 @@ describe('createApplication', () => {
       const application = yield* fileSystem.readFileString(
         path.join(target, 'src', 'application.tsx'),
       );
+      const configuredPackageJson = yield* Schema.decodeEffect(ConfiguredPackageJson)(packageJson);
 
       expect(result).toEqual({ directory: target, packageName: 'reading-room' });
-      expect(packageJson).toContain('"name": "reading-room"');
-      expect(packageJson).toContain('"effective-rsc": "1.2.3"');
-      expect(packageJson).toMatch(
-        /^\{\n  "name": "reading-room",\n  "version": "0\.0\.0",\n  "private": true,\n  "type": "module",\n  "scripts":/,
-      );
-      expect(packageJson.indexOf('"scripts"')).toBeLessThan(packageJson.indexOf('"dependencies"'));
-      expect(packageJson.indexOf('"dependencies"')).toBeLessThan(
-        packageJson.indexOf('"devDependencies"'),
-      );
+      expect(configuredPackageJson.name).toBe('reading-room');
+      expect(configuredPackageJson.dependencies['effective-rsc']).toBe('1.2.3');
       expect(yield* fileSystem.exists(path.join(target, '.gitignore'))).toBe(true);
       expect(yield* fileSystem.exists(path.join(target, 'gitignore'))).toBe(false);
       expect(yield* fileSystem.readFileString(path.join(target, 'public', 'robots.txt'))).toBe(
         'User-agent: *\nAllow: /\n',
       );
       expect(application).toContain("import './styles.css';");
+    }).pipe(Effect.provide(BunServices.layer), Effect.scoped),
+  );
+
+  it.effect('runs Bun installation in the configured target directory', () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const liveSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+      const temporaryDirectory = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: 'create-ersc-app-install-',
+      });
+      const target = path.join(temporaryDirectory, 'installed-application');
+      const commands: Array<ChildProcess.Command> = [];
+      const spawner = ChildProcessSpawner.ChildProcessSpawner.of({
+        ...liveSpawner,
+        exitCode: (command) =>
+          Effect.sync(() => {
+            commands.push(command);
+            return ChildProcessSpawner.ExitCode(0);
+          }),
+      });
+
+      const result = yield* createApplication({
+        directory: target,
+        frameworkVersion: '1.2.3',
+        install: true,
+        templateUrl: TemplateUrl,
+      }).pipe(Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner));
+
+      expect(result).toEqual({ directory: target, packageName: 'installed-application' });
+      expect(commands).toHaveLength(1);
+      const command = commands[0];
+      expect(command?._tag).toBe('StandardCommand');
+      if (command?._tag === 'StandardCommand') {
+        expect(command.command).toBe('bun');
+        expect(command.args).toEqual(['install']);
+        expect(command.options).toMatchObject({
+          cwd: target,
+          stderr: 'inherit',
+          stdin: 'inherit',
+          stdout: 'inherit',
+        });
+      }
     }).pipe(Effect.provide(BunServices.layer), Effect.scoped),
   );
 

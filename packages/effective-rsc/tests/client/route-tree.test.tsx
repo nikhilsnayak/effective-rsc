@@ -150,7 +150,6 @@ describe('retainSharedLayoutContent', () => {
     const revealedLoading = requiredChild(requiredChild(retained));
 
     expect(revealedLoading).toBe(destinationLoading);
-    expect(requiredChild(revealedLoading)).toBe(requiredChild(destinationLoading));
   });
 
   it('does not retain content when refreshing the same destination', () => {

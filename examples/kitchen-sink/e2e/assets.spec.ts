@@ -1,48 +1,36 @@
 // oxlint-disable effecttsgo/async-function -- Playwright owns this Promise-based application-test boundary.
-import { expect, test } from '@playwright/test';
+import { expect, test, type Response } from '@playwright/test';
 
 import { getText } from './support/http';
 
-const readClientModulePaths = (flight: string) =>
-  flight
-    .split('\n')
-    .filter((row) => /^[0-9a-f]+:I/.test(row))
-    .flatMap((row) => {
-      const reference = JSON.parse(row.slice(row.indexOf(':I') + 2)) as unknown;
-      if (!Array.isArray(reference) || !Array.isArray(reference[1])) {
-        return [];
-      }
-
-      return reference[1]
-        .filter((value): value is string => typeof value === 'string' && value.endsWith('.js'))
-        .map((path) => `/_ersc/assets/${path}`);
-    });
-
-test('serves every stylesheet and client module referenced by the document', async ({
-  request,
-}) => {
-  const { body: html } = await getText(request, '/schedule/saturday');
-  const { body: flight } = await getText(request, '/schedule/saturday', {
-    accept: 'text/x-component',
+test('loads every compiler asset needed by the hydrated document', async ({ page }) => {
+  const assetResponses: Array<Response> = [];
+  page.on('response', (response) => {
+    if (new URL(response.url()).pathname.startsWith('/_ersc/assets/')) {
+      assetResponses.push(response);
+    }
   });
-  const stylesheetPaths = [...html.matchAll(/<link[^>]+rel="stylesheet"[^>]+href="([^"]+\.css)"/g)]
-    .map((match) => match[1])
-    .filter((path): path is string => path !== undefined);
-  const scriptPaths = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)]
-    .map((match) => match[1])
-    .filter((path): path is string => path !== undefined);
-  const clientModulePaths = readClientModulePaths(flight);
 
-  expect(stylesheetPaths.length).toBeGreaterThan(0);
-  expect(stylesheetPaths.every((path) => path.startsWith('/_ersc/assets/'))).toBe(true);
-  expect(scriptPaths).toContain('/_ersc/assets/main.js');
+  const documentResponse = await page.goto('/schedule/saturday');
+  expect(documentResponse?.status()).toBe(200);
+  await expect(page.getByRole('heading', { level: 1, name: 'Saturday schedule' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /the agenda/ }).first()).toBeVisible();
+  await page.waitForLoadState('networkidle');
 
-  for (const pathname of new Set([...stylesheetPaths, ...scriptPaths, ...clientModulePaths])) {
-    const { body, response } = await getText(request, pathname);
+  const responsesByPath = new Map(
+    assetResponses.map((response) => [new URL(response.url()).pathname, response]),
+  );
+  const stylesheets = [...responsesByPath.keys()].filter((pathname) => pathname.endsWith('.css'));
+  const scripts = [...responsesByPath.keys()].filter((pathname) => pathname.endsWith('.js'));
 
+  expect(stylesheets.length).toBeGreaterThan(0);
+  expect(scripts).toContain('/_ersc/assets/main.js');
+  expect(scripts.length).toBeGreaterThan(1);
+
+  for (const [pathname, response] of responsesByPath) {
     expect(response.status()).toBe(200);
-    expect(body.length).toBeGreaterThan(0);
-    expect(response.headers()['content-type']).toContain(
+    expect((await response.body()).length).toBeGreaterThan(0);
+    expect((await response.allHeaders())['content-type']).toContain(
       pathname.endsWith('.css') ? 'text/css' : 'text/javascript',
     );
   }

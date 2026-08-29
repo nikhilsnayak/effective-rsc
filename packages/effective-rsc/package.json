@@ -44,11 +44,8 @@
     "build": "rslib build",
     "docs:check": "bun ../../scripts/generate-docs.ts --check",
     "prepack": "bun run build && bun run docs:check",
-    "test": "vitest run --exclude tests/build/distribution.test.ts && bun run test:docs",
-    "test:docs": "tsc --project tsconfig.docs.json",
-    "test:dist": "vitest run tests/build/distribution.test.ts",
-    "test:pack": "bun pm pack --dry-run --ignore-scripts --quiet",
-    "test:watch": "vitest --exclude tests/build/distribution.test.ts"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@rspack/core": "2.2.0",

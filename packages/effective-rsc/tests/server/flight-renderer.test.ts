@@ -50,14 +50,17 @@ it.effect('interrupts application work when its Flight render is released', () =
           Effect.onInterrupt(() => Deferred.succeed(interrupted, void 0)),
         ),
       );
-      void applicationWork.catch(() => undefined);
+      const applicationWorkOutcome = applicationWork.then(
+        () => 'completed' as const,
+        () => 'interrupted' as const,
+      );
       yield* Deferred.await(started);
       expect(renderSignal?.aborted).toBe(false);
 
       yield* flight.release;
 
       yield* Deferred.await(interrupted);
-      expect(yield* Deferred.isDone(interrupted)).toBe(true);
+      expect(yield* Effect.promise(() => applicationWorkOutcome)).toBe('interrupted');
       expect(renderSignal?.aborted).toBe(true);
     }).pipe(Effect.provide(FlightRenderer.layer)),
   ),

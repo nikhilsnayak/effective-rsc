@@ -10,6 +10,15 @@ class Greeting extends Context.Service<Greeting, { readonly prefix: string }>()(
 ) {}
 
 describe('ERSC.Component.make', () => {
+  it('rejects rendering outside its application request runtime', () => {
+    const ERSC = Application.ersc();
+    const Component = ERSC.Component.make({ render: () => Effect.succeed(null) });
+
+    expect(() => Component({})).toThrow(
+      new TypeError('An ERSC concern rendered outside its application request runtime.'),
+    );
+  });
+
   it.effect('runs props and services through the request runtime', () =>
     Effect.gen(function* () {
       const ERSC = Application.ersc<Greeting>();

@@ -4,7 +4,31 @@ import { expect, test } from '@playwright/test';
 import { observeBrowserErrors } from './support/browser-errors';
 import { sessionCard, setAgendaSelection } from './support/conference-page';
 
-test.describe.serial('Server Functions', () => {
+const observeScheduleFallback = (page: Parameters<typeof observeBrowserErrors>[0]) =>
+  page.evaluate(() => {
+    const fallbackIsVisible = () => {
+      const fallback = document.querySelector('main[aria-label="Loading schedule"]');
+      if (fallback !== null && fallback.getClientRects().length > 0) {
+        Reflect.set(window, '__ersc_schedule_fallback_seen__', true);
+      }
+    };
+    const observer = new MutationObserver(fallbackIsVisible);
+    observer.observe(document.body, { childList: true, subtree: true });
+    Reflect.set(window, '__ersc_schedule_fallback_observer__', observer);
+    Reflect.set(window, '__ersc_schedule_fallback_seen__', false);
+    fallbackIsVisible();
+  });
+
+const readScheduleFallbackObservation = (page: Parameters<typeof observeBrowserErrors>[0]) =>
+  page.evaluate(() => {
+    const observer = Reflect.get(window, '__ersc_schedule_fallback_observer__');
+    if (observer instanceof MutationObserver) {
+      observer.disconnect();
+    }
+    return Reflect.get(window, '__ersc_schedule_fallback_seen__') === true;
+  });
+
+test.describe('Server Functions', () => {
   test('refreshes through a named ServerFn without revealing the route fallback', async ({
     page,
   }) => {
@@ -15,21 +39,15 @@ test.describe.serial('Server Functions', () => {
 
     try {
       let session = sessionCard(page, title);
-      const fallbackAppeared = page
-        .getByRole('main', { name: 'Loading schedule' })
-        .waitFor({ state: 'visible', timeout: 1_500 })
-        .then(
-          () => true,
-          () => false,
-        );
+      await observeScheduleFallback(page);
       await session.getByRole('button', { name: 'Add to the agenda' }).click();
 
       await expect(session.getByText('Added to the agenda.')).toBeVisible();
       await expect(session.getByRole('button', { name: 'Remove from the agenda' })).toBeVisible();
       const agenda = page.locator('section[aria-labelledby="conference-agenda-heading"]');
       await expect(agenda).not.toContainText(title);
-      expect(await fallbackAppeared).toBe(false);
       await expect(agenda).toContainText(title);
+      expect(await readScheduleFallbackObservation(page)).toBe(false);
 
       await page.reload();
       session = sessionCard(page, title);

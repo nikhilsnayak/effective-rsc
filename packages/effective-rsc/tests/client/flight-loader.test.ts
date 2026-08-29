@@ -212,6 +212,26 @@ it.effect('rejects a Flight response without its resolved location', () =>
   ),
 );
 
+it.effect('releases the Flight transport when decoding fails', () =>
+  Effect.gen(function* () {
+    let requestSignal: AbortSignal | undefined;
+    decodeFlight.mockRejectedValueOnce(new Error('invalid Flight payload'));
+    const client = makeClient((_request, signal) => {
+      requestSignal = signal;
+      return makePendingFlightResponse(signal);
+    });
+
+    const error = yield* loadFlight({
+      _tag: 'Navigation',
+      destination: new URL('https://effective-rsc.test/schedule/day-two'),
+    }).pipe(Effect.provideService(HttpClient.HttpClient, client), Effect.flip);
+
+    expect(error).toBeInstanceOf(FlightLoadError);
+    expect(error.reason).toBe('DecodeFailed');
+    expect(requestSignal?.aborted).toBe(true);
+  }),
+);
+
 it.effect('rejects a non-Flight Server Function response', () =>
   loadFlight({
     _tag: 'ServerFunction',

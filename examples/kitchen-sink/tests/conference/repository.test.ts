@@ -11,7 +11,7 @@ const PersistenceLayer = Layer.effectDiscard(runMigrations).pipe(
 const RepositoryLayer = ConferenceRepository.layer.pipe(Layer.provide(PersistenceLayer));
 
 describe('ConferenceRepository', () => {
-  it.effect('migrates, seeds, and transactionally toggles agenda membership', () =>
+  it.effect('migrates, seeds, and toggles agenda membership', () =>
     Effect.gen(function* () {
       const repository = yield* ConferenceRepository;
 

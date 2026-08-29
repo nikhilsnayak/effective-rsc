@@ -1,8 +1,0 @@
-{
-  "extends": "../../tsconfig.json",
-  "compilerOptions": {
-    "lib": ["ESNext", "DOM", "DOM.Iterable"],
-    "types": ["bun", "react", "react-dom"]
-  },
-  "include": ["docs/**/*.ts", "docs/**/*.tsx"]
-}

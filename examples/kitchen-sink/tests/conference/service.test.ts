@@ -1,5 +1,6 @@
 import { describe, expect, it } from '@effect/vitest';
-import { Effect, Layer } from 'effect';
+import { Effect, Fiber, Layer } from 'effect';
+import { TestClock } from 'effect/testing';
 import { SqlError, UnknownError } from 'effect/unstable/sql/SqlError';
 
 import { ConferenceRepository } from '../../src/modules/conference/repository';
@@ -12,11 +13,16 @@ const RepositoryLayer = ConferenceRepository.layerTest({
 const ServiceLayer = ConferenceService.layer.pipe(Layer.provide(RepositoryLayer));
 
 describe('ConferenceService', () => {
-  it.live('joins SQL-owned agenda membership into conference domain models', () =>
+  it.effect('joins SQL-owned agenda membership into conference domain models', () =>
     Effect.gen(function* () {
       const service = yield* ConferenceService;
-      const agenda = yield* service.agenda;
-      const schedule = yield* service.schedule('saturday');
+      const agendaFiber = yield* Effect.forkChild(service.agenda);
+      const scheduleFiber = yield* Effect.forkChild(service.schedule('saturday'));
+
+      yield* TestClock.adjust('2 seconds');
+
+      const agenda = yield* Fiber.join(agendaFiber);
+      const schedule = yield* Fiber.join(scheduleFiber);
 
       expect(agenda.data.map((item) => item.id)).toEqual([
         'server-components-from-first-principles',
@@ -39,15 +45,15 @@ describe('ConferenceService', () => {
           }),
         ),
       );
-      const exit = yield* Effect.gen(function* () {
+      const error = yield* Effect.gen(function* () {
         const service = yield* ConferenceService;
         return yield* service.agenda;
-      }).pipe(Effect.provide(serviceLayer), Effect.exit);
+      }).pipe(Effect.provide(serviceLayer), Effect.flip);
 
-      expect(exit._tag).toBe('Failure');
-      if (exit._tag === 'Failure') {
-        expect(exit.cause.toString()).toContain('ConferenceUnavailable');
-      }
+      expect(error._tag).toBe(
+        '@effective-rsc/example-kitchen-sink/conference/ConferenceUnavailable',
+      );
+      expect(error.operation).toBe('load agenda');
     }),
   );
 });

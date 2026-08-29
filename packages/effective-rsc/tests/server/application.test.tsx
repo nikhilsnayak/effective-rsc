@@ -9,11 +9,14 @@ import { Application } from '../../src/application/ersc';
 import { ServerFnIdHeader } from '../../src/rsc/flight';
 import { ServerConfig } from '../../src/server/server-config';
 
+const decodeAction = vi.fn(() => Promise.resolve(null));
+const decodeReply = vi.fn(() => Promise.resolve([]));
+
 vi.doMock('react-server-dom-rspack/server.node', () => ({
   createTemporaryReferenceSet: () => ({}),
-  decodeAction: () => Promise.resolve(null),
+  decodeAction,
   decodeFormState: () => Promise.resolve(null),
-  decodeReply: () => Promise.resolve([]),
+  decodeReply,
   loadServerAction: () => {
     throw new Error('Unexpected Server Function action load.');
   },
@@ -42,6 +45,8 @@ const ServerConfigLayer = Layer.succeed(
 
 describe('ServerApplication.httpLayer', () => {
   it.effect('composes application, Routes, and global HTTP concerns in one router', () => {
+    decodeAction.mockClear();
+    decodeReply.mockClear();
     const events: Array<string> = [];
     let acquisitions = 0;
     let globalRequests = 0;
@@ -178,20 +183,80 @@ describe('ServerApplication.httpLayer', () => {
           );
           expect(crossOriginResponse.status).toBe(403);
 
-          const oversizedResponse = yield* Effect.promise(() =>
+          const forwardedOriginResponse = yield* Effect.promise(() =>
             handler(
               new Request('http://effective-rsc.test/protected', {
-                body: 'x'.repeat(10 * 1024 * 1024 + 1),
                 headers: {
-                  host: 'effective-rsc.test',
-                  origin: 'http://effective-rsc.test',
-                  [ServerFnIdHeader]: 'oversized',
+                  host: 'internal-proxy.test',
+                  origin: 'https://public.example',
+                  [ServerFnIdHeader]: 'forwarded-origin',
+                  'x-forwarded-host': 'public.example, internal-proxy.test',
                 },
                 method: 'POST',
               }),
             ),
           );
-          expect(oversizedResponse.status).toBe(413);
+          expect(forwardedOriginResponse.status).toBe(400);
+          expect(decodeReply).toHaveBeenCalledTimes(1);
+
+          const wrongForwardedOriginResponse = yield* Effect.promise(() =>
+            handler(
+              new Request('http://effective-rsc.test/protected', {
+                headers: {
+                  host: 'internal-proxy.test',
+                  origin: 'https://internal-proxy.test',
+                  [ServerFnIdHeader]: 'wrong-forwarded-origin',
+                  'x-forwarded-host': 'public.example, internal-proxy.test',
+                },
+                method: 'POST',
+              }),
+            ),
+          );
+          expect(wrongForwardedOriginResponse.status).toBe(403);
+          expect(decodeReply).toHaveBeenCalledTimes(1);
+
+          const knownOversizedResponse = yield* Effect.promise(() =>
+            handler(
+              new Request('http://effective-rsc.test/protected', {
+                headers: {
+                  'content-length': String(10 * 1024 * 1024 + 1),
+                  host: 'effective-rsc.test',
+                  origin: 'http://effective-rsc.test',
+                  [ServerFnIdHeader]: 'known-oversized',
+                },
+                method: 'POST',
+              }),
+            ),
+          );
+          expect(knownOversizedResponse.status).toBe(413);
+
+          const chunk = new Uint8Array(64 * 1024);
+          let chunksRemaining = 161;
+          const streamingBody = new ReadableStream<Uint8Array>({
+            pull(controller) {
+              if (chunksRemaining === 0) {
+                controller.close();
+                return;
+              }
+              chunksRemaining -= 1;
+              controller.enqueue(chunk);
+            },
+          });
+          const streamingRequestInit: RequestInit & { readonly duplex: 'half' } = {
+            body: streamingBody,
+            duplex: 'half',
+            headers: {
+              host: 'effective-rsc.test',
+              origin: 'http://effective-rsc.test',
+              [ServerFnIdHeader]: 'streaming-oversized',
+            },
+            method: 'POST',
+          };
+          const streamingOversizedResponse = yield* Effect.promise(() =>
+            handler(new Request('http://effective-rsc.test/protected', streamingRequestInit)),
+          );
+          expect(streamingOversizedResponse.status).toBe(413);
+          expect(decodeReply).toHaveBeenCalledTimes(1);
 
           const serverFnResponse = yield* Effect.promise(() =>
             handler(
@@ -199,6 +264,7 @@ describe('ServerApplication.httpLayer', () => {
                 headers: {
                   host: 'effective-rsc.test',
                   origin: 'http://effective-rsc.test',
+                  [ServerFnIdHeader]: 'direct-host',
                 },
                 method: 'POST',
               }),
@@ -210,6 +276,8 @@ describe('ServerApplication.httpLayer', () => {
           expect(serverFnResponse.headers.get('x-middleware-order')).toBeNull();
           expect(serverFnResponse.headers.get('x-global-middleware')).toBe('true');
           expect(events).toEqual([]);
+          expect(decodeAction).not.toHaveBeenCalled();
+          expect(decodeReply).toHaveBeenCalledTimes(2);
 
           const apiResponse = yield* Effect.promise(() =>
             handler(new Request('http://effective-rsc.test/api/health')),
@@ -226,7 +294,7 @@ describe('ServerApplication.httpLayer', () => {
           );
           expect(missingResponse.status).toBe(404);
           expect(missingResponse.headers.get('x-global-middleware')).toBe('true');
-          expect(globalRequests).toBe(8);
+          expect(globalRequests).toBe(11);
           expect(acquisitions).toBe(1);
         }),
       ({ dispose }) => Effect.promise(dispose),

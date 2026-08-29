@@ -211,14 +211,15 @@ test('aborts a committed streaming navigation when it is superseded', async ({ p
     true,
   );
 
-  // Keep the superseding Flight pending long enough for an abandoned decoder error to destroy
-  // the committed fallback if transport cancellation leaks into React.
+  // Hold the replacement Flight at an explicit gate so cancellation can settle while the
+  // superseded fallback is still the only committed UI.
+  const releaseSupersedingFlight = Promise.withResolvers<void>();
   await page.route(
     (url) => url.pathname === '/',
     // oxlint-disable-next-line effecttsgo/async-function -- Playwright owns this Promise boundary.
     async (route, request) => {
       if (isNavigationFlightRequest(request)) {
-        await page.waitForTimeout(1_000);
+        await releaseSupersedingFlight.promise;
       }
       await route.continue();
     },
@@ -243,12 +244,27 @@ test('aborts a committed streaming navigation when it is superseded', async ({ p
     .getByRole('banner')
     .getByRole('link', { name: 'Converge home' })
     .evaluate((element: HTMLAnchorElement) => element.click());
-  await expect(page).toHaveURL('/');
-  await expect(page.getByRole('heading', { level: 1, name: 'Converge' })).toBeVisible();
   expect(await sundayFlightOutcome.promise).toBe('failed');
   expect(await page.evaluate(() => Reflect.get(window, '__ersc_sunday_navigation_aborted__'))).toBe(
     true,
   );
+  await page.evaluate(() => Reflect.set(window, '__ersc_supersession_frame_count__', 0));
+  await page.waitForFunction(
+    () => {
+      const frameCount = Number(Reflect.get(window, '__ersc_supersession_frame_count__')) + 1;
+      Reflect.set(window, '__ersc_supersession_frame_count__', frameCount);
+      return frameCount >= 2;
+    },
+    undefined,
+    { polling: 'raf' },
+  );
+  expect(
+    await page.evaluate(() => Reflect.get(window, '__ersc_supersession_rolled_back__')),
+  ).not.toBe(true);
+
+  releaseSupersedingFlight.resolve();
+  await expect(page).toHaveURL('/');
+  await expect(page.getByRole('heading', { level: 1, name: 'Converge' })).toBeVisible();
   expect(
     await page.evaluate(() => Reflect.get(window, '__ersc_supersession_rolled_back__')),
   ).not.toBe(true);

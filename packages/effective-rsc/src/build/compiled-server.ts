@@ -2,12 +2,7 @@ import { Effect, FileSystem, Layer, Path, Schema, Types } from 'effect';
 import { HttpRouter } from 'effect/unstable/http';
 
 import { ServerConfig } from '../server/server-config';
-import {
-  BuildClientOutputDir,
-  BuildServerBundlePath,
-  CompiledServerExportNames,
-  PublicAssetsDir,
-} from './contract';
+import { BuildServerBundlePath, CompiledServerExportNames, PublicAssetsDir } from './contract';
 
 export class CompiledServerError extends Schema.TaggedError<CompiledServerError>()(
   'CompiledServerError',
@@ -31,9 +26,9 @@ const CompiledHttpLayer = Schema.declare(
   (
     input,
   ): input is Layer.Layer<
-    HttpRouter.HttpRouter,
+    never,
     Types.unhandled,
-    FileSystem.FileSystem | Path.Path | ServerConfig
+    FileSystem.FileSystem | HttpRouter.HttpRouter | Path.Path | ServerConfig
   > => Layer.isLayer(input),
   { expected: 'the compiled effective-rsc HttpLayer' },
 );
@@ -50,6 +45,7 @@ export const decodeServerBundle = Schema.decodeUnknownEffect(ServerBundle);
 
 type RunnableLayerOptions = {
   readonly bundle: ServerBundle;
+  readonly clientOutputDir: string;
   readonly hostname: string;
   readonly port: number;
   readonly root: string;
@@ -57,6 +53,7 @@ type RunnableLayerOptions = {
 
 const makeServerConfigLayer = Effect.fnUntraced(function* ({
   bundle,
+  clientOutputDir,
   hostname,
   port,
   root,
@@ -66,7 +63,7 @@ const makeServerConfigLayer = Effect.fnUntraced(function* ({
   return Layer.succeed(
     ServerConfig,
     ServerConfig.of({
-      clientAssetsRoot: path.resolve(root, BuildClientOutputDir),
+      clientAssetsRoot: path.resolve(root, clientOutputDir),
       clientBootstrapScripts: bundle[CompiledServerExportNames.application].entryJsFiles,
       clientStylesheets: bundle[CompiledServerExportNames.application].entryCssFiles,
       hostname,
@@ -76,26 +73,18 @@ const makeServerConfigLayer = Effect.fnUntraced(function* ({
   );
 });
 
-export const makeRunnableServerLayer = Effect.fnUntraced(function* ({
-  bundle,
-  hostname,
-  port,
-  root,
-}: RunnableLayerOptions) {
-  const ServerConfigLayer = yield* makeServerConfigLayer({ bundle, hostname, port, root });
+export const makeRunnableServerLayer = Effect.fnUntraced(function* (options: RunnableLayerOptions) {
+  const ServerConfigLayer = yield* makeServerConfigLayer(options);
 
-  return bundle[CompiledServerExportNames.serverLayer].pipe(Layer.provide(ServerConfigLayer));
+  return options.bundle[CompiledServerExportNames.serverLayer].pipe(
+    Layer.provide(ServerConfigLayer),
+  );
 });
 
-export const makeRunnableHttpLayer = Effect.fnUntraced(function* ({
-  bundle,
-  hostname,
-  port,
-  root,
-}: RunnableLayerOptions) {
-  const ServerConfigLayer = yield* makeServerConfigLayer({ bundle, hostname, port, root });
+export const makeRunnableHttpLayer = Effect.fnUntraced(function* (options: RunnableLayerOptions) {
+  const ServerConfigLayer = yield* makeServerConfigLayer(options);
 
-  return bundle[CompiledServerExportNames.httpLayer].pipe(Layer.provide(ServerConfigLayer));
+  return options.bundle[CompiledServerExportNames.httpLayer].pipe(Layer.provide(ServerConfigLayer));
 });
 
 export const loadServerBundle = Effect.fnUntraced(function* (serverBundlePath: string) {

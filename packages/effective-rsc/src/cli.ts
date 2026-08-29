@@ -6,6 +6,7 @@ import * as Flag from 'effect/unstable/cli/Flag';
 
 import PackageJson from '../package.json' with { type: 'json' };
 import { loadCompiledServer, makeRunnableServerLayer } from './build/compiled-server';
+import { BuildClientOutputDir } from './build/contract';
 import { DefaultApplicationHostname, DefaultApplicationPort } from './server/server-config';
 
 export class BuildModuleLoadError extends Schema.TaggedError<BuildModuleLoadError>()(
@@ -28,6 +29,7 @@ const start = Effect.fn('ersc/cli/start')(function* ({
   const bundle = yield* loadCompiledServer(root);
   const ServerLayer = yield* makeRunnableServerLayer({
     bundle,
+    clientOutputDir: BuildClientOutputDir,
     hostname,
     port,
     root,

@@ -15,14 +15,17 @@ describe('ConferenceRepository', () => {
     Effect.gen(function* () {
       const repository = yield* ConferenceRepository;
 
-      expect(yield* repository.selectedSessionIds).toEqual(
+      const selectedSessionIds = yield* repository.selectedSessionIds;
+      expect(selectedSessionIds).toEqual(
         new Set(['mutation-protocols-that-compose', 'server-components-from-first-principles']),
       );
 
-      expect(yield* repository.toggleAgenda('mutation-protocols-that-compose')).toEqual({
+      const removed = yield* repository.toggleAgenda('mutation-protocols-that-compose');
+      expect(removed).toEqual({
         selected: false,
       });
-      expect(yield* repository.toggleAgenda('mutation-protocols-that-compose')).toEqual({
+      const restored = yield* repository.toggleAgenda('mutation-protocols-that-compose');
+      expect(restored).toEqual({
         selected: true,
       });
     }).pipe(Effect.provide(RepositoryLayer)),

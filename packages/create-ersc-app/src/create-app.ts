@@ -49,7 +49,8 @@ export const createApplication = Effect.fn('create-ersc-app/createApplication')(
     });
   }
 
-  if (yield* fileSystem.exists(directory)) {
+  const directoryExists = yield* fileSystem.exists(directory);
+  if (directoryExists) {
     const entries = yield* fileSystem.readDirectory(directory);
 
     if (entries.length > 0) {

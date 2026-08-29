@@ -138,7 +138,8 @@ it.effect('waits for the current compilation outcome before dispatching', () =>
       hash: 'first',
       serverBundle: { filename: firstFilename, outputPath: directory },
     });
-    expect((yield* Fiber.join(initialRequest)).status).toBe(204);
+    const initialResponse = yield* Fiber.join(initialRequest);
+    expect(initialResponse.status).toBe(204);
 
     yield* store.update({ _tag: 'Building', changedFiles: [] });
     const rebuildingRequest = yield* request('/first').pipe(
@@ -153,8 +154,10 @@ it.effect('waits for the current compilation outcome before dispatching', () =>
       reason: 'BuildFailed',
     });
     yield* store.update({ _tag: 'Failed', error: compilationError });
-    expect(yield* Fiber.join(rebuildingRequest).pipe(Effect.flip)).toBe(compilationError);
-    expect(yield* request('/first').pipe(Effect.flip)).toBe(compilationError);
+    const rebuildingError = yield* Fiber.join(rebuildingRequest).pipe(Effect.flip);
+    const requestError = yield* request('/first').pipe(Effect.flip);
+    expect(rebuildingError).toBe(compilationError);
+    expect(requestError).toBe(compilationError);
 
     yield* store.update({ _tag: 'Building', changedFiles: [] });
     const recoveredRequest = yield* request('/second').pipe(
@@ -169,7 +172,8 @@ it.effect('waits for the current compilation outcome before dispatching', () =>
       hash: 'second',
       serverBundle: { filename: secondFilename, outputPath: directory },
     });
-    expect((yield* Fiber.join(recoveredRequest)).status).toBe(204);
+    const recoveredResponse = yield* Fiber.join(recoveredRequest);
+    expect(recoveredResponse.status).toBe(204);
   }).pipe(Effect.provide(BunServices.layer), Effect.scoped),
 );
 
@@ -335,7 +339,9 @@ it.effect('keeps one HTTP server across successful generations', () =>
 
     yield* launchDevApplication(application).pipe(Effect.provide(HttpServerLayer));
 
-    expect(yield* Ref.get(serveCount)).toBe(1);
-    expect(yield* Deferred.isDone(serverStopped)).toBe(true);
+    const served = yield* Ref.get(serveCount);
+    const stopped = yield* Deferred.isDone(serverStopped);
+    expect(served).toBe(1);
+    expect(stopped).toBe(true);
   }).pipe(Effect.provide(BunServices.layer), Effect.scoped),
 );

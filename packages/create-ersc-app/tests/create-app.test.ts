@@ -77,11 +77,12 @@ describe('createApplication', () => {
       expect(configuredPackageJson.name).toBe('reading-room');
       expect(configuredPackageJson.dependencies['effective-rsc']).toBe('1.2.3');
       expect(configuredPackageJson.scripts['dev']).toBe('ersc dev');
-      expect(yield* fileSystem.exists(path.join(target, '.gitignore'))).toBe(true);
-      expect(yield* fileSystem.exists(path.join(target, 'gitignore'))).toBe(false);
-      expect(yield* fileSystem.readFileString(path.join(target, 'public', 'robots.txt'))).toBe(
-        'User-agent: *\nAllow: /\n',
-      );
+      const gitignoreExists = yield* fileSystem.exists(path.join(target, '.gitignore'));
+      const templateGitignoreExists = yield* fileSystem.exists(path.join(target, 'gitignore'));
+      const robots = yield* fileSystem.readFileString(path.join(target, 'public', 'robots.txt'));
+      expect(gitignoreExists).toBe(true);
+      expect(templateGitignoreExists).toBe(false);
+      expect(robots).toBe('User-agent: *\nAllow: /\n');
       expect(application).toContain("import './styles.css';");
     }).pipe(Effect.provide(BunServices.layer), Effect.scoped),
   );
@@ -150,7 +151,8 @@ describe('createApplication', () => {
 
       expect(error._tag).toBe('CreateApplicationError');
       expect(error.message).toContain('target directory is not empty');
-      expect(yield* fileSystem.readFileString(path.join(target, 'notes.txt'))).toBe('keep me');
+      const notes = yield* fileSystem.readFileString(path.join(target, 'notes.txt'));
+      expect(notes).toBe('keep me');
     }).pipe(Effect.provide(BunServices.layer), Effect.scoped),
   );
 });

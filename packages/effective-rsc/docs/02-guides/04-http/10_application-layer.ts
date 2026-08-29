@@ -13,7 +13,8 @@ const CatalogApi = HttpRouter.add(
   '/api/catalog',
   Effect.gen(function* () {
     const catalog = yield* Catalog;
-    return HttpServerResponse.jsonUnsafe(yield* catalog.featured);
+    const featured = yield* catalog.featured;
+    return HttpServerResponse.jsonUnsafe(featured);
   }),
 ).pipe(HttpRouter.provideRequest(Catalog.layer));
 

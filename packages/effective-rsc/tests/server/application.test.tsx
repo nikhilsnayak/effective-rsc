@@ -132,9 +132,8 @@ describe('ServerApplication.httpLayer', () => {
           expect(pageResponse.status).toBe(200);
           expect(pageResponse.headers.get('x-middleware-order')).toBe('inner,outer');
           expect(pageResponse.headers.get('x-global-middleware')).toBe('true');
-          expect(yield* Effect.promise(() => pageResponse.text())).toBe(
-            'Routes middleware response',
-          );
+          const pageBody = yield* Effect.promise(() => pageResponse.text());
+          expect(pageBody).toBe('Routes middleware response');
           expect(events).toEqual([
             'outer:request',
             'inner:request',
@@ -282,7 +281,8 @@ describe('ServerApplication.httpLayer', () => {
           const apiResponse = yield* Effect.promise(() =>
             handler(new Request('http://effective-rsc.test/api/health')),
           );
-          expect(yield* Effect.promise(() => apiResponse.text())).toBe('healthy');
+          const apiBody = yield* Effect.promise(() => apiResponse.text());
+          expect(apiBody).toBe('healthy');
           expect(apiResponse.headers.get('x-global-middleware')).toBe('true');
           expect(apiResponse.headers.get('x-middleware-order')).toBeNull();
           expect(apiResponse.headers.get('cache-control')).toBeNull();

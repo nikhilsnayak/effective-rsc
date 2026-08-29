@@ -29,7 +29,8 @@ describe('ConferenceService', () => {
       ]);
       expect(schedule.data.sessions[0]?.isInAgenda).toBe(true);
       expect(schedule.data.sessions[1]?.isInAgenda).toBe(false);
-      expect(yield* service.toggleAgenda('missing-session')).toBeNull();
+      const missingSession = yield* service.toggleAgenda('missing-session');
+      expect(missingSession).toBeNull();
     }).pipe(Effect.provide(ServiceLayer)),
   );
 

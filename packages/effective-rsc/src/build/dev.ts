@@ -80,7 +80,8 @@ export const makeDevGenerationStore = Effect.fnUntraced(function* (options: DevG
 
     switch (event._tag) {
       case 'Building': {
-        if (yield* Deferred.isDone(current)) {
+        const compilationCompleted = yield* Deferred.isDone(current);
+        if (compilationCompleted) {
           const next = yield* Deferred.make<DevGeneration, DevGenerationFailure>();
           yield* Ref.set(compilation, next);
         }

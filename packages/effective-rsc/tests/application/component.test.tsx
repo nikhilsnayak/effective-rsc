@@ -92,7 +92,8 @@ describe('ERSC.Component.make', () => {
 
       const result = yield* Effect.promise(() => execution);
       expect(result).toBe('interrupted');
-      expect(yield* Ref.get(interrupted)).toBe(true);
+      const wasInterrupted = yield* Ref.get(interrupted);
+      expect(wasInterrupted).toBe(true);
     }),
   );
 });

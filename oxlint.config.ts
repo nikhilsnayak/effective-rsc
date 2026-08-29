@@ -4,6 +4,7 @@ import { defineConfig } from 'oxlint';
 export default defineConfig({
   extends: [recommended],
   ignorePatterns: ['**/.ersc/**', '**/coverage/**', '**/dist/**', '**/node_modules/**', 'repos/**'],
+  jsPlugins: ['./tooling/oxlint/ersc-plugin.js'],
   plugins: [
     'eslint',
     'typescript',
@@ -18,6 +19,7 @@ export default defineConfig({
   ],
   rules: {
     curly: 'error',
+    'ersc/no-inline-yield': 'error',
   },
   options: {
     typeAware: true,

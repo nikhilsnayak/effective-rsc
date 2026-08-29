@@ -30,7 +30,8 @@ const applicationSource = (version: string) => `
 const readJavaScriptOutput = Effect.fnUntraced(function* (directory: string) {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const files = (yield* fileSystem.readDirectory(directory)).filter((file) => file.endsWith('.js'));
+  const directoryEntries = yield* fileSystem.readDirectory(directory);
+  const files = directoryEntries.filter((file) => file.endsWith('.js'));
   const sources = yield* Effect.forEach(files, (file) =>
     fileSystem.readFileString(path.join(directory, file)),
   );

@@ -122,8 +122,9 @@ const httpLayer = <Services, ApplicationError>(
       );
     }
 
-    const pathParams =
-      destination.page.paramsSchema === null ? EmptyPathParams : yield* HttpRouter.params;
+    const pathParams = yield* destination.page.paramsSchema === null
+      ? Effect.succeed(EmptyPathParams)
+      : HttpRouter.params;
     const routeTree = renderRouteTree({
       destination,
       pathParams,

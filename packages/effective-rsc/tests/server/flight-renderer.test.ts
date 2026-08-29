@@ -60,7 +60,8 @@ it.effect('interrupts application work when its Flight render is released', () =
       yield* flight.release;
 
       yield* Deferred.await(interrupted);
-      expect(yield* Effect.promise(() => applicationWorkOutcome)).toBe('interrupted');
+      const applicationOutcome = yield* Effect.promise(() => applicationWorkOutcome);
+      expect(applicationOutcome).toBe('interrupted');
       expect(renderSignal?.aborted).toBe(true);
     }).pipe(Effect.provide(FlightRenderer.layer)),
   ),

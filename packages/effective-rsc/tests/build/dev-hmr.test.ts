@@ -33,6 +33,7 @@ it.effect('replays the latest update and streams later updates to each subscribe
     hmr.onServerComponentChanges();
     yield* hmr.publishCompilation(RscUpdate.clientHash);
 
-    expect(Array.from(yield* Fiber.join(updates))).toEqual([ClientUpdate, RscUpdate]);
+    const received = yield* Fiber.join(updates);
+    expect(Array.from(received)).toEqual([ClientUpdate, RscUpdate]);
   }),
 );

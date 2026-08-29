@@ -5,12 +5,16 @@ import rspack, { type Configuration, type RuleSetRule } from '@rspack/core';
 import { FrameworkAssetPrefix } from '../application/route-path';
 import {
   ApplicationEntrySpecifier,
+  BuildClientOutputDir,
+  BuildCssFilenameTemplate,
+  BuildJsFilenameTemplate,
+  BuildServerOutputDir,
   ClientEntryName,
-  ClientOutputDir,
-  CssFilenameTemplate,
-  JsFilenameTemplate,
+  DevClientOutputDir,
+  DevCssFilenameTemplate,
+  DevJsFilenameTemplate,
+  DevServerOutputDir,
   ServerEntryName,
-  ServerOutputDir,
 } from './contract';
 
 export type RspackEntries = {
@@ -55,7 +59,9 @@ export const rejectBunModule = ({ request }: ExternalsRequest): false => {
   return false;
 };
 
-const makeSwcRule = (target: 'browser' | 'server'): RuleSetRule => ({
+type CompilationMode = 'development' | 'production';
+
+const makeSwcRule = (target: 'browser' | 'server', mode: CompilationMode): RuleSetRule => ({
   test: /\.(?:js|jsx|mjs|cjs|ts|tsx|mts|cts)$/,
   type: 'javascript/auto',
   use: [
@@ -73,7 +79,7 @@ const makeSwcRule = (target: 'browser' | 'server'): RuleSetRule => ({
           },
           transform: {
             react: {
-              development: false,
+              development: mode === 'development',
               runtime: 'automatic',
             },
             ...(target === 'browser' ? { reactCompiler: true } : {}),
@@ -87,7 +93,7 @@ const makeSwcRule = (target: 'browser' | 'server'): RuleSetRule => ({
   ],
 });
 
-const makeCssRule = (root: string): RuleSetRule => ({
+const makeCssRule = (root: string, mode: CompilationMode): RuleSetRule => ({
   test: /\.css$/i,
   type: 'css/auto',
   use: [
@@ -95,7 +101,7 @@ const makeCssRule = (root: string): RuleSetRule => ({
       loader: TailwindLoaderPath,
       options: {
         base: root,
-        optimize: { minify: true },
+        optimize: mode === 'production' ? { minify: true } : false,
       },
     },
   ],
@@ -113,26 +119,33 @@ const makeResolve = (root: string): NonNullable<Configuration['resolve']> => ({
   },
 });
 
-export const makeRspackBuildConfig = (
+const makeRspackConfig = (
   root: string,
   entries: RspackEntries,
+  mode: CompilationMode,
 ): ReadonlyArray<Configuration> => {
   const { ClientPlugin, ServerPlugin } = rspack.experiments.rsc.createPlugins();
   const { Layers } = rspack.experiments.rsc;
+  const development = mode === 'development';
+  const clientOutputDir = development ? DevClientOutputDir : BuildClientOutputDir;
+  const serverOutputDir = development ? DevServerOutputDir : BuildServerOutputDir;
+  const cssFilename = development ? DevCssFilenameTemplate : BuildCssFilenameTemplate;
+  const jsFilename = development ? DevJsFilenameTemplate : BuildJsFilenameTemplate;
 
   const client: Configuration = {
     context: root,
-    devtool: false,
+    devtool: development ? 'cheap-module-source-map' : false,
     entry: {
       [ClientEntryName]: entries.client,
     },
     externals: [rejectBunModule],
-    mode: 'production',
+    mode,
     module: {
-      rules: [makeCssRule(root), makeSwcRule('browser')],
+      rules: [makeCssRule(root, mode), makeSwcRule('browser', mode)],
     },
     name: 'client',
     optimization: {
+      emitOnErrors: !development,
       splitChunks: {
         cacheGroups: {
           react: {
@@ -145,12 +158,12 @@ export const makeRspackBuildConfig = (
       },
     },
     output: {
-      chunkFilename: JsFilenameTemplate,
-      clean: true,
-      cssChunkFilename: CssFilenameTemplate,
-      cssFilename: CssFilenameTemplate,
-      filename: JsFilenameTemplate,
-      path: `${root}/${ClientOutputDir}`,
+      chunkFilename: jsFilename,
+      clean: !development,
+      cssChunkFilename: cssFilename,
+      cssFilename,
+      filename: jsFilename,
+      path: `${root}/${clientOutputDir}`,
       publicPath: FrameworkAssetPrefix,
     },
     plugins: [new ClientPlugin()],
@@ -165,11 +178,11 @@ export const makeRspackBuildConfig = (
       [ServerEntryName]: entries.rsc,
     },
     externals: [externalizeServerModule],
-    mode: 'production',
+    mode,
     module: {
       rules: [
-        makeCssRule(root),
-        makeSwcRule('server'),
+        makeCssRule(root, mode),
+        makeSwcRule('server', mode),
         {
           resource: entries.rsc,
           layer: Layers.rsc,
@@ -192,24 +205,25 @@ export const makeRspackBuildConfig = (
     },
     name: 'server',
     optimization: {
+      emitOnErrors: !development,
       minimize: false,
       splitChunks: {
         chunks: 'all',
       },
     },
     output: {
-      chunkFilename: JsFilenameTemplate,
+      chunkFilename: jsFilename,
       chunkFormat: 'module',
       chunkLoading: 'import',
-      clean: true,
-      cssChunkFilename: CssFilenameTemplate,
-      cssFilename: CssFilenameTemplate,
-      filename: JsFilenameTemplate,
+      clean: !development,
+      cssChunkFilename: cssFilename,
+      cssFilename,
+      filename: jsFilename,
       library: {
         type: 'module',
       },
       module: true,
-      path: `${root}/${ServerOutputDir}`,
+      path: `${root}/${serverOutputDir}`,
       publicPath: '/',
     },
     plugins: [new ServerPlugin()],
@@ -224,3 +238,9 @@ export const makeRspackBuildConfig = (
 
   return [client, server];
 };
+
+export const makeRspackBuildConfig = (root: string, entries: RspackEntries) =>
+  makeRspackConfig(root, entries, 'production');
+
+export const makeRspackDevConfig = (root: string, entries: RspackEntries) =>
+  makeRspackConfig(root, entries, 'development');

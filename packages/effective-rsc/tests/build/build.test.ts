@@ -4,10 +4,11 @@ import rspack from '@rspack/core';
 import { Effect, Path } from 'effect';
 
 import { resolveApplicationBuild } from '../../src/build/build';
-import { ServerBundlePath } from '../../src/build/contract';
+import { BuildServerBundlePath } from '../../src/build/contract';
 import {
   externalizeServerModule,
   makeRspackBuildConfig,
+  makeRspackDevConfig,
   rejectBunModule,
 } from '../../src/build/rspack-config';
 
@@ -101,7 +102,9 @@ it.effect('resolves the server bundle where Rspack emits it', () =>
     )}`;
 
     expect(emittedBundlePath).toBe('/workspace/.ersc/server/main.js');
-    expect(path.resolve('/workspace', ServerBundlePath)).toBe('/workspace/.ersc/server/main.js');
+    expect(path.resolve('/workspace', BuildServerBundlePath)).toBe(
+      '/workspace/.ersc/server/main.js',
+    );
   }).pipe(Effect.provide(Path.layer)),
 );
 
@@ -119,6 +122,32 @@ it.effect('compiles Tailwind CSS against the application root in both runtime gr
         optimize: { minify: true },
       });
     }
+  }).pipe(Effect.provide(Path.layer)),
+);
+
+it.effect('keeps development candidates immutable until they are published', () =>
+  Effect.gen(function* () {
+    const { applicationRoot, entries } = yield* resolveFixtureBuild('/workspace');
+    const configs = makeRspackDevConfig(applicationRoot, entries);
+    const client = configNamed(configs, 'client');
+    const server = configNamed(configs, 'server');
+
+    for (const config of [client, server]) {
+      expect(config.mode).toBe('development');
+      expect(config.optimization?.emitOnErrors).toBe(false);
+      expect(config.output?.clean).toBe(false);
+      expect(config.output?.filename).toBe('[name].[contenthash].js');
+      expect(config.output?.cssFilename).toBe('[name].[contenthash].css');
+      expect(tailwindUseNamed(config)?.options).toEqual({
+        base: '/workspace',
+        optimize: false,
+      });
+    }
+
+    expect(client.devtool).toBe('cheap-module-source-map');
+    expect(server.devtool).toBe('source-map');
+    expect(client.output?.path).toBe('/workspace/.ersc/dev/client');
+    expect(server.output?.path).toBe('/workspace/.ersc/dev/server');
   }).pipe(Effect.provide(Path.layer)),
 );
 

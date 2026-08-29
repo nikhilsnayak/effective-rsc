@@ -3,10 +3,10 @@ import { HttpRouter } from 'effect/unstable/http';
 
 import { ServerConfig } from '../server/server-config';
 import {
-  ClientOutputDir,
+  BuildClientOutputDir,
+  BuildServerBundlePath,
   CompiledServerExportNames,
   PublicAssetsDir,
-  ServerBundlePath,
 } from './contract';
 
 export class CompiledServerError extends Schema.TaggedError<CompiledServerError>()(
@@ -66,7 +66,7 @@ const makeServerConfigLayer = Effect.fnUntraced(function* ({
   return Layer.succeed(
     ServerConfig,
     ServerConfig.of({
-      clientAssetsRoot: path.resolve(root, ClientOutputDir),
+      clientAssetsRoot: path.resolve(root, BuildClientOutputDir),
       clientBootstrapScripts: bundle[CompiledServerExportNames.application].entryJsFiles,
       clientStylesheets: bundle[CompiledServerExportNames.application].entryCssFiles,
       hostname,
@@ -100,7 +100,7 @@ export const makeRunnableHttpLayer = Effect.fnUntraced(function* ({
 
 export const loadCompiledServer = Effect.fnUntraced(function* (root: string) {
   const path = yield* Path.Path;
-  const serverBundlePath = path.resolve(root, ServerBundlePath);
+  const serverBundlePath = path.resolve(root, BuildServerBundlePath);
   const serverBundleUrl = yield* path.toFileUrl(serverBundlePath).pipe(
     Effect.mapError(
       (cause) =>

@@ -61,13 +61,18 @@ implemented, accepted but not implemented, and intentionally outside the current
 | D-059 | Require a matching browser Origin host for Server Function POST requests and reject bodies larger than 10 MiB while streaming, before React decodes them.                                                                                                         |
 | D-060 | Map HTML failures before the Fizz shell to `500`; after streaming begins, preserve committed response metadata, report render errors through the request logger, and let React and Web Streams recover or terminate.                                              |
 
+## Planned
+
+| ID    | Decision                                                                                                                                                                                                                                        |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D-041 | Run development through one Bun + Effect HTTP server and Rspack watch; publish only coherent, successfully acquired application generations, retain the last working generation on failure, and reload browsers after a successful replacement. |
+
 ## Deferred
 
-| ID    | Decision                                                                                                                                    |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| D-011 | Consider Effect RPC only for work that does not imply an RSC refresh.                                                                       |
-| D-014 | Defer SSG, ISR, partial prerendering, SPA mode, alternate bundlers, and runtime adapters.                                                   |
-| D-027 | Revisit StyleX only after its Rspack CSS-emission hook ships and MultiCompiler RSC CSS ownership and watch invalidation are proven.         |
-| D-041 | Let one Bun + Effect HTTP server own port `18193` in development and replace only the compiled application handler after successful builds. |
-| D-042 | Use Rspack's HMR runtime and React Fast Refresh over `/_ersc/hmr`; apply client updates before refetching Flight after RSC changes.         |
-| D-043 | Replace the whole route tree on HMR refresh, interrupt superseded refreshes, and retain successful responses through stream EOF.            |
+| ID    | Decision                                                                                                                            |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| D-011 | Consider Effect RPC only for work that does not imply an RSC refresh.                                                               |
+| D-014 | Defer SSG, ISR, partial prerendering, SPA mode, alternate bundlers, and runtime adapters.                                           |
+| D-027 | Revisit StyleX only after its Rspack CSS-emission hook ships and MultiCompiler RSC CSS ownership and watch invalidation are proven. |
+| D-042 | Use Rspack's HMR runtime and React Fast Refresh over `/_ersc/hmr`; apply client updates before refetching Flight after RSC changes. |
+| D-043 | Replace the whole route tree on HMR refresh, interrupt superseded refreshes, and retain successful responses through stream EOF.    |

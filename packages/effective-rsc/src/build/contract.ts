@@ -1,14 +1,20 @@
 export const ApplicationEntryPath = 'src/application.tsx';
 export const ApplicationEntrySpecifier = 'effective-rsc/application-entry';
 
+export const ErscOutputDir = '.ersc';
+export const BuildClientOutputDir = `${ErscOutputDir}/client`;
+export const BuildServerOutputDir = `${ErscOutputDir}/server`;
 export const ClientEntryName = 'main';
-export const ClientOutputDir = '.ersc/client';
+export const DevOutputDir = `${ErscOutputDir}/dev`;
+export const DevClientOutputDir = `${DevOutputDir}/client`;
+export const DevServerOutputDir = `${DevOutputDir}/server`;
 export const PublicAssetsDir = 'public';
 export const ServerEntryName = 'main';
-export const ServerOutputDir = '.ersc/server';
 
-export const CssFilenameTemplate = '[name].css';
-export const JsFilenameTemplate = '[name].js';
+export const BuildCssFilenameTemplate = '[name].css';
+export const BuildJsFilenameTemplate = '[name].js';
+export const DevCssFilenameTemplate = '[name].[contenthash].css';
+export const DevJsFilenameTemplate = '[name].[contenthash].js';
 
 export const CompiledServerExportNames: {
   readonly application: 'default';
@@ -20,6 +26,7 @@ export const CompiledServerExportNames: {
   serverLayer: 'ServerLayer',
 };
 
-const emittedJsFile = (entryName: string) => JsFilenameTemplate.replace('[name]', entryName);
+const emittedBuildJsFile = (entryName: string) =>
+  BuildJsFilenameTemplate.replace('[name]', entryName);
 
-export const ServerBundlePath = `${ServerOutputDir}/${emittedJsFile(ServerEntryName)}`;
+export const BuildServerBundlePath = `${BuildServerOutputDir}/${emittedBuildJsFile(ServerEntryName)}`;

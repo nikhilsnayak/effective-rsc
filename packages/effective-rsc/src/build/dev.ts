@@ -1,4 +1,4 @@
-import { Effect, Path, Schema } from 'effect';
+import { Effect, Path, Schema, ScopedRef } from 'effect';
 import { HttpRouter } from 'effect/unstable/http';
 
 import { loadServerBundle, makeRunnableHttpLayer } from './compiled-server';
@@ -21,6 +21,8 @@ type AcquireDevGenerationOptions = {
   readonly port: number;
   readonly root: string;
 };
+
+type DevGenerationOptions = Omit<AcquireDevGenerationOptions, 'compilation'>;
 
 export const acquireDevGeneration = Effect.fnUntraced(function* ({
   compilation,
@@ -52,5 +54,31 @@ export const acquireDevGeneration = Effect.fnUntraced(function* ({
   return {
     hash: compilation.hash,
     httpEffect,
+  };
+});
+
+type DevGeneration = Effect.Success<ReturnType<typeof acquireDevGeneration>>;
+
+type DevGenerationState =
+  | { readonly _tag: 'Unavailable' }
+  | { readonly _tag: 'Ready'; readonly generation: DevGeneration };
+
+export const makeDevGenerationStore = Effect.fnUntraced(function* (options: DevGenerationOptions) {
+  const state = yield* ScopedRef.make<DevGenerationState>(() => ({ _tag: 'Unavailable' }));
+  const publish = Effect.fnUntraced(function* (compilation: RspackCompilation) {
+    yield* ScopedRef.set(
+      state,
+      acquireDevGeneration({ ...options, compilation }).pipe(
+        Effect.map((generation): DevGenerationState => ({
+          _tag: 'Ready',
+          generation,
+        })),
+      ),
+    );
+  });
+
+  return {
+    current: ScopedRef.get(state),
+    publish,
   };
 });

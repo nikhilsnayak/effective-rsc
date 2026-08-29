@@ -3,7 +3,7 @@ import { expect, it } from '@effect/vitest';
 import { Effect, FileSystem, Path } from 'effect';
 import { HttpServerRequest } from 'effect/unstable/http';
 
-import { acquireDevGeneration } from '../../src/build/dev';
+import { acquireDevGeneration, makeDevGenerationStore } from '../../src/build/dev';
 
 const EffectModuleUrl = import.meta.resolve('effect');
 const HttpModuleUrl = import.meta.resolve('effect/unstable/http');
@@ -74,5 +74,77 @@ it.effect('acquires a complete development generation before returning it', () =
       _tag: 'DevGenerationError',
       cause: 'startup failed',
     });
+  }).pipe(Effect.provide(BunServices.layer), Effect.scoped),
+);
+
+it.effect('keeps the last ready generation when a replacement fails', () =>
+  Effect.gen(function* () {
+    const fileSystem = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: 'ersc-dev-store-' });
+    const firstFilename = 'main.first.js';
+    const failedFilename = 'main.failed.js';
+    const secondFilename = 'main.second.js';
+
+    yield* fileSystem.writeFileString(
+      path.join(directory, firstFilename),
+      serverBundleSource("HttpRouter.add('GET', '/first', HttpServerResponse.empty())"),
+    );
+    yield* fileSystem.writeFileString(
+      path.join(directory, failedFilename),
+      serverBundleSource("Layer.effectDiscard(Effect.fail('startup failed'))"),
+    );
+    yield* fileSystem.writeFileString(
+      path.join(directory, secondFilename),
+      serverBundleSource("HttpRouter.add('GET', '/second', HttpServerResponse.empty())"),
+    );
+
+    const store = yield* makeDevGenerationStore({
+      hostname: 'localhost',
+      port: 18193,
+      root: '/workspace',
+    });
+
+    expect((yield* store.current)._tag).toBe('Unavailable');
+
+    yield* store.publish({
+      _tag: 'Compiled',
+      hash: 'first',
+      serverBundle: { filename: firstFilename, outputPath: directory },
+    });
+    const first = yield* store.current;
+    expect(first._tag).toBe('Ready');
+    if (first._tag === 'Ready') {
+      expect(first.generation.hash).toBe('first');
+    }
+
+    const startupError = yield* store
+      .publish({
+        _tag: 'Compiled',
+        hash: 'failed',
+        serverBundle: { filename: failedFilename, outputPath: directory },
+      })
+      .pipe(Effect.flip);
+    expect(startupError).toMatchObject({
+      _tag: 'DevGenerationError',
+      cause: 'startup failed',
+    });
+
+    const retained = yield* store.current;
+    expect(retained._tag).toBe('Ready');
+    if (retained._tag === 'Ready') {
+      expect(retained.generation.hash).toBe('first');
+    }
+
+    yield* store.publish({
+      _tag: 'Compiled',
+      hash: 'second',
+      serverBundle: { filename: secondFilename, outputPath: directory },
+    });
+    const second = yield* store.current;
+    expect(second._tag).toBe('Ready');
+    if (second._tag === 'Ready') {
+      expect(second.generation.hash).toBe('second');
+    }
   }).pipe(Effect.provide(BunServices.layer), Effect.scoped),
 );

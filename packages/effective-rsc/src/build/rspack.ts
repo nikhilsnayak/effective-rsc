@@ -27,6 +27,7 @@ export type RspackWatchEvent =
     }
   | {
       readonly _tag: 'Compiled';
+      readonly clientHash: string;
       readonly compilers: ReadonlyArray<{
         readonly duration?: number;
         readonly name: string;
@@ -176,6 +177,16 @@ const missingServerBundleError = () =>
     reason: 'BuildFailed',
   });
 
+const missingClientHashError = () =>
+  new RspackError({
+    message: failureMessage('Rspack did not emit a client compilation hash.'),
+    cause: new Error('Missing client compilation hash in Rspack statistics.'),
+    reason: 'BuildFailed',
+  });
+
+const clientCompilationHash = (stats: RspackStats) =>
+  stats.stats.find(({ compilation }) => compilation.name === 'client')?.hash;
+
 const watchEvent = (cause: Error | null, stats?: RspackStats): RspackWatchEvent => {
   if (cause) {
     return { _tag: 'Failed', error: compilationError(cause) };
@@ -190,10 +201,15 @@ const watchEvent = (cause: Error | null, stats?: RspackStats): RspackWatchEvent 
   if (!serverBundle) {
     return { _tag: 'Failed', error: missingServerBundleError() };
   }
+  const clientHash = clientCompilationHash(stats);
+  if (typeof clientHash !== 'string') {
+    return { _tag: 'Failed', error: missingClientHashError() };
+  }
   const duration = buildDuration(stats);
 
   return {
     _tag: 'Compiled',
+    clientHash,
     compilers: stats.stats.map(compilerSummary),
     ...(duration === undefined ? {} : { duration }),
     hash: stats.hash,

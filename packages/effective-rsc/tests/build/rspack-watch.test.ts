@@ -1,6 +1,7 @@
 import * as BunServices from '@effect/platform-bun/BunServices';
 import { expect, it } from '@effect/vitest';
 import { Effect, FileSystem, Layer, Path, Stream } from 'effect';
+import { vi } from 'vitest';
 
 import { Rspack, type RspackWatchEvent } from '../../src/build/rspack';
 import { makeRspackDevConfig } from '../../src/build/rspack-config';
@@ -55,14 +56,19 @@ it.effect(
       yield* fileSystem.writeFileString(application, applicationSource('first'));
 
       const rspack = yield* Rspack;
+      const onServerComponentChanges = vi.fn();
       const compilations = yield* rspack
         .watch(
-          makeRspackDevConfig(directory, {
-            application,
-            client: path.join(frameworkRoot, 'src/client/entry.ts'),
-            rsc: path.join(frameworkRoot, 'src/build/rsc-entry.ts'),
-            ssr: path.join(frameworkRoot, 'src/server/html-renderer.tsx'),
-          }),
+          makeRspackDevConfig(
+            directory,
+            {
+              application,
+              client: path.join(frameworkRoot, 'src/client/entry.ts'),
+              rsc: path.join(frameworkRoot, 'src/build/rsc-entry.ts'),
+              ssr: path.join(frameworkRoot, 'src/server/html-renderer.tsx'),
+            },
+            { onServerComponentChanges },
+          ),
         )
         .pipe(
           Stream.mapEffect((event) =>
@@ -82,6 +88,7 @@ it.effect(
       const hashes = Array.from(compilations, ([compilation]) => compilation.hash);
       expect(hashes).toHaveLength(2);
       expect(hashes[1]).not.toBe(hashes[0]);
+      expect(onServerComponentChanges).toHaveBeenCalledTimes(1);
     }).pipe(Effect.provide(Layer.merge(BunServices.layer, Rspack.layer)), Effect.scoped),
   15_000,
 );

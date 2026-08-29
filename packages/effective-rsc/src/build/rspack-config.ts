@@ -25,6 +25,10 @@ export type RspackEntries = {
   readonly ssr: string;
 };
 
+export type RspackDevConfigOptions = {
+  readonly onServerComponentChanges?: () => void | Promise<void>;
+};
+
 const require = createRequire(import.meta.url);
 const TailwindLoaderPath = require.resolve('@tailwindcss/webpack');
 
@@ -125,6 +129,7 @@ const makeRspackConfig = (
   root: string,
   entries: RspackEntries,
   mode: CompilationMode,
+  devOptions?: RspackDevConfigOptions,
 ): ReadonlyArray<Configuration> => {
   const { ClientPlugin, ServerPlugin } = rspack.experiments.rsc.createPlugins();
   const { Layers } = rspack.experiments.rsc;
@@ -233,7 +238,13 @@ const makeRspackConfig = (
       path: `${root}/${serverOutputDir}`,
       publicPath: '/',
     },
-    plugins: [new ServerPlugin()],
+    plugins: [
+      devOptions?.onServerComponentChanges === undefined
+        ? new ServerPlugin()
+        : new ServerPlugin({
+            onServerComponentChanges: devOptions.onServerComponentChanges,
+          }),
+    ],
     resolve: {
       ...makeResolve(root),
       alias: {
@@ -249,5 +260,8 @@ const makeRspackConfig = (
 export const makeRspackBuildConfig = (root: string, entries: RspackEntries) =>
   makeRspackConfig(root, entries, 'production');
 
-export const makeRspackDevConfig = (root: string, entries: RspackEntries) =>
-  makeRspackConfig(root, entries, 'development');
+export const makeRspackDevConfig = (
+  root: string,
+  entries: RspackEntries,
+  options?: RspackDevConfigOptions,
+) => makeRspackConfig(root, entries, 'development', options);

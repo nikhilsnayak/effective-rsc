@@ -14,6 +14,7 @@ type FakeStats = {
     readonly compilation: { readonly name: string };
     readonly startTime: number;
     readonly endTime: number;
+    readonly hash: string;
     readonly toJson: () => {
       readonly chunks: ReadonlyArray<{
         readonly entry: boolean;
@@ -52,6 +53,7 @@ const makeStats = ({
       compilation: { name: 'client' },
       startTime: 10,
       endTime: 18,
+      hash: `client-${hash}`,
       toJson: () => ({
         chunks: [],
         entrypoints: {},
@@ -62,6 +64,7 @@ const makeStats = ({
       compilation: { name: 'server' },
       startTime: 10,
       endTime: 20,
+      hash: `server-${hash}`,
       toJson: () => ({
         chunks: [{ entry: true, files: [`main.${hash}.js`], id: 'main' }],
         entrypoints: { main: { chunks: ['main'] } },
@@ -131,6 +134,7 @@ it.effect('streams aggregate compilation outcomes and closes the complete watch 
       { _tag: 'Building', changedFiles: [] },
       {
         _tag: 'Compiled',
+        clientHash: 'client-ready',
         compilers: [
           { duration: 8, name: 'client' },
           { duration: 10, name: 'server' },

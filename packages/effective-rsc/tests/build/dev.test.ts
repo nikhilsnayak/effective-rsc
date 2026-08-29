@@ -14,7 +14,8 @@ import { Terminal } from '../../src/build/terminal';
 
 const EffectModuleUrl = import.meta.resolve('effect');
 const HttpModuleUrl = import.meta.resolve('effect/unstable/http');
-const CompilationTimings = {
+const CompilationDetails = {
+  clientHash: 'client',
   compilers: [
     { duration: 10, name: 'client' },
     { duration: 20, name: 'server' },
@@ -56,7 +57,7 @@ it.effect('acquires a complete development generation before returning it', () =
     const generation = yield* acquireDevGeneration({
       compilation: {
         _tag: 'Compiled',
-        ...CompilationTimings,
+        ...CompilationDetails,
         hash: 'ready',
         serverBundle: { filename: readyFilename, outputPath: directory },
       },
@@ -77,7 +78,7 @@ it.effect('acquires a complete development generation before returning it', () =
     const startupError = yield* acquireDevGeneration({
       compilation: {
         _tag: 'Compiled',
-        ...CompilationTimings,
+        ...CompilationDetails,
         hash: 'failed',
         serverBundle: { filename: failedFilename, outputPath: directory },
       },
@@ -132,7 +133,7 @@ it.effect('waits for the current compilation outcome before dispatching', () =>
 
     yield* store.update({
       _tag: 'Compiled',
-      ...CompilationTimings,
+      ...CompilationDetails,
       hash: 'first',
       serverBundle: { filename: firstFilename, outputPath: directory },
     });
@@ -163,7 +164,7 @@ it.effect('waits for the current compilation outcome before dispatching', () =>
 
     yield* store.update({
       _tag: 'Compiled',
-      ...CompilationTimings,
+      ...CompilationDetails,
       hash: 'second',
       serverBundle: { filename: secondFilename, outputPath: directory },
     });
@@ -197,14 +198,14 @@ it.effect('continues watching after a generation fails to start', () =>
             { _tag: 'Building', changedFiles: [] },
             {
               _tag: 'Compiled',
-              ...CompilationTimings,
+              ...CompilationDetails,
               hash: 'failed',
               serverBundle: { filename: failedFilename, outputPath: directory },
             },
             { _tag: 'Building', changedFiles: [] },
             {
               _tag: 'Compiled',
-              ...CompilationTimings,
+              ...CompilationDetails,
               hash: 'ready',
               serverBundle: { filename: readyFilename, outputPath: directory },
             },
@@ -293,7 +294,7 @@ it.effect('keeps one HTTP server across successful generations', () =>
                   { _tag: 'Building', changedFiles: [] },
                   {
                     _tag: 'Compiled',
-                    ...CompilationTimings,
+                    ...CompilationDetails,
                     hash: 'first',
                     serverBundle: {
                       filename: firstFilename,
@@ -303,7 +304,7 @@ it.effect('keeps one HTTP server across successful generations', () =>
                   { _tag: 'Building', changedFiles: [] },
                   {
                     _tag: 'Compiled',
-                    ...CompilationTimings,
+                    ...CompilationDetails,
                     hash: 'second',
                     serverBundle: {
                       filename: secondFilename,

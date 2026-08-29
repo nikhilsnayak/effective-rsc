@@ -1,14 +1,10 @@
 import { Schema } from 'effect';
 
-const ClientUpdate = Schema.Struct({
-  _tag: Schema.Literal('ClientUpdate'),
-  clientHash: Schema.String,
-});
+export const DevHmrPath = '/_ersc/hmr';
 
-const RscUpdate = Schema.Struct({
-  _tag: Schema.Literal('RscUpdate'),
-  clientHash: Schema.String,
-});
+const ClientUpdate = Schema.TaggedStruct('ClientUpdate', { clientHash: Schema.String });
+
+const RscUpdate = Schema.TaggedStruct('RscUpdate', { clientHash: Schema.String });
 
 export const DevHmrMessage = Schema.Union([ClientUpdate, RscUpdate]);
 export type DevHmrMessage = typeof DevHmrMessage.Type;

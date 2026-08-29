@@ -62,18 +62,31 @@ const makeStats = ({
 
 it.effect('streams aggregate compilation outcomes and closes the complete watch lifecycle', () => {
   const closeOrder: Array<string> = [];
+  const watchRunHandlers: Array<() => void> = [];
+  const beginCompilation = () => watchRunHandlers.forEach((handler) => handler());
 
   Mocks.rspack.mockReturnValue({
     close: (callback: (cause?: Error) => void) => {
       closeOrder.push('compiler');
       callback();
     },
+    hooks: {
+      watchRun: {
+        tap: (_options: unknown, handler: () => void) => {
+          watchRunHandlers.push(handler);
+        },
+      },
+    },
     watch: (_options: unknown, callback: WatchCallback) => {
+      beginCompilation();
+      beginCompilation();
       callback(
         null,
         makeStats({ diagnostics: 'application.tsx: compile error', errors: true, hash: 'failed' }),
       );
+      beginCompilation();
       callback(new Error('watch callback failed'));
+      beginCompilation();
       callback(
         null,
         makeStats({ diagnostics: 'application.tsx: warning', hash: 'ready', warnings: true }),
@@ -91,12 +104,15 @@ it.effect('streams aggregate compilation outcomes and closes the complete watch 
   return Effect.gen(function* () {
     const events = yield* Effect.gen(function* () {
       const rspack = yield* Rspack;
-      return yield* rspack.watch([]).pipe(Stream.take(3), Stream.runCollect);
+      return yield* rspack.watch([]).pipe(Stream.take(6), Stream.runCollect);
     }).pipe(Effect.provide(Rspack.layer), Effect.scoped);
 
     expect(Array.from(events)).toMatchObject([
+      { _tag: 'Building' },
       { _tag: 'Failed', error: { reason: 'BuildFailed' } },
+      { _tag: 'Building' },
       { _tag: 'Failed', error: { reason: 'CompileFailed' } },
+      { _tag: 'Building' },
       {
         _tag: 'Compiled',
         hash: 'ready',

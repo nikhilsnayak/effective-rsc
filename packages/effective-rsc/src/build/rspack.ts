@@ -14,6 +14,7 @@ type RspackStats = MultiStats;
 type RspackWatching = ReturnType<RspackCompiler['watch']>;
 
 export type RspackWatchEvent =
+  | { readonly _tag: 'Building' }
   | {
       readonly _tag: 'Compiled';
       readonly hash: string;
@@ -225,11 +226,20 @@ const watchCompiler = (configs: ReadonlyArray<Configuration>) =>
   Stream.callback<RspackWatchEvent, RspackError>((queue) =>
     Effect.gen(function* () {
       const compiler = yield* acquireCompiler(configs);
+      let watchState: 'Idle' | 'Building' = 'Idle';
+
+      compiler.hooks.watchRun.tap({ name: 'ersc:watch-state', stage: -10_000 }, () => {
+        if (watchState === 'Idle') {
+          watchState = 'Building';
+          Queue.offerUnsafe(queue, { _tag: 'Building' });
+        }
+      });
 
       yield* Effect.acquireRelease(
         Effect.try({
           try: () =>
             compiler.watch({}, (cause, stats) => {
+              watchState = 'Idle';
               Queue.offerUnsafe(queue, watchEvent(cause, stats));
             }),
           catch: (cause) => compilationError(cause),

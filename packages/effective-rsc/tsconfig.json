@@ -3,7 +3,7 @@
   "compilerOptions": {
     "isolatedModules": true,
     "rootDir": "./src",
-    "types": ["bun"]
+    "types": ["bun", "@rspack/core/module"]
   },
   "include": ["src"]
 }

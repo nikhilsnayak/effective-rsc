@@ -3,7 +3,6 @@ import { expect, it } from '@effect/vitest';
 import { Deferred, Effect, Fiber, FileSystem, Layer, Logger, Path, Ref, Stream } from 'effect';
 import { HttpServer, HttpServerRequest } from 'effect/unstable/http';
 
-import { DevHmrPath } from '../../src/dev/hmr';
 import {
   acquireDevGeneration,
   launchDevApplication,
@@ -12,6 +11,7 @@ import {
 } from '../../src/build/dev';
 import { Rspack, RspackError } from '../../src/build/rspack';
 import { Terminal } from '../../src/build/terminal';
+import { DevHmrPath } from '../../src/dev/hmr';
 
 const EffectModuleUrl = import.meta.resolve('effect');
 const HttpModuleUrl = import.meta.resolve('effect/unstable/http');

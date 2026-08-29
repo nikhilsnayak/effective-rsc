@@ -4,9 +4,7 @@ import { HttpServerRequest, HttpServerResponse } from 'effect/unstable/http';
 import { type DevHmrMessage, DevHmrMessageJson } from '../dev/hmr';
 
 type DevHmrState = { readonly _tag: 'Initial' } | DevHmrMessage;
-type PendingDevHmrUpdate =
-  | { readonly _tag: 'ClientUpdate' }
-  | { readonly _tag: 'RscUpdate' };
+type PendingDevHmrUpdate = { readonly _tag: 'ClientUpdate' } | { readonly _tag: 'RscUpdate' };
 
 export const makeDevHmr = Effect.gen(function* () {
   const pending = MutableRef.make<PendingDevHmrUpdate>({ _tag: 'ClientUpdate' });

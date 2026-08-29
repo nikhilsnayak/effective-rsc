@@ -65,6 +65,7 @@ it.effect(
             {
               application,
               client: path.join(frameworkRoot, 'src/client/entry.ts'),
+              devClient: path.join(frameworkRoot, 'src/dev/entry.ts'),
               rsc: path.join(frameworkRoot, 'src/build/rsc-entry.ts'),
               ssr: path.join(frameworkRoot, 'src/server/html-renderer.tsx'),
             },

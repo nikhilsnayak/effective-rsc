@@ -42,6 +42,7 @@ export type NavigationResourceRequest = {
 };
 
 export type NavigationResources = {
+  readonly invalidate: () => void;
   readonly load: (
     request: NavigationResourceRequest,
   ) => Effect.Effect<NavigationResource, FlightLoadError, HttpClient.HttpClient | Scope.Scope>;
@@ -165,5 +166,5 @@ export const makeNavigationResources = Effect.fnUntraced(function* (
     );
   }
 
-  return { load, prepareRefresh } satisfies NavigationResources;
+  return { invalidate, load, prepareRefresh } satisfies NavigationResources;
 });

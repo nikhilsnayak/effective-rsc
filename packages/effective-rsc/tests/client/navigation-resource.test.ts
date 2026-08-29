@@ -99,6 +99,38 @@ it.effect('does not let initial Flight completion overwrite a refreshed cache ge
   );
 });
 
+it.effect('invalidates cached history entries before a development refresh', () => {
+  decodedFlights.length = 0;
+  const requestedUrls: Array<string> = [];
+  return Effect.scoped(
+    Effect.gen(function* () {
+      const initialEntry = makeNavigationEntry(
+        'entry-one',
+        'slot-one',
+        'https://effective-rsc.test/schedule/day-one',
+      );
+      const navigationHistory = new TestNavigationHistory(initialEntry);
+      const resources = yield* makeNavigationResources(
+        navigationHistory,
+        makeRouteTree('initial'),
+        Promise.resolve(),
+      );
+      yield* Effect.yieldNow;
+      resources.invalidate();
+      decodedFlights.push({
+        formState: null,
+        routeTree: makeRouteTree('reloaded'),
+        serverFnResult: null,
+      });
+
+      const resource = yield* load(resources, initialEntry, 'traverse');
+
+      expect(resource._tag === 'Route' && resource.routeTree.id).toBe('reloaded');
+      expect(requestedUrls).toEqual([initialEntry.url]);
+    }).pipe(Effect.provideService(HttpClient.HttpClient, makeHttpClient(requestedUrls))),
+  );
+});
+
 it.effect('fences an in-flight navigation cache write when a refresh invalidates it', () => {
   decodedFlights.length = 0;
   const requestedUrls: Array<string> = [];

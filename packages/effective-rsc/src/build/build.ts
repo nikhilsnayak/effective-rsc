@@ -18,7 +18,6 @@ export class BuildEntryError extends Schema.TaggedError<BuildEntryError>()('Buil
 }) {}
 
 const ClientEntryPath = '../client/entry.js';
-const DevClientEntryPath = '../dev/entry.js';
 const RscEntryPath = './rsc-entry.js';
 const SsrEntryPath = '../server/html-renderer.js';
 
@@ -49,13 +48,11 @@ export const resolveApplicationBuild = Effect.fnUntraced(function* ({
   const applicationRoot = path.resolve(root);
   const applicationPath = path.resolve(applicationRoot, ApplicationEntryPath);
   const clientEntry = yield* resolveFrameworkEntry(buildModuleUrl, ClientEntryPath);
-  const devClientEntry = yield* resolveFrameworkEntry(buildModuleUrl, DevClientEntryPath);
   const rscEntry = yield* resolveFrameworkEntry(buildModuleUrl, RscEntryPath);
   const ssrEntry = yield* resolveFrameworkEntry(buildModuleUrl, SsrEntryPath);
   const entries = {
     application: applicationPath,
     client: clientEntry,
-    devClient: devClientEntry,
     rsc: rscEntry,
     ssr: ssrEntry,
   };

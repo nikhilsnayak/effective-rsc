@@ -37,6 +37,13 @@ export const hydrate = Effect.scoped(
 
     yield* listenForNavigation(browserRoot, navigationResources);
     yield* installCallServer(browserRoot, navigationResources);
+    if (import.meta.webpackHot) {
+      yield* Effect.tryPromise(() => import('../dev/hmr-client')).pipe(
+        Effect.flatMap(({ startDevHmr }) => startDevHmr(navigationResources)),
+        Effect.catch((cause) => Effect.logError('Development HMR failed.', cause)),
+        Effect.forkScoped,
+      );
+    }
 
     return yield* Effect.never;
   }),

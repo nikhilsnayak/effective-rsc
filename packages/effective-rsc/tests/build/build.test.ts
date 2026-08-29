@@ -60,7 +60,6 @@ it.effect('uses real framework entries and private aliases for application sourc
 
     expect(entries.application).toBe('/workspace/src/application.tsx');
     expect(entries.client).toBe('/framework/dist/client/entry.js');
-    expect(entries.devClient).toBe('/framework/dist/dev/entry.js');
     expect(entries.rsc).toBe('/framework/dist/build/rsc-entry.js');
     expect(entries.ssr).toBe('/framework/dist/server/html-renderer.js');
     expect(entries.rsc).not.toContain('/.ersc/');
@@ -211,7 +210,7 @@ it.effect('enables HMR and React Refresh only in the development browser graph',
         expect.any(ReactRefreshRspackPlugin),
       ]),
     );
-    expect(devClient.entry).toEqual({ main: entries.devClient });
+    expect(devClient.entry).toEqual({ main: entries.client });
     expect(buildClient.entry).toEqual({ main: entries.client });
     expect(devServer.plugins).not.toEqual(
       expect.arrayContaining([

@@ -21,7 +21,6 @@ import {
 export type RspackEntries = {
   readonly application: string;
   readonly client: string;
-  readonly devClient: string;
   readonly rsc: string;
   readonly ssr: string;
 };
@@ -151,7 +150,7 @@ const makeRspackConfig = (
     context: root,
     devtool: development ? 'cheap-module-source-map' : false,
     entry: {
-      [ClientEntryName]: development ? entries.devClient : entries.client,
+      [ClientEntryName]: entries.client,
     },
     externals: [rejectBunModule],
     mode,

@@ -56,6 +56,7 @@ it.effect(
       yield* fileSystem.writeFileString(application, applicationSource('first'));
 
       const rspack = yield* Rspack;
+      const onCompilationStart = vi.fn();
       const onServerComponentChanges = vi.fn();
       const compilations = yield* rspack
         .watch(
@@ -67,7 +68,7 @@ it.effect(
               rsc: path.join(frameworkRoot, 'src/build/rsc-entry.ts'),
               ssr: path.join(frameworkRoot, 'src/server/html-renderer.tsx'),
             },
-            { onServerComponentChanges },
+            { onCompilationStart, onServerComponentChanges },
           ),
         )
         .pipe(
@@ -88,6 +89,7 @@ it.effect(
       const hashes = Array.from(compilations, ([compilation]) => compilation.hash);
       expect(hashes).toHaveLength(2);
       expect(hashes[1]).not.toBe(hashes[0]);
+      expect(onCompilationStart).toHaveBeenCalledTimes(2);
       expect(onServerComponentChanges).toHaveBeenCalledTimes(1);
     }).pipe(Effect.provide(Layer.merge(BunServices.layer, Rspack.layer)), Effect.scoped),
   15_000,

@@ -162,6 +162,7 @@ export const makeDevApplication = Effect.fnUntraced(function* ({
           yield* Effect.logWarning(event.warnings);
         }
         yield* generationStore.update(event).pipe(
+          Effect.andThen(hmr.publishCompilation(event.clientHash)),
           Effect.tap(() => {
             const duration =
               event.duration === undefined ? '' : ` in ${formatDuration(event.duration)}`;
@@ -180,7 +181,12 @@ export const makeDevApplication = Effect.fnUntraced(function* ({
     }
   });
   const watch = rspack
-    .watch(makeRspackDevConfig(applicationRoot, entries))
+    .watch(
+      makeRspackDevConfig(applicationRoot, entries, {
+        onCompilationStart: hmr.onCompilationStart,
+        onServerComponentChanges: hmr.onServerComponentChanges,
+      }),
+    )
     .pipe(Stream.runForEach(update));
   const httpEffect = yield* HttpRouter.toHttpEffect(
     HttpRouter.addAll([

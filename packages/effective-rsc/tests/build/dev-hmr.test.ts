@@ -18,7 +18,7 @@ it('round-trips the development HMR wire protocol through Schema', () => {
 it.effect('replays the latest update and streams later updates to each subscriber', () =>
   Effect.gen(function* () {
     const hmr = yield* makeDevHmr;
-    yield* hmr.publish(ClientUpdate);
+    yield* hmr.publishCompilation(ClientUpdate.clientHash);
 
     const receivedFirst = yield* Deferred.make<void>();
     const updates = yield* hmr.updates.pipe(
@@ -29,7 +29,9 @@ it.effect('replays the latest update and streams later updates to each subscribe
     );
 
     yield* Deferred.await(receivedFirst);
-    yield* hmr.publish(RscUpdate);
+    hmr.onCompilationStart();
+    hmr.onServerComponentChanges();
+    yield* hmr.publishCompilation(RscUpdate.clientHash);
 
     expect(Array.from(yield* Fiber.join(updates))).toEqual([ClientUpdate, RscUpdate]);
   }),

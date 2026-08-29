@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 
-import rspack, { type Configuration, type RuleSetRule } from '@rspack/core';
+import rspack, { type Compiler, type Configuration, type RuleSetRule } from '@rspack/core';
 import { ReactRefreshRspackPlugin } from '@rspack/plugin-react-refresh';
 
 import { FrameworkAssetPrefix } from '../application/route-path';
@@ -26,6 +26,7 @@ export type RspackEntries = {
 };
 
 export type RspackDevConfigOptions = {
+  readonly onCompilationStart?: () => void;
   readonly onServerComponentChanges?: () => void | Promise<void>;
 };
 
@@ -122,6 +123,12 @@ const makeResolve = (root: string): NonNullable<Configuration['resolve']> => ({
   tsConfig: {
     configFile: `${root}/tsconfig.json`,
     references: 'auto',
+  },
+});
+
+const makeCompilationStartPlugin = (onCompilationStart: () => void) => ({
+  apply(compiler: Compiler) {
+    compiler.hooks.watchRun.tap('ersc:dev-hmr', onCompilationStart);
   },
 });
 
@@ -239,6 +246,9 @@ const makeRspackConfig = (
       publicPath: '/',
     },
     plugins: [
+      ...(devOptions?.onCompilationStart === undefined
+        ? []
+        : [makeCompilationStartPlugin(devOptions.onCompilationStart)]),
       devOptions?.onServerComponentChanges === undefined
         ? new ServerPlugin()
         : new ServerPlugin({

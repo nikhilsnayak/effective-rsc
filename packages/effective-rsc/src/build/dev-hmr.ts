@@ -1,17 +1,28 @@
-import { Effect, Schema, Stream, SubscriptionRef } from 'effect';
+import { Effect, MutableRef, Schema, Stream, SubscriptionRef } from 'effect';
 import { HttpServerRequest, HttpServerResponse } from 'effect/unstable/http';
 
 import { type DevHmrMessage, DevHmrMessageJson } from '../dev/hmr';
 
 type DevHmrState = { readonly _tag: 'Initial' } | DevHmrMessage;
+type PendingDevHmrUpdate =
+  | { readonly _tag: 'ClientUpdate' }
+  | { readonly _tag: 'RscUpdate' };
 
 export const makeDevHmr = Effect.gen(function* () {
+  const pending = MutableRef.make<PendingDevHmrUpdate>({ _tag: 'ClientUpdate' });
   const state = yield* SubscriptionRef.make<DevHmrState>({ _tag: 'Initial' });
   const encode = Schema.encodeEffect(DevHmrMessageJson);
   const updates = SubscriptionRef.changes(state).pipe(
     Stream.filter((update): update is DevHmrMessage => update._tag !== 'Initial'),
   );
-  const publish = (message: DevHmrMessage) => SubscriptionRef.set(state, message);
+  const onCompilationStart = () => {
+    MutableRef.set(pending, { _tag: 'ClientUpdate' });
+  };
+  const onServerComponentChanges = () => {
+    MutableRef.set(pending, { _tag: 'RscUpdate' });
+  };
+  const publishCompilation = (clientHash: string) =>
+    SubscriptionRef.set(state, { ...MutableRef.get(pending), clientHash });
   const httpEffect = Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest;
     const socket = yield* request.upgrade;
@@ -28,5 +39,11 @@ export const makeDevHmr = Effect.gen(function* () {
     return HttpServerResponse.empty();
   });
 
-  return { httpEffect, publish, updates };
+  return {
+    httpEffect,
+    onCompilationStart,
+    onServerComponentChanges,
+    publishCompilation,
+    updates,
+  };
 });

@@ -104,19 +104,24 @@ it.effect('keeps the last ready generation when a replacement fails', () =>
       port: 18193,
       root: '/workspace',
     });
+    const request = (pathname: string) =>
+      store.httpEffect.pipe(
+        Effect.provideService(
+          HttpServerRequest.HttpServerRequest,
+          HttpServerRequest.fromWeb(new Request(`http://localhost${pathname}`)),
+        ),
+      );
 
-    expect((yield* store.current)._tag).toBe('Unavailable');
+    const unavailable = yield* request('/first');
+    expect(unavailable.status).toBe(503);
+    expect(unavailable.headers['retry-after']).toBe('1');
 
     yield* store.publish({
       _tag: 'Compiled',
       hash: 'first',
       serverBundle: { filename: firstFilename, outputPath: directory },
     });
-    const first = yield* store.current;
-    expect(first._tag).toBe('Ready');
-    if (first._tag === 'Ready') {
-      expect(first.generation.hash).toBe('first');
-    }
+    expect((yield* request('/first')).status).toBe(204);
 
     const startupError = yield* store
       .publish({
@@ -129,22 +134,13 @@ it.effect('keeps the last ready generation when a replacement fails', () =>
       _tag: 'DevGenerationError',
       cause: 'startup failed',
     });
-
-    const retained = yield* store.current;
-    expect(retained._tag).toBe('Ready');
-    if (retained._tag === 'Ready') {
-      expect(retained.generation.hash).toBe('first');
-    }
+    expect((yield* request('/first')).status).toBe(204);
 
     yield* store.publish({
       _tag: 'Compiled',
       hash: 'second',
       serverBundle: { filename: secondFilename, outputPath: directory },
     });
-    const second = yield* store.current;
-    expect(second._tag).toBe('Ready');
-    if (second._tag === 'Ready') {
-      expect(second.generation.hash).toBe('second');
-    }
+    expect((yield* request('/second')).status).toBe(204);
   }).pipe(Effect.provide(BunServices.layer), Effect.scoped),
 );

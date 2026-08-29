@@ -1,5 +1,5 @@
 import { Effect, Path, Schema, ScopedRef } from 'effect';
-import { HttpRouter } from 'effect/unstable/http';
+import { HttpRouter, HttpServerResponse } from 'effect/unstable/http';
 
 import { loadServerBundle, makeRunnableHttpLayer } from './compiled-server';
 import { DevClientOutputDir } from './contract';
@@ -63,6 +63,11 @@ type DevGenerationState =
   | { readonly _tag: 'Unavailable' }
   | { readonly _tag: 'Ready'; readonly generation: DevGeneration };
 
+const UnavailableResponse = HttpServerResponse.text('The application is compiling.', {
+  headers: { 'retry-after': '1' },
+  status: 503,
+});
+
 export const makeDevGenerationStore = Effect.fnUntraced(function* (options: DevGenerationOptions) {
   const state = yield* ScopedRef.make<DevGenerationState>(() => ({ _tag: 'Unavailable' }));
   const publish = Effect.fnUntraced(function* (compilation: RspackCompilation) {
@@ -76,9 +81,16 @@ export const makeDevGenerationStore = Effect.fnUntraced(function* (options: DevG
       ),
     );
   });
+  const httpEffect = ScopedRef.get(state).pipe(
+    Effect.flatMap((current) =>
+      current._tag === 'Unavailable'
+        ? Effect.succeed(UnavailableResponse)
+        : current.generation.httpEffect,
+    ),
+  );
 
   return {
-    current: ScopedRef.get(state),
+    httpEffect,
     publish,
   };
 });

@@ -10,7 +10,20 @@ import { Rspack } from '../../src/build/rspack';
 
 type FakeStats = {
   readonly hash: string;
-  readonly stats: ReadonlyArray<{ readonly startTime: number; readonly endTime: number }>;
+  readonly stats: ReadonlyArray<{
+    readonly compilation: { readonly name: string };
+    readonly startTime: number;
+    readonly endTime: number;
+    readonly toJson: () => {
+      readonly chunks: ReadonlyArray<{
+        readonly entry: boolean;
+        readonly files: ReadonlyArray<string>;
+        readonly id: string;
+      }>;
+      readonly entrypoints: Record<string, { readonly chunks: ReadonlyArray<string> }>;
+      readonly outputPath: string;
+    };
+  }>;
   readonly hasErrors: () => boolean;
   readonly hasWarnings: () => boolean;
   readonly toString: () => string;
@@ -30,7 +43,18 @@ const makeStats = ({
   readonly warnings?: boolean;
 }): FakeStats => ({
   hash,
-  stats: [{ startTime: 10, endTime: 20 }],
+  stats: [
+    {
+      compilation: { name: 'server' },
+      startTime: 10,
+      endTime: 20,
+      toJson: () => ({
+        chunks: [{ entry: true, files: [`main.${hash}.js`], id: 'main' }],
+        entrypoints: { main: { chunks: ['main'] } },
+        outputPath: '/workspace/.ersc/dev/server',
+      }),
+    },
+  ],
   hasErrors: () => errors,
   hasWarnings: () => warnings,
   toString: () => diagnostics,
@@ -73,7 +97,15 @@ it.effect('streams aggregate compilation outcomes and closes the complete watch 
     expect(Array.from(events)).toMatchObject([
       { _tag: 'Failed', error: { reason: 'BuildFailed' } },
       { _tag: 'Failed', error: { reason: 'CompileFailed' } },
-      { _tag: 'Compiled', hash: 'ready', warnings: 'application.tsx: warning' },
+      {
+        _tag: 'Compiled',
+        hash: 'ready',
+        serverBundle: {
+          filename: 'main.ready.js',
+          outputPath: '/workspace/.ersc/dev/server',
+        },
+        warnings: 'application.tsx: warning',
+      },
     ]);
     expect(closeOrder).toEqual(['watching', 'compiler']);
   });

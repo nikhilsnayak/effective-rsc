@@ -1,6 +1,8 @@
 import rspack, { type Configuration, type MultiCompiler, type MultiStats } from '@rspack/core';
 import { Context, Effect, Layer, Queue, Schema, Stream } from 'effect';
 
+import { ServerEntryName } from './contract';
+
 export class RspackError extends Schema.TaggedError<RspackError>()('RspackError', {
   message: Schema.String,
   cause: Schema.Defect(),
@@ -15,6 +17,10 @@ export type RspackWatchEvent =
   | {
       readonly _tag: 'Compiled';
       readonly hash: string;
+      readonly serverBundle: {
+        readonly filename: string;
+        readonly outputPath: string;
+      };
       readonly warnings?: string;
     }
   | {
@@ -126,6 +132,36 @@ const failedStatsError = (diagnostics: string) =>
     reason: 'BuildFailed',
   });
 
+const emittedServerBundle = (stats: RspackStats) => {
+  const serverStats = stats.stats.find(({ compilation }) => compilation.name === 'server');
+  const output = serverStats?.toJson({
+    all: false,
+    chunks: true,
+    entrypoints: true,
+    ids: true,
+    outputPath: true,
+  });
+  const entryChunkIds = output?.entrypoints?.[ServerEntryName]?.chunks ?? [];
+  const filenames =
+    output?.chunks?.flatMap((chunk) =>
+      chunk.entry && chunk.id !== undefined && entryChunkIds.includes(chunk.id)
+        ? (chunk.files ?? []).filter((filename) => filename.endsWith('.js'))
+        : [],
+    ) ?? [];
+  const filename = filenames[0];
+
+  return output?.outputPath && filename !== undefined && filenames.length === 1
+    ? { filename, outputPath: output.outputPath }
+    : undefined;
+};
+
+const missingServerBundleError = () =>
+  new RspackError({
+    message: failureMessage('Rspack did not emit exactly one server entry bundle.'),
+    cause: new Error('Missing or ambiguous server entry bundle in Rspack compilation statistics.'),
+    reason: 'BuildFailed',
+  });
+
 const watchEvent = (cause: Error | null, stats?: RspackStats): RspackWatchEvent => {
   if (cause) {
     return { _tag: 'Failed', error: compilationError(cause) };
@@ -136,10 +172,15 @@ const watchEvent = (cause: Error | null, stats?: RspackStats): RspackWatchEvent 
   if (stats.hasErrors()) {
     return { _tag: 'Failed', error: failedStatsError(statsDiagnostics(stats)) };
   }
+  const serverBundle = emittedServerBundle(stats);
+  if (!serverBundle) {
+    return { _tag: 'Failed', error: missingServerBundleError() };
+  }
 
   return {
     _tag: 'Compiled',
     hash: stats.hash,
+    serverBundle,
     ...(stats.hasWarnings() ? { warnings: statsDiagnostics(stats) } : {}),
   };
 };

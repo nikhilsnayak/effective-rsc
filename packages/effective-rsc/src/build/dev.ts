@@ -1,9 +1,9 @@
-import { Effect, Path, Schema, ScopedRef } from 'effect';
-import { HttpRouter, HttpServerResponse } from 'effect/unstable/http';
+import { Deferred, Effect, Path, Ref, Schema, ScopedRef } from 'effect';
+import { HttpRouter } from 'effect/unstable/http';
 
 import { loadServerBundle, makeRunnableHttpLayer } from './compiled-server';
 import { DevClientOutputDir } from './contract';
-import type { RspackWatchEvent } from './rspack';
+import type { RspackError, RspackWatchEvent } from './rspack';
 
 type RspackCompilation = Extract<RspackWatchEvent, { readonly _tag: 'Compiled' }>;
 
@@ -58,39 +58,59 @@ export const acquireDevGeneration = Effect.fnUntraced(function* ({
 });
 
 type DevGeneration = Effect.Success<ReturnType<typeof acquireDevGeneration>>;
+type DevGenerationFailure = Effect.Error<ReturnType<typeof acquireDevGeneration>> | RspackError;
 
 type DevGenerationState =
   | { readonly _tag: 'Unavailable' }
   | { readonly _tag: 'Ready'; readonly generation: DevGeneration };
 
-const UnavailableResponse = HttpServerResponse.text('The application is compiling.', {
-  headers: { 'retry-after': '1' },
-  status: 503,
-});
-
 export const makeDevGenerationStore = Effect.fnUntraced(function* (options: DevGenerationOptions) {
-  const state = yield* ScopedRef.make<DevGenerationState>(() => ({ _tag: 'Unavailable' }));
-  const publish = Effect.fnUntraced(function* (compilation: RspackCompilation) {
-    yield* ScopedRef.set(
-      state,
-      acquireDevGeneration({ ...options, compilation }).pipe(
-        Effect.map((generation): DevGenerationState => ({
-          _tag: 'Ready',
+  const generation = yield* ScopedRef.make<DevGenerationState>(() => ({ _tag: 'Unavailable' }));
+  const initialCompilation = yield* Deferred.make<DevGeneration, DevGenerationFailure>();
+  const compilation = yield* Ref.make(initialCompilation);
+  const update = Effect.fnUntraced(function* (event: RspackWatchEvent) {
+    const current = yield* Ref.get(compilation);
+
+    switch (event._tag) {
+      case 'Building': {
+        if (yield* Deferred.isDone(current)) {
+          const next = yield* Deferred.make<DevGeneration, DevGenerationFailure>();
+          yield* Ref.set(compilation, next);
+        }
+        return;
+      }
+      case 'Failed': {
+        yield* Deferred.fail(current, event.error);
+        return;
+      }
+      case 'Compiled': {
+        yield* ScopedRef.set(
           generation,
-        })),
-      ),
-    );
+          acquireDevGeneration({ ...options, compilation: event }).pipe(
+            Effect.map((ready): DevGenerationState => ({
+              _tag: 'Ready',
+              generation: ready,
+            })),
+            Effect.tapError((error) => Deferred.fail(current, error)),
+          ),
+        );
+        const ready = yield* ScopedRef.get(generation);
+        if (ready._tag === 'Unavailable') {
+          return yield* Effect.die(
+            new TypeError('Expected the completed development generation to be available.'),
+          );
+        }
+        yield* Deferred.succeed(current, ready.generation);
+      }
+    }
   });
-  const httpEffect = ScopedRef.get(state).pipe(
-    Effect.flatMap((current) =>
-      current._tag === 'Unavailable'
-        ? Effect.succeed(UnavailableResponse)
-        : current.generation.httpEffect,
-    ),
+  const httpEffect = Ref.get(compilation).pipe(
+    Effect.flatMap(Deferred.await),
+    Effect.flatMap((ready) => ready.httpEffect),
   );
 
   return {
     httpEffect,
-    publish,
+    update,
   };
 });

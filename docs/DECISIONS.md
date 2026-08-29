@@ -63,9 +63,9 @@ implemented, accepted but not implemented, and intentionally outside the current
 
 ## Planned
 
-| ID    | Decision                                                                                                                                                                                                                                        |
-| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| D-041 | Run development through one Bun + Effect HTTP server and Rspack watch; publish only coherent, successfully acquired application generations, retain the last working generation on failure, and reload browsers after a successful replacement. |
+| ID    | Decision                                                                                                                                                                                                                                                                                                        |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D-041 | Run development through one Bun + Effect HTTP server and Rspack watch; reset request-visible state when aggregate compilation begins, wait for and acquire the current application generation before serving requests, surface failed current compilations, and reload browsers after a successful replacement. |
 
 ## Deferred
 

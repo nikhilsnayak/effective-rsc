@@ -1,9 +1,10 @@
 import * as BunServices from '@effect/platform-bun/BunServices';
 import { expect, it } from '@effect/vitest';
-import { Effect, FileSystem, Path } from 'effect';
+import { Effect, Fiber, FileSystem, Path } from 'effect';
 import { HttpServerRequest } from 'effect/unstable/http';
 
 import { acquireDevGeneration, makeDevGenerationStore } from '../../src/build/dev';
+import { RspackError } from '../../src/build/rspack';
 
 const EffectModuleUrl = import.meta.resolve('effect');
 const HttpModuleUrl = import.meta.resolve('effect/unstable/http');
@@ -77,22 +78,17 @@ it.effect('acquires a complete development generation before returning it', () =
   }).pipe(Effect.provide(BunServices.layer), Effect.scoped),
 );
 
-it.effect('keeps the last ready generation when a replacement fails', () =>
+it.effect('waits for the current compilation outcome before dispatching', () =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: 'ersc-dev-store-' });
     const firstFilename = 'main.first.js';
-    const failedFilename = 'main.failed.js';
     const secondFilename = 'main.second.js';
 
     yield* fileSystem.writeFileString(
       path.join(directory, firstFilename),
       serverBundleSource("HttpRouter.add('GET', '/first', HttpServerResponse.empty())"),
-    );
-    yield* fileSystem.writeFileString(
-      path.join(directory, failedFilename),
-      serverBundleSource("Layer.effectDiscard(Effect.fail('startup failed'))"),
     );
     yield* fileSystem.writeFileString(
       path.join(directory, secondFilename),
@@ -112,35 +108,48 @@ it.effect('keeps the last ready generation when a replacement fails', () =>
         ),
       );
 
-    const unavailable = yield* request('/first');
-    expect(unavailable.status).toBe(503);
-    expect(unavailable.headers['retry-after']).toBe('1');
+    yield* store.update({ _tag: 'Building' });
+    const initialRequest = yield* request('/first').pipe(
+      Effect.forkChild({ startImmediately: true }),
+    );
+    yield* Effect.yieldNow;
+    expect(initialRequest.pollUnsafe()).toBeUndefined();
 
-    yield* store.publish({
+    yield* store.update({
       _tag: 'Compiled',
       hash: 'first',
       serverBundle: { filename: firstFilename, outputPath: directory },
     });
-    expect((yield* request('/first')).status).toBe(204);
+    expect((yield* Fiber.join(initialRequest)).status).toBe(204);
 
-    const startupError = yield* store
-      .publish({
-        _tag: 'Compiled',
-        hash: 'failed',
-        serverBundle: { filename: failedFilename, outputPath: directory },
-      })
-      .pipe(Effect.flip);
-    expect(startupError).toMatchObject({
-      _tag: 'DevGenerationError',
-      cause: 'startup failed',
+    yield* store.update({ _tag: 'Building' });
+    const rebuildingRequest = yield* request('/first').pipe(
+      Effect.forkChild({ startImmediately: true }),
+    );
+    yield* Effect.yieldNow;
+    expect(rebuildingRequest.pollUnsafe()).toBeUndefined();
+
+    const compilationError = new RspackError({
+      message: 'Compilation failed.',
+      cause: new Error('application.tsx: syntax error'),
+      reason: 'BuildFailed',
     });
-    expect((yield* request('/first')).status).toBe(204);
+    yield* store.update({ _tag: 'Failed', error: compilationError });
+    expect(yield* Fiber.join(rebuildingRequest).pipe(Effect.flip)).toBe(compilationError);
+    expect(yield* request('/first').pipe(Effect.flip)).toBe(compilationError);
 
-    yield* store.publish({
+    yield* store.update({ _tag: 'Building' });
+    const recoveredRequest = yield* request('/second').pipe(
+      Effect.forkChild({ startImmediately: true }),
+    );
+    yield* Effect.yieldNow;
+    expect(recoveredRequest.pollUnsafe()).toBeUndefined();
+
+    yield* store.update({
       _tag: 'Compiled',
       hash: 'second',
       serverBundle: { filename: secondFilename, outputPath: directory },
     });
-    expect((yield* request('/second')).status).toBe(204);
+    expect((yield* Fiber.join(recoveredRequest)).status).toBe(204);
   }).pipe(Effect.provide(BunServices.layer), Effect.scoped),
 );

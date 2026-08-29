@@ -118,9 +118,7 @@ export const createApplication = Effect.fn('create-ersc-app/createApplication')(
     yield* Console.log('  bun install');
   }
 
-  yield* Console.log('  bun run check');
-  yield* Console.log('  bun run build');
-  yield* Console.log('  bun run start');
+  yield* Console.log('  bun run dev');
 
   return { directory, packageName } as const;
 });

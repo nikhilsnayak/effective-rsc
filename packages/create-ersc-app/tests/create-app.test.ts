@@ -14,6 +14,7 @@ const ConfiguredPackageJson = Schema.fromJsonString(
   Schema.Struct({
     dependencies: Schema.Record(Schema.String, Schema.String),
     name: Schema.String,
+    scripts: Schema.Record(Schema.String, Schema.String),
   }),
 );
 
@@ -75,6 +76,7 @@ describe('createApplication', () => {
       expect(result).toEqual({ directory: target, packageName: 'reading-room' });
       expect(configuredPackageJson.name).toBe('reading-room');
       expect(configuredPackageJson.dependencies['effective-rsc']).toBe('1.2.3');
+      expect(configuredPackageJson.scripts['dev']).toBe('ersc dev');
       expect(yield* fileSystem.exists(path.join(target, '.gitignore'))).toBe(true);
       expect(yield* fileSystem.exists(path.join(target, 'gitignore'))).toBe(false);
       expect(yield* fileSystem.readFileString(path.join(target, 'public', 'robots.txt'))).toBe(

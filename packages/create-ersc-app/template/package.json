@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "ersc dev",
     "check": "tsc --noEmit",
     "build": "ersc build",
     "start": "ersc start"

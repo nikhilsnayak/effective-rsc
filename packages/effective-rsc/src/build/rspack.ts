@@ -1,7 +1,14 @@
-import rspack, { type Configuration, type MultiCompiler, type MultiStats } from '@rspack/core';
+import rspack, {
+  type Compiler,
+  type Configuration,
+  type MultiCompiler,
+  type MultiStats,
+  type Stats,
+} from '@rspack/core';
 import { Context, Effect, Layer, Queue, Schema, Stream } from 'effect';
 
 import { ServerEntryName } from './contract';
+import { formatDuration, Terminal } from './terminal';
 
 export class RspackError extends Schema.TaggedError<RspackError>()('RspackError', {
   message: Schema.String,
@@ -14,9 +21,17 @@ type RspackStats = MultiStats;
 type RspackWatching = ReturnType<RspackCompiler['watch']>;
 
 export type RspackWatchEvent =
-  | { readonly _tag: 'Building' }
+  | {
+      readonly _tag: 'Building';
+      readonly changedFiles: ReadonlyArray<string>;
+    }
   | {
       readonly _tag: 'Compiled';
+      readonly compilers: ReadonlyArray<{
+        readonly duration?: number;
+        readonly name: string;
+      }>;
+      readonly duration?: number;
       readonly hash: string;
       readonly serverBundle: {
         readonly filename: string;
@@ -29,18 +44,7 @@ export type RspackWatchEvent =
       readonly error: RspackError;
     };
 
-const Ansi = {
-  cyan: '\u001B[36m',
-  green: '\u001B[32m',
-  red: '\u001B[31m',
-  reset: '\u001B[0m',
-  yellow: '\u001B[33m',
-} as const;
-
-const failureMessage = (message: string) => `${Ansi.red}✗${Ansi.reset} ${message}`;
-
-const formatDuration = (milliseconds: number) =>
-  milliseconds < 1_000 ? `${milliseconds} ms` : `${(milliseconds / 1_000).toFixed(2)} s`;
+const failureMessage = (message: string) => `${Terminal.red('✗')} ${message}`;
 
 const buildDuration = (stats: RspackStats) => {
   const compilations = stats.stats;
@@ -54,6 +58,15 @@ const buildDuration = (stats: RspackStats) => {
   }
 
   return Math.max(...ends) - Math.min(...starts);
+};
+
+const compilerSummary = (stats: Stats) => {
+  const { endTime, startTime } = stats;
+
+  return {
+    ...(startTime !== undefined && endTime !== undefined ? { duration: endTime - startTime } : {}),
+    name: stats.compilation.name ?? 'compiler',
+  };
 };
 
 const closeCompiler = Effect.fnUntraced(function* (compiler: RspackCompiler) {
@@ -177,9 +190,12 @@ const watchEvent = (cause: Error | null, stats?: RspackStats): RspackWatchEvent 
   if (!serverBundle) {
     return { _tag: 'Failed', error: missingServerBundleError() };
   }
+  const duration = buildDuration(stats);
 
   return {
     _tag: 'Compiled',
+    compilers: stats.stats.map(compilerSummary),
+    ...(duration === undefined ? {} : { duration }),
     hash: stats.hash,
     serverBundle,
     ...(stats.hasWarnings() ? { warnings: statsDiagnostics(stats) } : {}),
@@ -209,7 +225,7 @@ const reportStats = Effect.fnUntraced(function* (stats: RspackStats) {
   }
   if (stats.hasWarnings()) {
     yield* Effect.logWarning(
-      `${Ansi.yellow}▲${Ansi.reset} Rspack compiled the application with warnings.\n${statsDiagnostics(stats)}`,
+      `${Terminal.yellow('▲')} Rspack compiled the application with warnings.\n${statsDiagnostics(stats)}`,
     );
   }
 
@@ -217,8 +233,8 @@ const reportStats = Effect.fnUntraced(function* (stats: RspackStats) {
 
   yield* Effect.logInfo(
     duration === undefined
-      ? `${Ansi.green}✓${Ansi.reset} Build finished successfully.`
-      : `${Ansi.green}✓${Ansi.reset} Build finished successfully in ${formatDuration(duration)}.`,
+      ? `${Terminal.green('✓')} Build finished successfully.`
+      : `${Terminal.green('✓')} Build finished successfully in ${formatDuration(duration)}.`,
   );
 });
 
@@ -230,12 +246,18 @@ const watchCompiler = (configs: ReadonlyArray<Configuration>) =>
       const watchOptions = configs.map(() => ({}));
       let watchState: 'Idle' | 'Building' = 'Idle';
 
-      compiler.hooks.watchRun.tap({ name: 'ersc:watch-state', stage: -10_000 }, () => {
-        if (watchState === 'Idle') {
-          watchState = 'Building';
-          Queue.offerUnsafe(queue, { _tag: 'Building' });
-        }
-      });
+      compiler.hooks.watchRun.tap(
+        { name: 'ersc:watch-state', stage: -10_000 },
+        (childCompiler: Compiler) => {
+          if (watchState === 'Idle') {
+            watchState = 'Building';
+            Queue.offerUnsafe(queue, {
+              _tag: 'Building',
+              changedFiles: Array.from(childCompiler.modifiedFiles ?? []),
+            });
+          }
+        },
+      );
 
       yield* Effect.acquireRelease(
         Effect.try({
@@ -254,7 +276,7 @@ const watchCompiler = (configs: ReadonlyArray<Configuration>) =>
 export class Rspack extends Context.Service<Rspack>()('ersc/build/Rspack', {
   make: Effect.succeed({
     build: Effect.fn('Rspack.build')(function* (configs: ReadonlyArray<Configuration>) {
-      yield* Effect.logInfo(`${Ansi.cyan}●${Ansi.reset} Building application with Rspack...`);
+      yield* Effect.logInfo(`${Terminal.cyan('●')} Building application with Rspack...`);
 
       const compiler = yield* acquireCompiler(configs);
       const stats = yield* runCompiler(compiler);

@@ -10,9 +10,17 @@ import {
   makeDevGenerationStore,
 } from '../../src/build/dev';
 import { Rspack, RspackError } from '../../src/build/rspack';
+import { Terminal } from '../../src/build/terminal';
 
 const EffectModuleUrl = import.meta.resolve('effect');
 const HttpModuleUrl = import.meta.resolve('effect/unstable/http');
+const CompilationTimings = {
+  compilers: [
+    { duration: 10, name: 'client' },
+    { duration: 20, name: 'server' },
+  ],
+  duration: 20,
+} as const;
 
 const serverBundleSource = (httpLayer: string) => `
   import { Effect, Layer } from ${JSON.stringify(EffectModuleUrl)};
@@ -48,6 +56,7 @@ it.effect('acquires a complete development generation before returning it', () =
     const generation = yield* acquireDevGeneration({
       compilation: {
         _tag: 'Compiled',
+        ...CompilationTimings,
         hash: 'ready',
         serverBundle: { filename: readyFilename, outputPath: directory },
       },
@@ -68,6 +77,7 @@ it.effect('acquires a complete development generation before returning it', () =
     const startupError = yield* acquireDevGeneration({
       compilation: {
         _tag: 'Compiled',
+        ...CompilationTimings,
         hash: 'failed',
         serverBundle: { filename: failedFilename, outputPath: directory },
       },
@@ -113,7 +123,7 @@ it.effect('waits for the current compilation outcome before dispatching', () =>
         ),
       );
 
-    yield* store.update({ _tag: 'Building' });
+    yield* store.update({ _tag: 'Building', changedFiles: [] });
     const initialRequest = yield* request('/first').pipe(
       Effect.forkChild({ startImmediately: true }),
     );
@@ -122,12 +132,13 @@ it.effect('waits for the current compilation outcome before dispatching', () =>
 
     yield* store.update({
       _tag: 'Compiled',
+      ...CompilationTimings,
       hash: 'first',
       serverBundle: { filename: firstFilename, outputPath: directory },
     });
     expect((yield* Fiber.join(initialRequest)).status).toBe(204);
 
-    yield* store.update({ _tag: 'Building' });
+    yield* store.update({ _tag: 'Building', changedFiles: [] });
     const rebuildingRequest = yield* request('/first').pipe(
       Effect.forkChild({ startImmediately: true }),
     );
@@ -143,7 +154,7 @@ it.effect('waits for the current compilation outcome before dispatching', () =>
     expect(yield* Fiber.join(rebuildingRequest).pipe(Effect.flip)).toBe(compilationError);
     expect(yield* request('/first').pipe(Effect.flip)).toBe(compilationError);
 
-    yield* store.update({ _tag: 'Building' });
+    yield* store.update({ _tag: 'Building', changedFiles: [] });
     const recoveredRequest = yield* request('/second').pipe(
       Effect.forkChild({ startImmediately: true }),
     );
@@ -152,6 +163,7 @@ it.effect('waits for the current compilation outcome before dispatching', () =>
 
     yield* store.update({
       _tag: 'Compiled',
+      ...CompilationTimings,
       hash: 'second',
       serverBundle: { filename: secondFilename, outputPath: directory },
     });
@@ -182,15 +194,17 @@ it.effect('continues watching after a generation fails to start', () =>
         build: () => Effect.void,
         watch: () =>
           Stream.make(
-            { _tag: 'Building' },
+            { _tag: 'Building', changedFiles: [] },
             {
               _tag: 'Compiled',
+              ...CompilationTimings,
               hash: 'failed',
               serverBundle: { filename: failedFilename, outputPath: directory },
             },
-            { _tag: 'Building' },
+            { _tag: 'Building', changedFiles: [] },
             {
               _tag: 'Compiled',
+              ...CompilationTimings,
               hash: 'ready',
               serverBundle: { filename: readyFilename, outputPath: directory },
             },
@@ -219,15 +233,17 @@ it.effect('continues watching after a generation fails to start', () =>
 
     expect(response.status).toBe(204);
     expect(messages).toHaveLength(4);
-    expect(messages[0]).toEqual(['Compiling application with Rspack...']);
+    expect(messages[0]).toEqual([`${Terminal.cyan('●')} Compiling application...`]);
     expect(messages[1]).toMatchObject([
       {
         _tag: 'DevGenerationError',
         cause: 'startup failed',
       },
     ]);
-    expect(messages[2]).toEqual(['Compiling application with Rspack...']);
-    expect(messages[3]).toEqual(['Application ready.']);
+    expect(messages[2]).toEqual([`${Terminal.cyan('●')} Compiling application...`]);
+    expect(messages[3]).toEqual([
+      `${Terminal.green('✓')} Ready in 20 ms  ${Terminal.dim('client 10 ms · server 20 ms')}`,
+    ]);
   }).pipe(Effect.provide(BunServices.layer), Effect.scoped),
 );
 
@@ -274,18 +290,20 @@ it.effect('keeps one HTTP server across successful generations', () =>
             Deferred.await(serverStarted).pipe(
               Effect.as(
                 Stream.make(
-                  { _tag: 'Building' },
+                  { _tag: 'Building', changedFiles: [] },
                   {
                     _tag: 'Compiled',
+                    ...CompilationTimings,
                     hash: 'first',
                     serverBundle: {
                       filename: firstFilename,
                       outputPath: directory,
                     },
                   },
-                  { _tag: 'Building' },
+                  { _tag: 'Building', changedFiles: [] },
                   {
                     _tag: 'Compiled',
+                    ...CompilationTimings,
                     hash: 'second',
                     serverBundle: {
                       filename: secondFilename,

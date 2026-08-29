@@ -30,6 +30,10 @@ type FakeStats = {
 };
 
 type WatchCallback = (cause: Error | null, stats?: FakeStats) => void;
+type WatchCompiler = {
+  readonly modifiedFiles?: ReadonlySet<string>;
+  readonly name: string;
+};
 
 const makeStats = ({
   diagnostics,
@@ -44,6 +48,16 @@ const makeStats = ({
 }): FakeStats => ({
   hash,
   stats: [
+    {
+      compilation: { name: 'client' },
+      startTime: 10,
+      endTime: 18,
+      toJson: () => ({
+        chunks: [],
+        entrypoints: {},
+        outputPath: '/workspace/.ersc/dev/client',
+      }),
+    },
     {
       compilation: { name: 'server' },
       startTime: 10,
@@ -62,8 +76,9 @@ const makeStats = ({
 
 it.effect('streams aggregate compilation outcomes and closes the complete watch lifecycle', () => {
   const closeOrder: Array<string> = [];
-  const watchRunHandlers: Array<() => void> = [];
-  const beginCompilation = () => watchRunHandlers.forEach((handler) => handler());
+  const watchRunHandlers: Array<(compiler: WatchCompiler) => void> = [];
+  const beginCompilation = (name: string) =>
+    watchRunHandlers.forEach((handler) => handler({ modifiedFiles: new Set(), name }));
 
   Mocks.rspack.mockReturnValue({
     close: (callback: (cause?: Error) => void) => {
@@ -72,21 +87,22 @@ it.effect('streams aggregate compilation outcomes and closes the complete watch 
     },
     hooks: {
       watchRun: {
-        tap: (_options: unknown, handler: () => void) => {
+        tap: (_options: unknown, handler: (compiler: WatchCompiler) => void) => {
           watchRunHandlers.push(handler);
         },
       },
     },
     watch: (_options: unknown, callback: WatchCallback) => {
-      beginCompilation();
-      beginCompilation();
+      beginCompilation('client');
+      beginCompilation('server');
       callback(
         null,
         makeStats({ diagnostics: 'application.tsx: compile error', errors: true, hash: 'failed' }),
       );
-      beginCompilation();
+      beginCompilation('client');
       callback(new Error('watch callback failed'));
-      beginCompilation();
+      beginCompilation('client');
+      beginCompilation('server');
       callback(
         null,
         makeStats({ diagnostics: 'application.tsx: warning', hash: 'ready', warnings: true }),
@@ -108,13 +124,18 @@ it.effect('streams aggregate compilation outcomes and closes the complete watch 
     }).pipe(Effect.provide(Rspack.layer), Effect.scoped);
 
     expect(Array.from(events)).toMatchObject([
-      { _tag: 'Building' },
+      { _tag: 'Building', changedFiles: [] },
       { _tag: 'Failed', error: { reason: 'BuildFailed' } },
-      { _tag: 'Building' },
+      { _tag: 'Building', changedFiles: [] },
       { _tag: 'Failed', error: { reason: 'CompileFailed' } },
-      { _tag: 'Building' },
+      { _tag: 'Building', changedFiles: [] },
       {
         _tag: 'Compiled',
+        compilers: [
+          { duration: 8, name: 'client' },
+          { duration: 10, name: 'server' },
+        ],
+        duration: 10,
         hash: 'ready',
         serverBundle: {
           filename: 'main.ready.js',

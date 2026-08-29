@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "ersc dev",
     "build": "ersc build",
     "start": "ersc start",
     "test": "bun run --bun vitest run",

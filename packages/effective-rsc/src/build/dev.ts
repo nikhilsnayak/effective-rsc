@@ -6,6 +6,7 @@ import { loadServerBundle, makeRunnableHttpLayer } from './compiled-server';
 import { DevClientOutputDir } from './contract';
 import { Rspack, type RspackError, type RspackWatchEvent } from './rspack';
 import { makeRspackDevConfig } from './rspack-config';
+import { formatDuration, Terminal } from './terminal';
 
 type RspackCompilation = Extract<RspackWatchEvent, { readonly _tag: 'Compiled' }>;
 
@@ -125,6 +126,7 @@ export const makeDevApplication = Effect.fnUntraced(function* ({
   root,
 }: DevApplicationOptions) {
   const { applicationRoot, entries } = yield* resolveApplicationBuild({ root });
+  const path = yield* Path.Path;
   const rspack = yield* Rspack;
   const generationStore = yield* makeDevGenerationStore({
     hostname,
@@ -135,7 +137,16 @@ export const makeDevApplication = Effect.fnUntraced(function* ({
     switch (event._tag) {
       case 'Building': {
         yield* generationStore.update(event);
-        yield* Effect.logInfo('Compiling application with Rspack...');
+        const firstChangedFile =
+          event.changedFiles.find((file) => path.basename(file).includes('.')) ??
+          event.changedFiles[0];
+        const changedPath =
+          firstChangedFile === undefined
+            ? undefined
+            : path.relative(applicationRoot, firstChangedFile);
+        const subject = changedPath ?? 'application';
+
+        yield* Effect.logInfo(`${Terminal.cyan('●')} Compiling ${subject}...`);
         return;
       }
       case 'Failed': {
@@ -148,7 +159,18 @@ export const makeDevApplication = Effect.fnUntraced(function* ({
           yield* Effect.logWarning(event.warnings);
         }
         yield* generationStore.update(event).pipe(
-          Effect.tap(() => Effect.logInfo('Application ready.')),
+          Effect.tap(() => {
+            const duration =
+              event.duration === undefined ? '' : ` in ${formatDuration(event.duration)}`;
+            const compilers = event.compilers
+              .map(({ duration, name }) =>
+                duration === undefined ? name : `${name} ${formatDuration(duration)}`,
+              )
+              .join(' · ');
+            const details = compilers.length === 0 ? '' : `  ${Terminal.dim(compilers)}`;
+
+            return Effect.logInfo(`${Terminal.green('✓')} Ready${duration}${details}`);
+          }),
           Effect.catch((error) => Effect.logError(error)),
         );
       }

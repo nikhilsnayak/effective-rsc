@@ -11,9 +11,7 @@ Create a new effective-rsc application with Bun.
 ```sh
 bunx create-ersc-app my-application
 cd my-application
-bun run check
-bun run build
-bun run start
+bun run dev
 ```
 
 Open `http://localhost:18193`.

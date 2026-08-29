@@ -10,12 +10,18 @@ An effective-rsc application.
 ## Develop
 
 ```sh
+bun run dev
+```
+
+Open `http://localhost:18193`.
+
+Verify and run the production build with:
+
+```sh
 bun run check
 bun run build
 bun run start
 ```
-
-Open `http://localhost:18193`.
 
 For deployment, `ersc start` accepts `--hostname` and `--port`. Command-line flags take precedence
 over `HOST` and `PORT`.

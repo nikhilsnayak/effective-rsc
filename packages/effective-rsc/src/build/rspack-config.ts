@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 
 import rspack, { type Configuration, type RuleSetRule } from '@rspack/core';
+import { ReactRefreshRspackPlugin } from '@rspack/plugin-react-refresh';
 
 import { FrameworkAssetPrefix } from '../application/route-path';
 import {
@@ -80,6 +81,7 @@ const makeSwcRule = (target: 'browser' | 'server', mode: CompilationMode): RuleS
           transform: {
             react: {
               development: mode === 'development',
+              refresh: target === 'browser' && mode === 'development',
               runtime: 'automatic',
             },
             ...(target === 'browser' ? { reactCompiler: true } : {}),
@@ -166,7 +168,12 @@ const makeRspackConfig = (
       path: `${root}/${clientOutputDir}`,
       publicPath: FrameworkAssetPrefix,
     },
-    plugins: [new ClientPlugin()],
+    plugins: [
+      new ClientPlugin(),
+      ...(development
+        ? [new rspack.HotModuleReplacementPlugin(), new ReactRefreshRspackPlugin()]
+        : []),
+    ],
     resolve: makeResolve(root),
     target: `browserslist:${SupportedBrowserTargets.join(', ')}`,
   };

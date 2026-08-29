@@ -1,6 +1,7 @@
 import { expect, it } from '@effect/vitest';
 import type { Configuration } from '@rspack/core';
 import rspack from '@rspack/core';
+import { ReactRefreshRspackPlugin } from '@rspack/plugin-react-refresh';
 import { Effect, Path } from 'effect';
 
 import { resolveApplicationBuild } from '../../src/build/build';
@@ -151,13 +152,18 @@ it.effect('keeps development candidates immutable until they are published', () 
   }).pipe(Effect.provide(Path.layer)),
 );
 
-const reactCompilerOption = (config: Configuration) => {
+const reactTransformOptions = (config: Configuration) => {
   const rules = config.module?.rules as
     | ReadonlyArray<{
         readonly use?: ReadonlyArray<{
           readonly loader?: string;
           readonly options?: {
-            readonly jsc?: { readonly transform?: { readonly reactCompiler?: unknown } };
+            readonly jsc?: {
+              readonly transform?: {
+                readonly react?: { readonly refresh?: boolean };
+                readonly reactCompiler?: unknown;
+              };
+            };
           };
         }>;
       }>
@@ -166,7 +172,7 @@ const reactCompilerOption = (config: Configuration) => {
   for (const rule of rules ?? []) {
     for (const use of rule.use ?? []) {
       if (use.loader === 'builtin:swc-loader') {
-        return use.options?.jsc?.transform?.reactCompiler;
+        return use.options?.jsc?.transform;
       }
     }
   }
@@ -179,8 +185,43 @@ it.effect('keeps the React Compiler out of the server compilation', () =>
     const { applicationRoot, entries } = yield* resolveFixtureBuild('/workspace');
     const configs = makeRspackBuildConfig(applicationRoot, entries);
 
-    expect(reactCompilerOption(configNamed(configs, 'client'))).toBe(true);
-    expect(reactCompilerOption(configNamed(configs, 'server'))).toBeUndefined();
+    expect(reactTransformOptions(configNamed(configs, 'client'))?.reactCompiler).toBe(true);
+    expect(reactTransformOptions(configNamed(configs, 'server'))?.reactCompiler).toBeUndefined();
+  }).pipe(Effect.provide(Path.layer)),
+);
+
+it.effect('enables HMR and React Refresh only in the development browser graph', () =>
+  Effect.gen(function* () {
+    const { applicationRoot, entries } = yield* resolveFixtureBuild('/workspace');
+    const buildConfigs = makeRspackBuildConfig(applicationRoot, entries);
+    const devConfigs = makeRspackDevConfig(applicationRoot, entries);
+    const buildClient = configNamed(buildConfigs, 'client');
+    const buildServer = configNamed(buildConfigs, 'server');
+    const devClient = configNamed(devConfigs, 'client');
+    const devServer = configNamed(devConfigs, 'server');
+
+    expect(reactTransformOptions(devClient)?.react?.refresh).toBe(true);
+    expect(reactTransformOptions(devServer)?.react?.refresh).toBe(false);
+    expect(reactTransformOptions(buildClient)?.react?.refresh).toBe(false);
+    expect(reactTransformOptions(buildServer)?.react?.refresh).toBe(false);
+    expect(devClient.plugins).toEqual(
+      expect.arrayContaining([
+        expect.any(rspack.HotModuleReplacementPlugin),
+        expect.any(ReactRefreshRspackPlugin),
+      ]),
+    );
+    expect(devServer.plugins).not.toEqual(
+      expect.arrayContaining([
+        expect.any(rspack.HotModuleReplacementPlugin),
+        expect.any(ReactRefreshRspackPlugin),
+      ]),
+    );
+    expect(buildClient.plugins).not.toEqual(
+      expect.arrayContaining([
+        expect.any(rspack.HotModuleReplacementPlugin),
+        expect.any(ReactRefreshRspackPlugin),
+      ]),
+    );
   }).pipe(Effect.provide(Path.layer)),
 );
 

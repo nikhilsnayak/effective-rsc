@@ -18,6 +18,9 @@
         "template/**"
       ]
     },
+    "test:types": {
+      "inputs": ["src/**", "tests/types/**", "tsconfig.json"]
+    },
     "test:e2e": {
       "dependsOn": ["build"],
       "inputs": ["e2e/**", "playwright.config.ts"]

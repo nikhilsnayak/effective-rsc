@@ -49,7 +49,7 @@ type ServerFnOptions<InputSchema extends Schema.Constraint, Output, Error, Servi
 export type ServerFnFactory<Services> = {
   readonly make: <InputSchema extends Schema.ConstraintDecoder<unknown, Services>, Output, Error>(
     options: ServerFnOptions<InputSchema, Output, Error, Services>,
-  ) => ServerFunction<InputSchema['Type'], Output, Services>;
+  ) => ServerFunction<InputSchema['Encoded'], Output, Services>;
 };
 
 const directInvocationError = () =>
@@ -86,7 +86,7 @@ export const makeServerFnFactory = <Services>(
 ): ServerFnFactory<Services> => ({
   make: ({ input, handler }) => {
     const decode = Schema.decodeUnknownEffect(input);
-    const serverFunction = (untrustedInput: typeof input.Type) => {
+    const serverFunction = (untrustedInput: typeof input.Encoded) => {
       const effect = decode(untrustedInput).pipe(
         Effect.flatMap(handler),
         Effect.mapError((cause) => new ServerFnOperationError({ cause })),

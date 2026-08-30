@@ -56,6 +56,23 @@ describe('ServerFn.make', () => {
     }).pipe(Effect.provideService(Greeting, { prefix: 'Hello' })),
   );
 
+  it.effect('decodes FormData before invoking a form action handler', () =>
+    Effect.gen(function* () {
+      const ERSC = Application.ersc();
+      const createGreeting = ERSC.ServerFn.make({
+        input: Schema.fromFormData(Schema.Struct({ name: Schema.NonEmptyString })),
+        handler: ({ name }) => Effect.succeed(`Hello, ${name}`),
+      });
+      const formData = new FormData();
+      formData.set('name', 'Nikhil');
+
+      const invocation: Promise<string> = createGreeting(formData);
+      const result = yield* invocationEffect(invocation, getERSCIdentity(ERSC));
+
+      expect(result).toBe('Hello, Nikhil');
+    }),
+  );
+
   it.effect('rejects untrusted input before invoking the handler', () =>
     Effect.gen(function* () {
       const invoked = yield* Ref.make(false);

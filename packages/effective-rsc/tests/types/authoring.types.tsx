@@ -121,21 +121,24 @@ ERSC.Routes.make().mount('/nested', widenedRoutes);
 
 // @ts-expect-error An empty parameter Schema cannot match a parameterized path.
 ERSC.Page.make({ params: Schema.Struct({}), render: () => Effect.succeed(null) });
-ERSC.Page.make({
-  // @ts-expect-error A record Schema has no finite parameter-name set.
+const recordParamsPageOptions = {
   params: Schema.Record(Schema.String, Schema.String),
   render: () => Effect.succeed(null),
-});
-ERSC.Page.make({
-  // @ts-expect-error Effect HTTP captures path parameters as strings.
+};
+// @ts-expect-error A record Schema has no finite parameter-name set.
+ERSC.Page.make(recordParamsPageOptions);
+const nonStringParamsPageOptions = {
   params: Schema.Struct({ count: Schema.Finite }),
   render: () => Effect.succeed(null),
-});
-ERSC.Page.make({
-  // @ts-expect-error Schema keys must be valid Effect HTTP parameter names.
+};
+// @ts-expect-error Effect HTTP captures path parameters as strings.
+ERSC.Page.make(nonStringParamsPageOptions);
+const invalidNameParamsPageOptions = {
   params: Schema.Struct({ 'invalid-name': Schema.String }),
   render: () => Effect.succeed(null),
-});
+};
+// @ts-expect-error Schema keys must be valid Effect HTTP parameter names.
+ERSC.Page.make(invalidNameParamsPageOptions);
 
 // @ts-expect-error Dynamic params must occupy a complete path segment.
 ERSC.Routes.make().page('/users/user:userId', HomePage);
@@ -179,6 +182,21 @@ void DayPage.component;
 // @ts-expect-error The parameter Schema is private to framework runtime modules.
 void DayPage.paramsSchema;
 
+const CreateReport = ERSC.ServerFn.make({
+  input: Schema.fromFormData(Schema.Struct({ title: Schema.NonEmptyString })),
+  handler: ({ title }) => {
+    const inferredTitle: string = title;
+    void inferredTitle;
+    return Effect.void;
+  },
+});
+const directFormInvocation: Promise<void> = CreateReport(new FormData());
+void directFormInvocation;
+const DirectServerFnForm = () => <form action={CreateReport} />;
+void DirectServerFnForm;
+// @ts-expect-error A Server Function accepts the Schema's encoded input, not its decoded output.
+void CreateReport({ title: 'Incident report' });
+
 const ServiceERSC = Application.ersc<PageService>();
 const ServiceRootLayout = ServiceERSC.Layout.make({
   render: ({ children }) => Effect.succeed(children),
@@ -211,14 +229,14 @@ const NarrowERSC = Application.ersc<PageService>();
 const ServiceSchema = Schema.String.pipe(
   Schema.catchDecodingWithContext(() => Effect.map(LayoutService, () => Option.some('fallback'))),
 );
-NarrowERSC.Page.make({
-  // @ts-expect-error LayoutService is not part of this application's declared contracts.
-  // oxlint-disable-next-line effecttsgo/missing-effect-context -- intentional invalid Effect fixture
+const layoutServicePageOptions = {
   render: Effect.fnUntraced(function* () {
     yield* LayoutService;
     return null;
   }),
-});
+};
+// @ts-expect-error LayoutService is not part of this application's declared contracts.
+NarrowERSC.Page.make(layoutServicePageOptions); // oxlint-disable-line effecttsgo/missing-effect-context -- intentional invalid Effect fixture
 NarrowERSC.Routes.middleware({
   handler: (httpEffect) =>
     // @ts-expect-error LayoutService is not part of this application's declared contracts.
@@ -258,11 +276,12 @@ NarrowERSC.ServerFn.make({
   input: ServiceSchema,
   handler: () => Effect.void,
 });
-NarrowERSC.Page.make({
-  // @ts-expect-error LayoutService required by param decoding is outside this ERSC universe.
+const serviceSchemaPageOptions = {
   params: Schema.Struct({ value: ServiceSchema }),
   render: () => Effect.succeed(null),
-});
+};
+// @ts-expect-error LayoutService required by param decoding is outside this ERSC universe.
+NarrowERSC.Page.make(serviceSchemaPageOptions);
 
 const WideERSC = Application.ersc<PageService | LayoutService>();
 const NarrowPage = NarrowERSC.Page.make({ render: () => Effect.succeed(null) });

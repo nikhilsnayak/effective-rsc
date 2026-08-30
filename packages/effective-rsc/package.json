@@ -45,6 +45,7 @@
     "docs:check": "bun ../../scripts/generate-docs.ts --check",
     "prepack": "bun run build && bun run docs:check",
     "test": "vitest run",
+    "test:types": "tsc --noEmit -p tests/types/tsconfig.json",
     "test:watch": "vitest"
   },
   "dependencies": {

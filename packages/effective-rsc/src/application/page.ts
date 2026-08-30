@@ -124,6 +124,7 @@ export const getPageState = <Services>(
 };
 
 type StaticPageOptions<Error, Services> = {
+  readonly params?: never;
   readonly render: () => Effect.Effect<Awaited<ReactNode>, Error, Services>;
 };
 type ParameterizedPageOptions<ParamsSchema extends PageParamsSchema<Services>, Error, Services> = {
@@ -153,7 +154,7 @@ export const makePageFactory = <Services>(
   function make<Error>(options: StaticPageOptions<Error, Services>): StaticPageDefinition<Services>;
   function make<Error>(
     options:
-      | StaticPageOptions<Error, Services>
+      | Omit<StaticPageOptions<Error, Services>, 'params'>
       | ParameterizedPageOptions<PageParamsSchema<Services>, Error, Services>,
   ): AnyPageDefinition<Services> {
     if ('params' in options) {

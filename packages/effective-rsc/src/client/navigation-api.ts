@@ -2,35 +2,20 @@ import { Effect } from 'effect';
 import { startTransition } from 'react';
 
 import { BrowserNavigation } from './browser-navigation';
-import type { BrowserRootController } from './browser-renderer';
+import { BrowserRenderer } from './browser-renderer';
 import { ClientRuntime } from './client-runtime';
 import {
   BrowserNavigationCoordinator,
-  isHistoryRollback,
   type NavigationAttempt,
   type NavigationRollbackReason,
 } from './navigation-coordinator';
-import type { NavigationResources } from './navigation-resource';
-
-const ReactTransitionNavigationInfo = 'react-transition';
-const NativeDocumentNavigationInfo = 'ersc-native-document';
-
-const shouldIntercept = (event: NavigateEvent) =>
-  event.canIntercept &&
-  !event.hashChange &&
-  event.downloadRequest === null &&
-  event.formData === null &&
-  event.info !== ReactTransitionNavigationInfo &&
-  event.info !== NativeDocumentNavigationInfo &&
-  event.navigationType !== 'reload';
-
-const preserveRequestedHash = (requested: URL, resolved: URL) =>
-  resolved.hash === '' &&
-  resolved.origin === requested.origin &&
-  resolved.pathname === requested.pathname &&
-  resolved.search === requested.search
-    ? new URL(`${resolved.href}${requested.hash}`)
-    : resolved;
+import { NavigationResources } from './navigation-resource';
+import {
+  isHistoryRollback,
+  isRoutedNavigation,
+  NativeDocumentNavigationInfo,
+  preserveRequestedHash,
+} from './navigation-routing';
 
 // oxlint-disable-next-line effecttsgo/async-function -- Navigation handlers are native Promise boundaries.
 const ignoreNavigationAbort = async (work: Promise<void>, signal: AbortSignal) => {
@@ -60,11 +45,10 @@ const startNavigationTransition = (work: () => Promise<void>) => {
   return finished.promise;
 };
 
-export const listenForNavigation = Effect.fnUntraced(function* (
-  browserRoot: BrowserRootController,
-  navigationResources: NavigationResources,
-) {
+export const listenForNavigation = Effect.gen(function* () {
   const browserNavigation = yield* BrowserNavigation;
+  const browserRenderer = yield* BrowserRenderer;
+  const navigationResources = yield* NavigationResources;
   const navigation = browserNavigation.navigation;
   const run = yield* ClientRuntime;
   const coordinator = new BrowserNavigationCoordinator(browserNavigation);
@@ -118,21 +102,21 @@ export const listenForNavigation = Effect.fnUntraced(function* (
       return;
     }
 
-    const renderResult = attempt.render(() => browserRoot.navigate(resource.routeTree));
+    const renderResult = attempt.render(() => browserRenderer.navigate(resource.routeTree));
     if (renderResult._tag === 'Discarded') {
       await run(resource.release);
       return;
     }
 
-    const rootNavigation = renderResult.value;
+    const rendererNavigation = renderResult.value;
     const rollbackAndRelease = (reason: NavigationRollbackReason) =>
-      Effect.promise(() => attempt.rollback(reason, rootNavigation.rollback)).pipe(
+      Effect.promise(() => attempt.rollback(reason, rendererNavigation.rollback)).pipe(
         Effect.ensuring(resource.release),
       );
     const flightCompletion = resource.completed.pipe(
       Effect.tap(() =>
         Effect.sync(() => {
-          rootNavigation.complete();
+          rendererNavigation.complete();
           attempt.complete();
           resource.cacheCurrent();
         }),
@@ -151,7 +135,7 @@ export const listenForNavigation = Effect.fnUntraced(function* (
 
     try {
       await run(
-        Effect.promise(() => rootNavigation.committed),
+        Effect.promise(() => rendererNavigation.committed),
         { signal: event.signal },
       );
 
@@ -174,7 +158,7 @@ export const listenForNavigation = Effect.fnUntraced(function* (
       event.intercept({ handler: () => Promise.resolve() });
       return;
     }
-    if (!shouldIntercept(event)) {
+    if (!isRoutedNavigation(event)) {
       return;
     }
 

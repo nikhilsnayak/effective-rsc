@@ -11,11 +11,7 @@ import {
 import { hydrateRoot } from 'react-dom/client';
 
 import type { FlightPayload } from '../rsc/flight';
-import {
-  type BrowserRender,
-  type BrowserRootController,
-  makeBrowserRenderer,
-} from './browser-renderer';
+import { type BrowserRender, BrowserRenderer, makeBrowserRenderer } from './browser-renderer';
 import { BrowserFailureScreen } from './browser-screen';
 import { ClientRuntime } from './client-runtime';
 import { RouteTree } from './route-tree';
@@ -55,13 +51,13 @@ export const hydrateBrowserRoot = Effect.fnUntraced(function* (
   container: Element | Document,
   initialPayload: FlightPayload,
 ) {
-  const browserRootReady = Promise.withResolvers<BrowserRootController>();
+  const browserRendererReady = Promise.withResolvers<BrowserRenderer['Service']>();
   const run = yield* ClientRuntime;
   const reportError = (error: unknown, info: ErrorInfo) => {
     void run(Effect.logError('Uncaught client render error.', error, info.componentStack));
   };
 
-  function BrowserRoot() {
+  function Root() {
     const [render, setRender] = useState<BrowserRender>(() => ({
       _tag: 'Initial',
       routeTree: initialPayload.routeTree,
@@ -73,7 +69,7 @@ export const hydrateBrowserRoot = Effect.fnUntraced(function* (
     }
 
     useLayoutEffect(() => {
-      browserRootReady.resolve(rendererRef.current!.controller);
+      browserRendererReady.resolve(rendererRef.current!.browserRenderer);
     }, []);
 
     useLayoutEffect(() => {
@@ -93,7 +89,7 @@ export const hydrateBrowserRoot = Effect.fnUntraced(function* (
         hydrateRoot(
           container,
           <StrictMode>
-            <BrowserRoot />
+            <Root />
           </StrictMode>,
           { formState: initialPayload.formState },
         ),
@@ -101,7 +97,7 @@ export const hydrateBrowserRoot = Effect.fnUntraced(function* (
     }),
     (root) => Effect.sync(() => root.unmount()),
   );
-  const browserRoot = yield* Effect.promise(() => browserRootReady.promise);
+  const browserRenderer = yield* Effect.promise(() => browserRendererReady.promise);
 
-  return browserRoot;
+  return browserRenderer;
 });

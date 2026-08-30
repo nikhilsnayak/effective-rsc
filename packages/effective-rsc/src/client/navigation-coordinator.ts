@@ -1,8 +1,7 @@
 import { MutableRef } from 'effect';
 
 import type { BrowserNavigation } from './browser-navigation';
-
-const HistoryRollbackInfo = 'ersc-history-rollback';
+import { HistoryRollbackNavigationInfo } from './navigation-routing';
 
 type NavigationRollbackTarget =
   | { readonly _tag: 'Replace'; readonly state: unknown; readonly url: string }
@@ -187,7 +186,7 @@ export class BrowserNavigationCoordinator {
         return navigationFinished(
           this.browserNavigation.navigation.navigate(target.url, {
             history: 'replace',
-            info: HistoryRollbackInfo,
+            info: HistoryRollbackNavigationInfo,
             state: target.state,
           }),
         );
@@ -197,7 +196,7 @@ export class BrowserNavigationCoordinator {
         }
         return navigationFinished(
           this.browserNavigation.navigation.traverseTo(target.key, {
-            info: HistoryRollbackInfo,
+            info: HistoryRollbackNavigationInfo,
           }),
         );
     }
@@ -222,5 +221,3 @@ export class BrowserNavigationCoordinator {
     }
   }
 }
-
-export const isHistoryRollback = (event: NavigateEvent) => event.info === HistoryRollbackInfo;

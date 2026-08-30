@@ -7,22 +7,21 @@ import {
 } from 'react-server-dom-rspack/client.browser';
 
 import { BrowserNavigation } from './browser-navigation';
-import type { BrowserRootController } from './browser-renderer';
+import { BrowserRenderer } from './browser-renderer';
 import { ClientRuntime } from './client-runtime';
 import { loadFlight } from './flight-loader';
-import type { NavigationResources } from './navigation-resource';
+import { NavigationResources } from './navigation-resource';
 
 class ServerFnCallError extends Schema.TaggedError<ServerFnCallError>()('ServerFnCallError', {
   cause: Schema.Defect(),
   message: Schema.String,
 }) {}
 
-export const installCallServer = Effect.fnUntraced(function* (
-  browserRoot: BrowserRootController,
-  navigationResources: NavigationResources,
-) {
+export const installCallServer = Effect.gen(function* () {
   const { location } = yield* BrowserNavigation;
+  const browserRenderer = yield* BrowserRenderer;
   const run = yield* ClientRuntime;
+  const navigationResources = yield* NavigationResources;
   const callServer = Effect.fnUntraced(function* (
     id: string,
     args: ReadonlyArray<unknown>,
@@ -83,7 +82,7 @@ export const installCallServer = Effect.fnUntraced(function* (
     startTransition(() => {
       // Keep the commit Promise outside React's Transition Action. Returning it would make React
       // wait for the commit that this Promise itself observes.
-      browserRoot.refresh(resource.payload.routeTree).then(committed.resolve, committed.reject);
+      browserRenderer.refresh(resource.payload.routeTree).then(committed.resolve, committed.reject);
     });
     yield* Effect.all([resource.completed, Effect.promise(() => committed.promise)], {
       concurrency: 'unbounded',

@@ -1,48 +1,53 @@
+import { Context } from 'effect';
+
 import type { RouteTreeModel } from '../rsc/route-tree';
 import { retainSharedLayoutContent } from './route-tree';
 
-export type BrowserRootNavigation = {
+export type BrowserRendererNavigation = {
   readonly committed: Promise<void>;
   readonly complete: () => void;
   readonly rollback: () => Promise<void>;
 };
 
-export type BrowserRootController = {
-  readonly navigate: (routeTree: RouteTreeModel) => BrowserRootNavigation;
-  readonly refresh: (routeTree: RouteTreeModel) => Promise<void>;
-};
+export class BrowserRenderer extends Context.Service<
+  BrowserRenderer,
+  {
+    readonly navigate: (routeTree: RouteTreeModel) => BrowserRendererNavigation;
+    readonly refresh: (routeTree: RouteTreeModel) => Promise<void>;
+  }
+>()('ersc/client/browser-renderer/BrowserRenderer') {}
 
-type BrowserNavigationState = {
+type BrowserRenderNavigationState = {
   readonly committed: PromiseWithResolvers<void>;
   readonly retired: PromiseWithResolvers<void>;
   readonly routeTree: RouteTreeModel;
   readonly stableRouteTree: RouteTreeModel;
 };
 
-type BrowserNavigationPhase =
+type BrowserRenderNavigationPhase =
   | 'Scheduled'
   | 'Visible'
   | 'RollbackRequested'
   | 'Completed'
   | 'Retired';
 
-type BrowserNavigationOwner =
+type BrowserRenderOwner =
   | { readonly _tag: 'Stable' }
-  | { readonly _tag: 'Navigation'; readonly navigation: BrowserNavigationState };
+  | { readonly _tag: 'Navigation'; readonly navigation: BrowserRenderNavigationState };
 
-type BrowserLifecycle = {
-  active: BrowserNavigationOwner;
-  readonly phases: WeakMap<BrowserNavigationState, BrowserNavigationPhase>;
-  retiring: ReadonlyArray<BrowserNavigationState>;
+type BrowserRendererLifecycle = {
+  active: BrowserRenderOwner;
+  readonly phases: WeakMap<BrowserRenderNavigationState, BrowserRenderNavigationPhase>;
+  retiring: ReadonlyArray<BrowserRenderNavigationState>;
   stableRouteTree: RouteTreeModel;
-  visible: BrowserNavigationOwner;
+  visible: BrowserRenderOwner;
 };
 
 export type BrowserRender =
   | { readonly _tag: 'Initial'; readonly routeTree: RouteTreeModel }
   | {
       readonly _tag: 'Navigation';
-      readonly navigation: BrowserNavigationState;
+      readonly navigation: BrowserRenderNavigationState;
       readonly routeTree: RouteTreeModel;
     }
   | {
@@ -52,11 +57,14 @@ export type BrowserRender =
     }
   | {
       readonly _tag: 'Rollback';
-      readonly navigation: BrowserNavigationState;
+      readonly navigation: BrowserRenderNavigationState;
       readonly routeTree: RouteTreeModel;
     };
 
-const getNavigationPhase = (lifecycle: BrowserLifecycle, navigation: BrowserNavigationState) => {
+const getNavigationPhase = (
+  lifecycle: BrowserRendererLifecycle,
+  navigation: BrowserRenderNavigationState,
+) => {
   const phase = lifecycle.phases.get(navigation);
   if (phase === undefined) {
     throw new TypeError('Browser navigation does not belong to this root.');
@@ -64,7 +72,10 @@ const getNavigationPhase = (lifecycle: BrowserLifecycle, navigation: BrowserNavi
   return phase;
 };
 
-const retireNavigation = (lifecycle: BrowserLifecycle, navigation: BrowserNavigationState) => {
+const retireNavigation = (
+  lifecycle: BrowserRendererLifecycle,
+  navigation: BrowserRenderNavigationState,
+) => {
   if (getNavigationPhase(lifecycle, navigation) !== 'Retired') {
     lifecycle.phases.set(navigation, 'Retired');
     navigation.retired.resolve();
@@ -75,7 +86,7 @@ export const makeBrowserRenderer = (
   initialRouteTree: RouteTreeModel,
   publish: (render: BrowserRender) => void,
 ) => {
-  const lifecycle: BrowserLifecycle = {
+  const lifecycle: BrowserRendererLifecycle = {
     active: { _tag: 'Stable' },
     phases: new WeakMap(),
     retiring: [],
@@ -83,9 +94,9 @@ export const makeBrowserRenderer = (
     visible: { _tag: 'Stable' },
   };
 
-  const controller: BrowserRootController = {
+  const browserRenderer = BrowserRenderer.of({
     navigate: (routeTree) => {
-      const navigation: BrowserNavigationState = {
+      const navigation: BrowserRenderNavigationState = {
         committed: Promise.withResolvers<void>(),
         retired: Promise.withResolvers<void>(),
         routeTree: retainSharedLayoutContent(lifecycle.stableRouteTree, routeTree),
@@ -146,10 +157,10 @@ export const makeBrowserRenderer = (
       publish({ _tag: 'Refresh', committed, routeTree });
       return committed.promise;
     },
-  };
+  });
 
   const commit = (render: BrowserRender) => {
-    const visible: BrowserNavigationOwner =
+    const visible: BrowserRenderOwner =
       render._tag === 'Navigation'
         ? { _tag: 'Navigation', navigation: render.navigation }
         : { _tag: 'Stable' };
@@ -182,5 +193,5 @@ export const makeBrowserRenderer = (
     }
   };
 
-  return { commit, controller };
+  return { browserRenderer, commit };
 };

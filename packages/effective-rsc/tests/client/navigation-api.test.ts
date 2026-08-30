@@ -26,10 +26,10 @@ import {
   NavigationApiUnavailableError,
   NavigationPrecommitUnavailableError,
 } from '../../src/client/browser-navigation';
-import type { BrowserRootController } from '../../src/client/browser-renderer';
+import { BrowserRenderer } from '../../src/client/browser-renderer';
 import { ClientRuntime } from '../../src/client/client-runtime';
 import { listenForNavigation } from '../../src/client/navigation-api';
-import { makeNavigationResources } from '../../src/client/navigation-resource';
+import { NavigationResources } from '../../src/client/navigation-resource';
 import type { RouteTreeModel } from '../../src/rsc/route-tree';
 
 type TestNavigateEvent = Event &
@@ -50,6 +50,7 @@ const makeNavigationEntry = (key: string, url: string, id = key) =>
   Object.assign(new EventTarget(), {
     getState: () => undefined,
     id,
+    index: 0,
     key,
     url,
   });
@@ -183,7 +184,7 @@ const initialRouteTree: RouteTreeModel = {
   id: 'day-one',
 };
 
-const makeBrowserRoot = (
+const makeBrowserRenderer = (
   renders: Array<BrowserRenderRequest> = [],
   navigationOutcomes: Array<'Complete' | 'Rollback'> = [],
 ) =>
@@ -203,7 +204,7 @@ const makeBrowserRoot = (
       renders.push({ _tag: 'ServerFunction', routeTree });
       return Promise.resolve();
     },
-  }) satisfies BrowserRootController;
+  }) satisfies BrowserRenderer['Service'];
 
 const makePrecommitController = (
   redirects: Array<{
@@ -225,7 +226,7 @@ const invokePrecommitHandler = (
 
 const listen = (
   navigation: TestNavigationApi,
-  browserRoot: BrowserRootController = makeBrowserRoot(),
+  browserRenderer: BrowserRenderer['Service'] = makeBrowserRenderer(),
   httpClient = makeHttpClient(),
   documentReplacements: Array<string> = [],
 ) => {
@@ -239,14 +240,16 @@ const listen = (
   });
   return Effect.gen(function* () {
     const run = yield* ClientRuntime.make;
-    const navigationResources = yield* makeNavigationResources(
+    const navigationResources = yield* NavigationResources.make(
       navigation,
       initialRouteTree,
       Promise.resolve(),
     );
-    return yield* listenForNavigation(browserRoot, navigationResources).pipe(
+    return yield* listenForNavigation.pipe(
       Effect.provide(BrowserNavigation.layer),
+      Effect.provideService(BrowserRenderer, browserRenderer),
       Effect.provideService(ClientRuntime, run),
+      Effect.provideService(NavigationResources, navigationResources),
     );
   }).pipe(Effect.provideService(HttpClient.HttpClient, httpClient));
 };
@@ -265,7 +268,7 @@ it.effect('splits a cancelable navigation between React commit and Flight comple
       Effect.gen(function* () {
         yield* listen(
           navigation,
-          makeBrowserRoot(renders, navigationOutcomes),
+          makeBrowserRenderer(renders, navigationOutcomes),
           makeHttpClient(requestedUrls),
         );
         const pendingNavigation = makeNavigationEvent();
@@ -330,7 +333,7 @@ it.effect('keeps the post-commit handler pending until the Flight stream reaches
           ),
         ),
       );
-      yield* listen(navigation, makeBrowserRoot(), httpClient);
+      yield* listen(navigation, makeBrowserRenderer(), httpClient);
       const pendingNavigation = makeNavigationEvent();
 
       navigation.dispatch(pendingNavigation.event);
@@ -371,7 +374,7 @@ it.effect('uses a post-commit handler for a non-cancelable traversal', () =>
     Effect.gen(function* () {
       const navigation = new TestNavigationApi();
       const requestedUrls: Array<string> = [];
-      yield* listen(navigation, makeBrowserRoot(), makeHttpClient(requestedUrls));
+      yield* listen(navigation, makeBrowserRenderer(), makeHttpClient(requestedUrls));
       const pendingNavigation = makeNavigationEvent({
         cancelable: false,
         navigationType: 'traverse',
@@ -405,7 +408,7 @@ it.effect('reuses completed route trees for back and forward traversals', () =>
       );
       const requestedUrls: Array<string> = [];
       const renders: Array<BrowserRenderRequest> = [];
-      yield* listen(navigation, makeBrowserRoot(renders), makeHttpClient(requestedUrls));
+      yield* listen(navigation, makeBrowserRenderer(renders), makeHttpClient(requestedUrls));
       yield* Effect.yieldNow;
 
       const push = makeNavigationEvent();
@@ -475,7 +478,7 @@ it.effect('promotes a non-Flight response to native document navigation', () =>
   Effect.scoped(
     Effect.gen(function* () {
       const navigation = new TestNavigationApi();
-      yield* listen(navigation, makeBrowserRoot(), makeHttpClient([], 'text/html'));
+      yield* listen(navigation, makeBrowserRenderer(), makeHttpClient([], 'text/html'));
       const pendingNavigation = makeNavigationEvent();
 
       navigation.dispatch(pendingNavigation.event);
@@ -509,7 +512,7 @@ it.effect('redirects a cancelable navigation before committing its Flight tree',
       }> = [];
       const handlers: Array<NavigationInterceptHandler> = [];
       const renders: Array<BrowserRenderRequest> = [];
-      yield* listen(navigation, makeBrowserRoot(renders));
+      yield* listen(navigation, makeBrowserRenderer(renders));
       const pendingNavigation = makeNavigationEvent({
         destination: { url: 'https://effective-rsc.test/schedule/day-one' },
       });
@@ -542,7 +545,7 @@ it.effect('falls back to document replacement for a redirected traversal', () =>
     Effect.gen(function* () {
       const navigation = new TestNavigationApi();
       const documentReplacements: Array<string> = [];
-      yield* listen(navigation, makeBrowserRoot(), makeHttpClient(), documentReplacements);
+      yield* listen(navigation, makeBrowserRenderer(), makeHttpClient(), documentReplacements);
       const pendingNavigation = makeNavigationEvent({
         cancelable: false,
         destination: { url: 'https://effective-rsc.test/schedule/day-one' },
@@ -573,7 +576,7 @@ it.effect('cancels a streaming Flight response abandoned before React commits', 
       const rollbackCommitted = Promise.withResolvers<void>();
       const rollbackStarted = Promise.withResolvers<void>();
       let responseSignal: AbortSignal | undefined;
-      const browserRoot = {
+      const browserRenderer = {
         navigate: () => {
           renderStarted.resolve();
           return {
@@ -586,7 +589,7 @@ it.effect('cancels a streaming Flight response abandoned before React commits', 
           };
         },
         refresh: () => Promise.resolve(),
-      } satisfies BrowserRootController;
+      } satisfies BrowserRenderer['Service'];
       const httpClient = HttpClient.make((request, _url, signal) =>
         Effect.sync(() => {
           responseSignal = signal;
@@ -611,7 +614,7 @@ it.effect('cancels a streaming Flight response abandoned before React commits', 
           );
         }),
       );
-      yield* listen(navigation, browserRoot, httpClient);
+      yield* listen(navigation, browserRenderer, httpClient);
       const pendingNavigation = makeNavigationEvent({ signal: navigationAbort.signal });
 
       navigation.dispatch(pendingNavigation.event);
@@ -675,7 +678,7 @@ it.effect('cancels a committed streaming Flight response before its handler comp
           );
         }),
       );
-      const browserRoot = {
+      const browserRenderer = {
         navigate: () => ({
           committed: Promise.resolve(),
           complete: () => undefined,
@@ -685,8 +688,8 @@ it.effect('cancels a committed streaming Flight response before its handler comp
           },
         }),
         refresh: () => Promise.resolve(),
-      } satisfies BrowserRootController;
-      yield* listen(navigation, browserRoot, httpClient);
+      } satisfies BrowserRenderer['Service'];
+      yield* listen(navigation, browserRenderer, httpClient);
       const pendingNavigation = makeNavigationEvent({ signal: navigationAbort.signal });
 
       navigation.dispatch(pendingNavigation.event);
@@ -732,7 +735,7 @@ it.effect('leaves navigations outside the router boundary to the browser', () =>
     Effect.gen(function* () {
       const navigation = new TestNavigationApi();
       const requestedUrls: Array<string> = [];
-      yield* listen(navigation, makeBrowserRoot(), makeHttpClient(requestedUrls));
+      yield* listen(navigation, makeBrowserRenderer(), makeHttpClient(requestedUrls));
       const nativeNavigations = [
         makeNavigationEvent({ canIntercept: false }),
         makeNavigationEvent({ hashChange: true }),

@@ -4,10 +4,11 @@ import { rscStream } from 'rsc-html-stream/client';
 
 import type { FlightPayload } from '../rsc/flight';
 import { BrowserNavigation } from './browser-navigation';
+import { BrowserRenderer } from './browser-renderer';
 import { hydrateBrowserRoot } from './browser-root';
 import { installCallServer } from './call-server';
 import { listenForNavigation } from './navigation-api';
-import { makeNavigationResources } from './navigation-resource';
+import { NavigationResources } from './navigation-resource';
 
 export class BrowserHydrationError extends Schema.TaggedError<BrowserHydrationError>()(
   'BrowserHydrationError',
@@ -27,24 +28,29 @@ export const hydrate = Effect.scoped(
       try: () => createFromReadableStream<FlightPayload>(initialFlightStream),
       catch: (cause) => new BrowserHydrationError({ cause }),
     });
-    const browserRoot = yield* hydrateBrowserRoot(document, payload);
+    const browserRenderer = yield* hydrateBrowserRoot(document, payload);
     const { navigation } = yield* BrowserNavigation;
-    const navigationResources = yield* makeNavigationResources(
+    const navigationResources = yield* NavigationResources.make(
       navigation,
       payload.routeTree,
       initialFlightCompleted.promise,
     );
 
-    yield* listenForNavigation(browserRoot, navigationResources);
-    yield* installCallServer(browserRoot, navigationResources);
-    if (import.meta.webpackHot) {
-      yield* Effect.tryPromise(() => import('../dev/hmr-client')).pipe(
-        Effect.flatMap(({ startDevHmr }) => startDevHmr(navigationResources)),
-        Effect.catch((cause) => Effect.logError('Development HMR failed.', cause)),
-        Effect.forkScoped,
-      );
-    }
+    return yield* Effect.gen(function* () {
+      yield* listenForNavigation;
+      yield* installCallServer;
+      if (import.meta.webpackHot) {
+        yield* Effect.tryPromise(() => import('../dev/hmr-client')).pipe(
+          Effect.flatMap(({ startDevHmr }) => startDevHmr),
+          Effect.catch((cause) => Effect.logError('Development HMR failed.', cause)),
+          Effect.forkScoped,
+        );
+      }
 
-    return yield* Effect.never;
+      return yield* Effect.never;
+    }).pipe(
+      Effect.provideService(BrowserRenderer, browserRenderer),
+      Effect.provideService(NavigationResources, navigationResources),
+    );
   }),
 );

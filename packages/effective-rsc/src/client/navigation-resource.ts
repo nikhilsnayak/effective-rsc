@@ -1,4 +1,4 @@
-import { Effect, MutableRef, Scope } from 'effect';
+import { Context, Effect, MutableRef, Scope } from 'effect';
 import { HttpClient } from 'effect/unstable/http';
 
 import type { RouteTreeModel } from '../rsc/route-tree';
@@ -12,12 +12,11 @@ type CachedRoute = {
 
 type CacheHistoryEntry = Pick<
   NavigationHistoryEntry,
-  'addEventListener' | 'id' | 'removeEventListener'
+  'addEventListener' | 'id' | 'index' | 'removeEventListener'
 >;
 
 type NavigationHistory = {
   readonly currentEntry: CacheHistoryEntry | null;
-  readonly entries: () => ReadonlyArray<CacheHistoryEntry>;
 };
 
 type RouteCache = Map<string, CachedRoute>;
@@ -41,130 +40,125 @@ export type NavigationResourceRequest = {
   readonly navigationType: NavigationType;
 };
 
-export type NavigationResources = {
-  readonly invalidate: () => void;
-  readonly load: (
-    request: NavigationResourceRequest,
-  ) => Effect.Effect<NavigationResource, FlightLoadError, HttpClient.HttpClient | Scope.Scope>;
-  readonly prepareRefresh: (routeTree: RouteTreeModel) => () => void;
-};
+export class NavigationResources extends Context.Service<
+  NavigationResources,
+  {
+    readonly invalidate: () => void;
+    readonly load: (
+      request: NavigationResourceRequest,
+    ) => Effect.Effect<NavigationResource, FlightLoadError, HttpClient.HttpClient | Scope.Scope>;
+    readonly prepareRefresh: (routeTree: RouteTreeModel) => () => void;
+  }
+>()('ersc/client/navigation-resource/NavigationResources') {
+  static readonly make = Effect.fnUntraced(function* (
+    navigationHistory: NavigationHistory,
+    initialRouteTree: RouteTreeModel,
+    initialFlightCompleted: Promise<void>,
+  ) {
+    const cacheRef = MutableRef.make<RouteCache>(new Map());
+    const initialEntry = navigationHistory.currentEntry;
 
-export const makeNavigationResources = Effect.fnUntraced(function* (
-  navigationHistory: NavigationHistory,
-  initialRouteTree: RouteTreeModel,
-  initialFlightCompleted: Promise<void>,
-) {
-  const cacheRef = MutableRef.make<RouteCache>(new Map());
-  const initialEntry = navigationHistory.currentEntry;
+    const remove = (cache: RouteCache, entry: CacheHistoryEntry) => {
+      const cached = cache.get(entry.id);
+      if (cached?.entry === entry) {
+        cache.delete(entry.id);
+      }
+    };
 
-  const remove = (cache: RouteCache, entry: CacheHistoryEntry) => {
-    const cached = cache.get(entry.id);
-    if (cached?.entry === entry) {
-      cache.delete(entry.id);
-    }
-  };
+    const store = (cache: RouteCache, entry: CacheHistoryEntry, routeTree: RouteTreeModel) => {
+      const cached = cache.get(entry.id);
+      if (cached?.entry !== entry) {
+        cached?.entry.removeEventListener('dispose', cached.onDispose);
+        const onDispose = () => remove(cache, entry);
+        entry.addEventListener('dispose', onDispose, { once: true });
+        cache.set(entry.id, { entry, onDispose, routeTree });
+        return;
+      }
+      cache.set(entry.id, { ...cached, routeTree });
+    };
 
-  const store = (cache: RouteCache, entry: CacheHistoryEntry, routeTree: RouteTreeModel) => {
-    const cached = cache.get(entry.id);
-    if (cached?.entry !== entry) {
-      cached?.entry.removeEventListener('dispose', cached.onDispose);
-      const onDispose = () => remove(cache, entry);
-      entry.addEventListener('dispose', onDispose, { once: true });
-      cache.set(entry.id, { entry, onDispose, routeTree });
-      return;
-    }
-    cache.set(entry.id, { ...cached, routeTree });
-  };
+    const clear = (cache: RouteCache) => {
+      for (const cached of cache.values()) {
+        cached.entry.removeEventListener('dispose', cached.onDispose);
+      }
+      cache.clear();
+    };
 
-  const clear = (cache: RouteCache) => {
-    for (const cached of cache.values()) {
-      cached.entry.removeEventListener('dispose', cached.onDispose);
-    }
-    cache.clear();
-  };
+    const invalidate = () => {
+      clear(MutableRef.get(cacheRef));
+      MutableRef.set(cacheRef, new Map());
+    };
 
-  const invalidate = () => {
-    clear(MutableRef.get(cacheRef));
-    const cache: RouteCache = new Map();
-    MutableRef.set(cacheRef, cache);
-    return cache;
-  };
-
-  const cacheCurrent = (cache: RouteCache, routeTree: RouteTreeModel) => () => {
-    if (MutableRef.get(cacheRef) !== cache) {
-      return;
-    }
-    const entry = navigationHistory.currentEntry;
-    if (entry !== null) {
-      store(cache, entry, routeTree);
-    }
-  };
-
-  const prepareRefresh = (routeTree: RouteTreeModel) => {
-    const cache = invalidate();
-    const entry = navigationHistory.currentEntry;
-    return () => {
-      if (
-        MutableRef.get(cacheRef) === cache &&
-        entry !== null &&
-        navigationHistory.entries().includes(entry)
-      ) {
+    const cacheCurrent = (cache: RouteCache, routeTree: RouteTreeModel) => () => {
+      if (MutableRef.get(cacheRef) !== cache) {
+        return;
+      }
+      const entry = navigationHistory.currentEntry;
+      if (entry !== null) {
         store(cache, entry, routeTree);
       }
     };
-  };
 
-  const load = Effect.fnUntraced(function* (request: NavigationResourceRequest) {
-    const cache = MutableRef.get(cacheRef);
-    if (request.navigationType === 'traverse') {
-      const cached = cache.get(request.destination.id);
-      if (cached !== undefined) {
-        return {
-          _tag: 'Route',
-          cacheCurrent: () => undefined,
-          completed: Effect.void,
-          release: Effect.void,
-          resolvedUrl: new URL(request.destination.url),
-          routeTree: cached.routeTree,
-        } satisfies NavigationResource;
+    const prepareRefresh = (routeTree: RouteTreeModel) => {
+      invalidate();
+      const cache = MutableRef.get(cacheRef);
+      const entry = navigationHistory.currentEntry;
+      return () => {
+        if (MutableRef.get(cacheRef) === cache && entry !== null && entry.index !== -1) {
+          store(cache, entry, routeTree);
+        }
+      };
+    };
+
+    const load = Effect.fnUntraced(function* (request: NavigationResourceRequest) {
+      const cache = MutableRef.get(cacheRef);
+      if (request.navigationType === 'traverse') {
+        const cached = cache.get(request.destination.id);
+        if (cached !== undefined) {
+          return {
+            _tag: 'Route',
+            cacheCurrent: () => undefined,
+            completed: Effect.void,
+            release: Effect.void,
+            resolvedUrl: new URL(request.destination.url),
+            routeTree: cached.routeTree,
+          } satisfies NavigationResource;
+        }
       }
-    }
 
-    const resource = yield* loadFlight({
-      _tag: 'Navigation',
-      destination: new URL(request.destination.url),
+      const resource = yield* loadFlight({
+        _tag: 'Navigation',
+        destination: new URL(request.destination.url),
+      });
+      if (resource._tag === 'Document') {
+        return resource satisfies NavigationResource;
+      }
+      return {
+        _tag: 'Route',
+        cacheCurrent: cacheCurrent(cache, resource.payload.routeTree),
+        completed: resource.completed,
+        release: resource.release,
+        resolvedUrl: resource.resolvedUrl,
+        routeTree: resource.payload.routeTree,
+      } satisfies NavigationResource;
     });
-    if (resource._tag === 'Document') {
-      return resource satisfies NavigationResource;
+
+    yield* Effect.addFinalizer(() => Effect.sync(() => clear(MutableRef.get(cacheRef))));
+
+    if (initialEntry !== null) {
+      const initialCache = MutableRef.get(cacheRef);
+      yield* Effect.promise(() => initialFlightCompleted).pipe(
+        Effect.andThen(
+          Effect.sync(() => {
+            if (MutableRef.get(cacheRef) === initialCache && initialEntry.index !== -1) {
+              store(initialCache, initialEntry, initialRouteTree);
+            }
+          }),
+        ),
+        Effect.forkScoped,
+      );
     }
-    return {
-      _tag: 'Route',
-      cacheCurrent: cacheCurrent(cache, resource.payload.routeTree),
-      completed: resource.completed,
-      release: resource.release,
-      resolvedUrl: resource.resolvedUrl,
-      routeTree: resource.payload.routeTree,
-    } satisfies NavigationResource;
+
+    return NavigationResources.of({ invalidate, load, prepareRefresh });
   });
-
-  yield* Effect.addFinalizer(() => Effect.sync(() => clear(MutableRef.get(cacheRef))));
-
-  if (initialEntry !== null) {
-    const initialCache = MutableRef.get(cacheRef);
-    yield* Effect.promise(() => initialFlightCompleted).pipe(
-      Effect.andThen(
-        Effect.sync(() => {
-          if (
-            MutableRef.get(cacheRef) === initialCache &&
-            navigationHistory.entries().includes(initialEntry)
-          ) {
-            store(initialCache, initialEntry, initialRouteTree);
-          }
-        }),
-      ),
-      Effect.forkScoped,
-    );
-  }
-
-  return { invalidate, load, prepareRefresh } satisfies NavigationResources;
-});
+}

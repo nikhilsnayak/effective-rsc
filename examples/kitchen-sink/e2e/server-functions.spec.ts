@@ -63,7 +63,7 @@ test.describe('Server Functions', () => {
     const title = 'A router that waits for the UI';
     await page.goto('/schedule/saturday');
     await setAgendaSelection(page, title, false);
-    await page.route('**/_ersc/assets/main.js', (route) => route.abort());
+    await page.route('**/_ersc/assets/main*.js', (route) => route.abort());
 
     try {
       await page.reload({ waitUntil: 'domcontentloaded' });
@@ -80,7 +80,7 @@ test.describe('Server Functions', () => {
         page.locator('section[aria-labelledby="conference-agenda-heading"]'),
       ).toContainText(title);
     } finally {
-      await page.unroute('**/_ersc/assets/main.js');
+      await page.unroute('**/_ersc/assets/main*.js');
       await page.goto('/schedule/saturday');
       await setAgendaSelection(page, title, false);
     }

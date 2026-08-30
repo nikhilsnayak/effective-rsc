@@ -89,6 +89,11 @@ CSS stays in Rspack's native pipeline, including Tailwind CSS v4 through `@tailw
 Effect `HttpStaticServer` serves the application root's `public/` directory from `/` with
 `Cache-Control: public, max-age=0`; compiler assets remain under `/_ersc/assets`.
 
+Development preserves React's native Server Components Performance Tracks. Initial hydration uses
+the document timeline origin; navigation and Server Function decoding receive a timestamp captured
+immediately before Effect HTTP execution. Rspack removes this timing metadata from production. A
+separate React Debug Channel transport remains deferred.
+
 ## Application model
 
 `Application.ersc<Services>()` creates one application-scoped ERSC authoring module. It owns a service

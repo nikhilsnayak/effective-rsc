@@ -1,3 +1,4 @@
+// oxlint-disable effecttsgo/process-env-in-effect -- Rspack replaces NODE_ENV at compile time.
 import { Effect, Schema } from 'effect';
 import { createFromReadableStream } from 'react-server-dom-rspack/client.browser';
 import { rscStream } from 'rsc-html-stream/client';
@@ -25,7 +26,11 @@ export const hydrate = Effect.scoped(
       }),
     );
     const payload = yield* Effect.tryPromise({
-      try: () => createFromReadableStream<FlightPayload>(initialFlightStream),
+      try: () =>
+        createFromReadableStream<FlightPayload>(
+          initialFlightStream,
+          process.env.NODE_ENV === 'development' ? { startTime: 0 } : undefined,
+        ),
       catch: (cause) => new BrowserHydrationError({ cause }),
     });
     const browserRenderer = yield* hydrateBrowserRoot(document, payload);

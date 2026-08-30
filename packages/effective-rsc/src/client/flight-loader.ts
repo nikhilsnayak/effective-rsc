@@ -1,3 +1,4 @@
+// oxlint-disable effecttsgo/process-env-in-effect -- Rspack replaces NODE_ENV at compile time.
 import { Deferred, Effect, Exit, Schema, Scope, Stream } from 'effect';
 import { HttpBody, HttpClient, HttpClientRequest } from 'effect/unstable/http';
 import {
@@ -58,6 +59,7 @@ export const loadFlight = Effect.fnUntraced(function* (flightRequest: FlightRequ
             }),
             HttpClientRequest.setBody(HttpBody.raw(flightRequest.body)),
           );
+    const requestStartTime = process.env.NODE_ENV === 'development' ? performance.now() : 0;
     const response = yield* client.execute(request).pipe(
       Scope.provide(responseScope),
       Effect.mapError(
@@ -127,14 +129,21 @@ export const loadFlight = Effect.fnUntraced(function* (flightRequest: FlightRequ
         Stream.ensuring(release),
       ),
     );
+    const decodeOptions =
+      flightRequest._tag === 'ServerFunction'
+        ? process.env.NODE_ENV === 'development'
+          ? {
+              startTime: requestStartTime,
+              temporaryReferences: flightRequest.temporaryReferences,
+            }
+          : { temporaryReferences: flightRequest.temporaryReferences }
+        : process.env.NODE_ENV === 'development'
+          ? {
+              startTime: requestStartTime,
+            }
+          : undefined;
     const payload = yield* Effect.tryPromise({
-      try: () =>
-        createFromReadableStream<FlightPayload>(
-          responseBody,
-          flightRequest._tag === 'ServerFunction'
-            ? { temporaryReferences: flightRequest.temporaryReferences }
-            : undefined,
-        ),
+      try: () => createFromReadableStream<FlightPayload>(responseBody, decodeOptions),
       catch: (cause) =>
         new FlightLoadError({
           cause,

@@ -63,6 +63,7 @@ implemented, accepted but not implemented, and intentionally outside the current
 | D-058 | Serve the conventional application-root `public/` directory from `/` through Effect `HttpStaticServer`, with revalidation-friendly `Cache-Control: public, max-age=0`; keep compiler assets under `/_ersc/assets`.                                                |
 | D-059 | Require a matching browser Origin host for Server Function POST requests and reject bodies larger than 10 MiB while streaming, before React decodes them.                                                                                                         |
 | D-060 | Map HTML failures before the Fizz shell to `500`; after streaming begins, preserve committed response metadata, report render errors through the request logger, and let React and Web Streams recover or terminate.                                              |
+| D-061 | Preserve React's native Server Components development Performance Tracks with full document and Flight request timing; eliminate that instrumentation from production and defer a Debug Channel transport.                                                        |
 
 ## Deferred
 

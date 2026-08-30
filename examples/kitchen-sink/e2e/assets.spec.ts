@@ -3,7 +3,7 @@ import { expect, test, type Response } from '@playwright/test';
 
 import { getText } from './support/http';
 
-test('loads every compiler asset needed by the hydrated document', async ({ page }) => {
+test('loads every compiler asset needed by the hydrated document', async ({ page }, testInfo) => {
   const assetResponses: Array<Response> = [];
   page.on('response', (response) => {
     if (new URL(response.url()).pathname.startsWith('/_ersc/assets/')) {
@@ -24,7 +24,13 @@ test('loads every compiler asset needed by the hydrated document', async ({ page
   const scripts = [...responsesByPath.keys()].filter((pathname) => pathname.endsWith('.js'));
 
   expect(stylesheets.length).toBeGreaterThan(0);
-  expect(scripts).toContain('/_ersc/assets/main.js');
+  if (testInfo.project.name === 'dev') {
+    expect(
+      scripts.some((pathname) => /^\/_ersc\/assets\/main\.[a-f0-9]+\.js$/.test(pathname)),
+    ).toBe(true);
+  } else {
+    expect(scripts).toContain('/_ersc/assets/main.js');
+  }
   expect(scripts.length).toBeGreaterThan(1);
 
   for (const [pathname, response] of responsesByPath) {

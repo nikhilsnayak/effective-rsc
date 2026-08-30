@@ -5,7 +5,10 @@ declare module 'react-server-dom-rspack/client.browser' {
 
   export function createFromReadableStream<T>(
     stream: ReadableStream<Uint8Array>,
-    options?: { readonly temporaryReferences?: TemporaryReferenceSet },
+    options?: {
+      readonly startTime?: number;
+      readonly temporaryReferences?: TemporaryReferenceSet;
+    },
   ): Promise<T>;
 
   export function encodeReply(

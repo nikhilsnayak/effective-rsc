@@ -14,8 +14,10 @@ const decodedPayload = {
   serverFnResult: null,
 } satisfies FlightPayload;
 const decodeFlight = vi.fn(
-  (_stream: ReadableStream<Uint8Array>, _options?: { readonly temporaryReferences?: unknown }) =>
-    Promise.resolve(decodedPayload),
+  (
+    _stream: ReadableStream<Uint8Array>,
+    _options?: { readonly startTime?: number; readonly temporaryReferences?: unknown },
+  ) => Promise.resolve(decodedPayload),
 );
 
 vi.doMock('react-server-dom-rspack/client.browser', () => ({
@@ -77,7 +79,7 @@ it.effect('requests and decodes a whole-tree Flight response', () =>
     expect(observedRequest?.method).toBe('GET');
     expect(observedRequest?.url).toBe('https://effective-rsc.test/schedule/day-two');
     expect(observedRequest?.headers['accept']).toBe('text/x-component');
-    expect(decodeFlight).toHaveBeenCalledTimes(1);
+    expect(decodeFlight).toHaveBeenCalledWith(expect.any(ReadableStream), undefined);
 
     yield* response.release;
   }),

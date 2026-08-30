@@ -12,8 +12,10 @@ IDs are append-only and never reused, including after a question is resolved.
 - **Affected:** Loading authoring, development diagnostics, and HMR error presentation.
 - **Evidence:** The static contract catches direct async outputs but not hidden suspension.
 - **Related:** D-016, D-039, D-041–D-043.
-- **Resolution:** Revisit with the development server and HMR work.
-- **Status:** Deferred until D-041–D-043.
+- **Resolution:** The static contract rejects direct Promise and Effect outputs. Detecting suspension
+  hidden inside a renderer requires development-only React instrumentation and a deliberate error
+  presentation path; do not add that runtime machinery for `0.1.0`.
+- **Status:** Deferred until framework development error presentation exists.
 
 ## OQ-003 — Route-parameter Schema rejection
 

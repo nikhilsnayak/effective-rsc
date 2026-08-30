@@ -37,11 +37,19 @@ test('loads every compiler asset needed by the hydrated document', async ({ page
 });
 
 test('serves conventional public assets from the application root', async ({ request }) => {
-  const { body, response } = await getText(request, '/robots.txt');
+  const [{ body, response }, favicon] = await Promise.all([
+    getText(request, '/robots.txt'),
+    getText(request, '/favicon.svg'),
+  ]);
 
   expect(response.status()).toBe(200);
   expect(response.headers()['content-type']).toBe('text/plain; charset=utf-8');
   expect(response.headers()['cache-control']).toBe('public, max-age=0');
   expect(response.headers()['access-control-allow-origin']).toBe('https://app.converge.example');
   expect(body).toBe('User-agent: *\nAllow: /\n');
+
+  expect(favicon.response.status()).toBe(200);
+  expect(favicon.response.headers()['content-type']).toContain('image/svg+xml');
+  expect(favicon.response.headers()['cache-control']).toBe('public, max-age=0');
+  expect(favicon.body).toContain('<svg');
 });

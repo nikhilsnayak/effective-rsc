@@ -18,6 +18,7 @@ export default ERSC.Layout.make({
         <head>
           <title>{`${conference.data.name} ${conference.data.year} — Conference schedule`}</title>
           <meta name='description' content={conference.data.tagline} />
+          <link rel='icon' href='/favicon.svg' type='image/svg+xml' />
         </head>
         <body>
           <header className='bg-background border-b'>

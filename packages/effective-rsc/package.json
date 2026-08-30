@@ -1,7 +1,7 @@
 {
   "name": "effective-rsc",
   "version": "0.1.0",
-  "description": "An experimental, Effect-native React Server Components framework for Bun",
+  "description": "An experimental, Effect-native React Server Components framework for Bun.",
   "keywords": [
     "bun",
     "effect",

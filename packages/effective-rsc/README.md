@@ -1,10 +1,10 @@
 <picture>
   <source
     media="(prefers-color-scheme: dark)"
-    srcset="https://raw.githubusercontent.com/nikhilsnayak/effective-rsc/main/packages/effective-rsc/logo-dark.svg"
+    srcset="https://github.com/nikhilsnayak/effective-rsc/blob/main/packages/effective-rsc/logo-dark.svg"
   />
   <img
-    src="https://raw.githubusercontent.com/nikhilsnayak/effective-rsc/main/packages/effective-rsc/logo.svg"
+    src="https://github.com/nikhilsnayak/effective-rsc/blob/main/packages/effective-rsc/logo.svg"
     alt=""
     width="72"
     height="72"

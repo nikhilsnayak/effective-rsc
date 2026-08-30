@@ -10,7 +10,6 @@
   in a resolved chain is rejected.
 - Routes middleware wraps matched Page GET and native HEAD fallback only. It does not wrap Server
   Function POST, userland HTTP, assets, or unmatched paths.
-
 - `routes.page(path, page)` adds a Page at an absolute Effect HTTP pattern. Parameter Schema keys must
   exactly match the path parameters.
 - `routes.mount(prefix, childRoutes)` mounts a non-empty same-ERSC graph below an absolute,

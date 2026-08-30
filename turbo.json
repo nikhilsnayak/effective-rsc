@@ -23,7 +23,7 @@
     },
     "test:e2e": {
       "dependsOn": ["build"],
-      "inputs": ["e2e/**", "playwright.config.ts"]
+      "inputs": ["e2e/**", "src/**", "playwright.config.ts"]
     },
     "test:watch": {
       "cache": false,

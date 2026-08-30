@@ -84,6 +84,8 @@ build targets Bun's Node 26 compatibility and omits the React Compiler. React, R
 one exact compatible release. The server build leaves `effect` and `@effect/*` imports external so Bun
 loads the application's exact shared peers at runtime. This also preserves runtime-owned dynamic
 imports, such as filesystem migration loading, instead of rewriting them into bundle contexts.
+`bun:*` builtins stay external there too, while the browser build fails the compilation for any
+`bun:*` or `@effect/platform-bun` request and names the boundary the import should move behind.
 
 CSS stays in Rspack's native pipeline, including Tailwind CSS v4 through `@tailwindcss/webpack`.
 Effect `HttpStaticServer` serves the application root's `public/` directory from `/` with
@@ -124,6 +126,11 @@ Concerns consumed directly by React stay callable branded functions: Layout, Loa
 ServerFn. ERSC-only values—Page, Routes, and Application—are opaque handles. Internal modules project
 their runtime state through an accessor instead of exposing fields or maintaining a lookup registry.
 Page stays opaque because authors compose it through Routes rather than render it directly.
+
+Every ERSC value identifies itself by a `Symbol.for` brand, not by constructor identity, so a value
+produced by a duplicated copy of the framework module still composes. Wiring mistakes then surface as
+the ERSC identity error they are, rather than as a misleading claim that the value was never created
+by the matching factory.
 
 Each ERSC module owns an AsyncLocalStorage context for its request runner. Flight rendering binds one
 FiberSet runner before React enters application code. Page, Layout, and Component operations retrieve
@@ -225,9 +232,12 @@ sequenceDiagram
   Note over Nav,Client: Back and Forward may reuse a completed cached tree
 ```
 
-The router uses `window.navigation` without a History API fallback. The Navigation API and
-`NavigationPrecommitController` are mandatory. Native focus and scroll remain enabled, and closing
-the browser Effect scope removes the listener.
+The router uses `window.navigation` without a History API fallback. When the Navigation API or
+`NavigationPrecommitController` is missing, the browser entry stops before hydrating and leaves the
+streamed document untouched, so the application degrades to a plain multi-page application: links
+perform document navigations and forms post their Server Function natively. Client Components are
+not interactive in that mode. Native focus and scroll remain enabled, and closing the browser Effect
+scope removes the listener.
 
 `NavigateEvent.signal` owns the Flight request and its child Effect scope. The precommit handler
 settles at the exact Layout commit, while a post-commit handler keeps the browser navigation active
@@ -342,10 +352,13 @@ Owning modules: [`application/server-fn.ts`](../packages/effective-rsc/src/appli
 
 ## Known limitations
 
+IDs are append-only and never reused; a gap means the limitation no longer applies.
+
 | ID    | Limitation                                                                                                                                                                                                                                            |
 | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | L-002 | Inline native Server Functions with compiler-captured values hit a bound-argument mismatch in the pinned Rspack/RSDR integration.                                                                                                                     |
 | L-003 | A Server Function imported and bound by a Client Component executes progressively, but its document response remains pending. Bind in a Server Component until [Next.js #98045](https://github.com/vercel/next.js/issues/98045) is resolved upstream. |
+| L-004 | A development stylesheet edit recompiles and emits a new CSS chunk, but the running document keeps its current stylesheet. Reload to pick the change up.                                                                                              |
 
 ## Effect and lifetime boundaries
 

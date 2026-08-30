@@ -1,9 +1,11 @@
-import type { Effect, Types } from 'effect';
+import { type Effect, Predicate, type Types } from 'effect';
 import { HttpRouter, type HttpServerResponse } from 'effect/unstable/http';
 
 import { type ERSCIdentity, ERSCIdentityTypeId, type ERSCMember } from './ersc-identity';
 
 declare const RoutesMiddlewareContractTypeId: unique symbol;
+
+const RoutesMiddlewareTypeId: unique symbol = Symbol.for('ersc/RoutesMiddleware');
 
 export type RoutesHttpEffect = Effect.Effect<
   HttpServerResponse.HttpServerResponse,
@@ -46,6 +48,7 @@ class RoutesMiddlewareImpl<Services>
   implements RoutesMiddleware<Services>, RoutesMiddlewareImplementationState<Services>
 {
   declare readonly [RoutesMiddlewareContractTypeId]: typeof RoutesMiddlewareContractTypeId;
+  readonly [RoutesMiddlewareTypeId] = RoutesMiddlewareTypeId;
   readonly [ERSCIdentityTypeId]: ERSCIdentity<Services>;
   readonly httpMiddleware: RoutesMiddlewareImplementationState<Services>['httpMiddleware'];
 
@@ -59,18 +62,16 @@ class RoutesMiddlewareImpl<Services>
   }
 }
 
-export const isRoutesMiddleware = (value: unknown): boolean =>
-  value instanceof RoutesMiddlewareImpl;
-
-const isRoutesMiddlewareImplementation = <Services>(
-  middleware: RoutesMiddleware<Services>,
-): middleware is RoutesMiddleware<Services> & RoutesMiddlewareImplementationState<Services> =>
-  middleware instanceof RoutesMiddlewareImpl;
+export const isRoutesMiddleware = <Services>(
+  value: unknown,
+): value is RoutesMiddleware<Services> & RoutesMiddlewareImplementationState<Services> =>
+  Predicate.hasProperty(value, RoutesMiddlewareTypeId) &&
+  value[RoutesMiddlewareTypeId] === RoutesMiddlewareTypeId;
 
 export const getRoutesMiddlewareState = <Services>(
   middleware: RoutesMiddleware<Services>,
 ): RoutesMiddlewareImplementationState<Services> => {
-  if (!isRoutesMiddlewareImplementation(middleware)) {
+  if (!isRoutesMiddleware<Services>(middleware)) {
     throw new TypeError('Routes middleware must be created with ERSC.Routes.middleware.');
   }
   return middleware;

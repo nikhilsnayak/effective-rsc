@@ -1,7 +1,10 @@
 ## Client navigation
 
 ERSC handles eligible document navigations through the browser Navigation API and
-`NavigationPrecommitController`. There is no History API fallback.
+`NavigationPrecommitController`. There is no History API fallback. A browser missing either one
+never hydrates: the streamed document stays as served and the application behaves as a plain
+multi-page application, with document navigations and natively submitted forms but no interactive
+Client Components.
 
 An intercepted Page navigation has two milestones:
 

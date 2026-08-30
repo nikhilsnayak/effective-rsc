@@ -1,10 +1,12 @@
-import { Effect, Schema, type Types } from 'effect';
+import { Effect, Predicate, Schema, type Types } from 'effect';
 import type { ReactNode } from 'react';
 
 import { type ERSCIdentity, ERSCIdentityTypeId, type ERSCMember } from './ersc-identity';
 import type { ValidRouteParamName } from './route-path';
 
 declare const PageContractTypeId: unique symbol;
+
+const PageDefinitionTypeId: unique symbol = Symbol.for('ersc/PageDefinition');
 
 export type PageParamsSchema<Services> = Schema.ConstraintCodec<
   Readonly<Record<string, unknown>>,
@@ -90,6 +92,7 @@ class PageDefinitionImpl<
     readonly mode: Types.Covariant<Mode>;
     readonly paramNames: Types.Covariant<ParamNames>;
   };
+  readonly [PageDefinitionTypeId] = PageDefinitionTypeId;
   readonly [ERSCIdentityTypeId]: ERSCIdentity<Services>;
   readonly component: PageComponent;
   readonly paramsSchema: ParamsSchema;
@@ -106,18 +109,16 @@ class PageDefinitionImpl<
   }
 }
 
-export const isPageDefinition = (value: unknown): value is AnyPageDefinition<unknown> =>
-  value instanceof PageDefinitionImpl;
-
-const isPageImplementation = <Services>(
-  page: AnyPageDefinition<Services>,
-): page is AnyPageDefinition<Services> & PageImplementationState<Services> =>
-  page instanceof PageDefinitionImpl;
+export const isPageDefinition = <Services>(
+  value: unknown,
+): value is AnyPageDefinition<Services> & PageImplementationState<Services> =>
+  Predicate.hasProperty(value, PageDefinitionTypeId) &&
+  value[PageDefinitionTypeId] === PageDefinitionTypeId;
 
 export const getPageState = <Services>(
   page: AnyPageDefinition<Services>,
 ): PageImplementationState<Services> => {
-  if (!isPageImplementation(page)) {
+  if (!isPageDefinition<Services>(page)) {
     throw new TypeError('Page must be created with ERSC.Page.make.');
   }
   return page;

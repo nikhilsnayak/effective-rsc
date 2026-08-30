@@ -3,6 +3,9 @@
 Every entry is **Accepted**. **Current**, **Planned**, and **Deferred** describe delivery state:
 implemented, accepted but not implemented, and intentionally outside the current milestone.
 
+IDs are append-only and never reused. A gap means the decision was withdrawn or absorbed by a later
+entry; read Git history for what it said.
+
 ## Current
 
 | ID    | Decision                                                                                                                                                                                                                                                          |
@@ -52,7 +55,7 @@ implemented, accepted but not implemented, and intentionally outside the current
 | D-047 | Expose the package-root application API only under the `react-server` condition and throw immediately when imported from another runtime condition.                                                                                                               |
 | D-048 | Treat only `src/application.tsx` as a fixed application input; stylesheets are ordinary imports owned by the modules that use them.                                                                                                                               |
 | D-049 | Keep a concern consumed directly by React's protocol a branded function; keep a concern only ERSC reads an opaque handle projected through an internal accessor.                                                                                                  |
-| D-050 | Preserve `bun:*` imports as server externals and reject them when they enter the browser module graph.                                                                                                                                                            |
+| D-050 | Preserve `bun:*` imports as server externals; reject `bun:*` and `@effect/platform-bun` when they enter the browser module graph.                                                                                                                                 |
 | D-051 | Use the kitchen-sink conference as both the primary real-world example and the current end-to-end integration fixture, with agenda persistence backed by Effect SQL and Bun SQLite.                                                                               |
 | D-052 | Ship authored, executable package documentation and generate its checked-in `LLMS.md` from the same sources with a small Bun script.                                                                                                                              |
 | D-053 | Ship `create-ersc-app` as a Bun-targeted Effect CLI with a version-matched generic Tailwind template, optional dependency installation, and a fallback directory prompt.                                                                                          |
@@ -64,6 +67,8 @@ implemented, accepted but not implemented, and intentionally outside the current
 | D-059 | Require a matching browser Origin host for Server Function POST requests and reject bodies larger than 10 MiB while streaming, before React decodes them.                                                                                                         |
 | D-060 | Map HTML failures before the Fizz shell to `500`; after streaming begins, preserve committed response metadata, report render errors through the request logger, and let React and Web Streams recover or terminate.                                              |
 | D-061 | Preserve React's native Server Components development Performance Tracks with full document and Flight request timing; eliminate that instrumentation from production and defer a Debug Channel transport.                                                        |
+| D-062 | Identify every ERSC value by a `Symbol.for` brand rather than by constructor identity, so a duplicated framework module still composes.                                                                                                                           |
+| D-063 | Skip hydration entirely when the Navigation API or `NavigationPrecommitController` is missing, leaving the streamed document as a plain multi-page application.                                                                                                   |
 
 ## Deferred
 

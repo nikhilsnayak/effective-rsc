@@ -43,261 +43,311 @@ const ServerConfigLayer = Layer.succeed(
   }),
 );
 
+const Origin = 'http://effective-rsc.test';
+const ProtectedUrl = `${Origin}/protected`;
+const MaximumBodyBytes = 10 * 1024 * 1024;
+
+type Harness = {
+  readonly call: (input: Request) => Effect.Effect<Response>;
+  readonly counters: { acquisitions: number; globalRequests: number };
+  readonly events: Array<string>;
+};
+
+const makeHttpLayer = (counters: Harness['counters'], events: Harness['events']) => {
+  const ERSC = Application.ersc<RequestTrace>();
+  const Outer = ERSC.Routes.middleware({
+    handler: (httpEffect) =>
+      Effect.gen(function* () {
+        const trace = yield* RequestTrace;
+        trace.events.push('outer:request');
+        const response = yield* httpEffect;
+        trace.events.push('outer:response');
+        const innerOrder = response.headers['x-middleware-order'];
+        return HttpServerResponse.setHeader(
+          response,
+          'x-middleware-order',
+          innerOrder === undefined ? 'outer' : `${innerOrder},outer`,
+        );
+      }),
+  });
+  const Inner = ERSC.Routes.middleware({
+    handler: () =>
+      Effect.gen(function* () {
+        const trace = yield* RequestTrace;
+        const request = yield* HttpServerRequest.HttpServerRequest;
+        expect(request.url).toBe('/protected');
+        trace.events.push('inner:request');
+        const response = HttpServerResponse.text('Routes middleware response');
+        trace.events.push('inner:response');
+        return HttpServerResponse.setHeader(response, 'x-middleware-order', 'inner');
+      }),
+  });
+  const RootLayout = ERSC.Layout.make({
+    render: ({ children }) => Effect.succeed(<html lang='en'>{children}</html>),
+  });
+  const Page = ERSC.Page.make({
+    render: () => Effect.die('Routes middleware should short-circuit Page rendering.'),
+  });
+  const RequestTraceLayer = Layer.effect(
+    RequestTrace,
+    Effect.sync(() => {
+      counters.acquisitions += 1;
+      return RequestTrace.of({ events });
+    }),
+  );
+  const GlobalMiddlewareLayer = HttpRouter.middleware(
+    (httpEffect) =>
+      Effect.andThen(
+        Effect.sync(() => {
+          counters.globalRequests += 1;
+        }),
+        Effect.map(httpEffect, HttpServerResponse.setHeader('x-global-middleware', 'true')),
+      ),
+    { global: true },
+  );
+  const ApiLayer = HttpRouter.add(
+    'GET',
+    '/api/health',
+    Effect.map(RequestTrace, ({ events: requestEvents }) => {
+      requestEvents.push('api');
+      return HttpServerResponse.text('healthy');
+    }),
+  ).pipe(HttpRouter.provideRequest(RequestTraceLayer));
+  const ApplicationLayer = Layer.mergeAll(RequestTraceLayer, GlobalMiddlewareLayer, ApiLayer);
+  const App = ERSC.make({
+    layer: ApplicationLayer,
+    routes: ERSC.Routes.make({
+      layout: RootLayout,
+      middleware: [Outer],
+    }).mount('/protected', ERSC.Routes.make({ middleware: [Inner] }).page('/', Page)),
+  });
+
+  return ServerApplication.httpLayer(App).pipe(
+    Layer.provide(ServerConfigLayer),
+    Layer.provide(Layer.mergeAll(BunFileSystem.layer, BunHttpPlatform.layer, BunPath.layer)),
+  );
+};
+
+const withHarness = <Value, Error>(
+  use: (harness: Harness) => Effect.Effect<Value, Error>,
+): Effect.Effect<Value, Error> => {
+  decodeAction.mockClear();
+  decodeReply.mockClear();
+  const counters = { acquisitions: 0, globalRequests: 0 };
+  const events: Array<string> = [];
+
+  return Effect.acquireUseRelease(
+    Effect.sync(() =>
+      HttpRouter.toWebHandler(makeHttpLayer(counters, events), {
+        disableLogger: true,
+      }),
+    ),
+    ({ handler }) =>
+      use({ call: (input) => Effect.promise(() => handler(input)), counters, events }),
+    ({ dispose }) => Effect.promise(dispose),
+  );
+};
+
+type ServerFnRequestOptions = Omit<RequestInit, 'headers' | 'method'> & {
+  readonly headers?: Readonly<Record<string, string>>;
+};
+
+const serverFnRequest = (id: string, { headers, ...init }: ServerFnRequestOptions = {}) =>
+  new Request(ProtectedUrl, {
+    ...init,
+    headers: {
+      host: 'effective-rsc.test',
+      origin: Origin,
+      [ServerFnIdHeader]: id,
+      ...headers,
+    },
+    method: 'POST',
+  });
+
 describe('ServerApplication.httpLayer', () => {
-  it.effect('composes application, Routes, and global HTTP concerns in one router', () => {
-    decodeAction.mockClear();
-    decodeReply.mockClear();
-    const events: Array<string> = [];
-    let acquisitions = 0;
-    let globalRequests = 0;
-    const ERSC = Application.ersc<RequestTrace>();
-    const Outer = ERSC.Routes.middleware({
-      handler: (httpEffect) =>
-        Effect.gen(function* () {
-          const trace = yield* RequestTrace;
-          trace.events.push('outer:request');
-          const response = yield* httpEffect;
-          trace.events.push('outer:response');
-          const innerOrder = response.headers['x-middleware-order'];
-          return HttpServerResponse.setHeader(
-            response,
-            'x-middleware-order',
-            innerOrder === undefined ? 'outer' : `${innerOrder},outer`,
-          );
-        }),
-    });
-    const Inner = ERSC.Routes.middleware({
-      handler: () =>
-        Effect.gen(function* () {
-          const trace = yield* RequestTrace;
-          const request = yield* HttpServerRequest.HttpServerRequest;
-          expect(request.url).toBe('/protected');
-          trace.events.push('inner:request');
-          const response = HttpServerResponse.text('Routes middleware response');
-          trace.events.push('inner:response');
-          return HttpServerResponse.setHeader(response, 'x-middleware-order', 'inner');
-        }),
-    });
-    const RootLayout = ERSC.Layout.make({
-      render: ({ children }) => Effect.succeed(<html lang='en'>{children}</html>),
-    });
-    const Page = ERSC.Page.make({
-      render: () => Effect.die('Routes middleware should short-circuit Page rendering.'),
-    });
-    const RequestTraceLayer = Layer.effect(
-      RequestTrace,
-      Effect.sync(() => {
-        acquisitions += 1;
-        return RequestTrace.of({ events });
+  it.effect('runs inherited Routes middleware from ancestor to descendant around a Page GET', () =>
+    withHarness(({ call, events }) =>
+      Effect.gen(function* () {
+        const response = yield* call(new Request(ProtectedUrl));
+
+        const body = yield* Effect.promise(() => response.text());
+
+        expect(response.status).toBe(200);
+        expect(body).toBe('Routes middleware response');
+        expect(response.headers.get('x-middleware-order')).toBe('inner,outer');
+        expect(response.headers.get('x-global-middleware')).toBe('true');
+        expect(events).toEqual([
+          'outer:request',
+          'inner:request',
+          'inner:response',
+          'outer:response',
+        ]);
       }),
-    );
-    const GlobalMiddlewareLayer = HttpRouter.middleware(
-      (httpEffect) =>
-        Effect.andThen(
-          Effect.sync(() => {
-            globalRequests += 1;
-          }),
-          Effect.map(httpEffect, HttpServerResponse.setHeader('x-global-middleware', 'true')),
-        ),
-      { global: true },
-    );
-    const ApiLayer = HttpRouter.add(
-      'GET',
-      '/api/health',
-      Effect.map(RequestTrace, ({ events: requestEvents }) => {
-        requestEvents.push('api');
-        return HttpServerResponse.text('healthy');
+    ),
+  );
+
+  it.effect('runs the same middleware chain for the native HEAD fallback', () =>
+    withHarness(({ call, events }) =>
+      Effect.gen(function* () {
+        const response = yield* call(new Request(ProtectedUrl, { method: 'HEAD' }));
+
+        expect(response.status).toBe(200);
+        expect(response.headers.get('x-middleware-order')).toBe('inner,outer');
+        expect(events).toEqual([
+          'outer:request',
+          'inner:request',
+          'inner:response',
+          'outer:response',
+        ]);
       }),
-    ).pipe(HttpRouter.provideRequest(RequestTraceLayer));
-    const ApplicationLayer = Layer.mergeAll(RequestTraceLayer, GlobalMiddlewareLayer, ApiLayer);
-    const App = ERSC.make({
-      layer: ApplicationLayer,
-      routes: ERSC.Routes.make({
-        layout: RootLayout,
-        middleware: [Outer],
-      }).mount('/protected', ERSC.Routes.make({ middleware: [Inner] }).page('/', Page)),
-    });
-    const HttpLayer = ServerApplication.httpLayer(App).pipe(
-      Layer.provide(ServerConfigLayer),
-      Layer.provide(Layer.mergeAll(BunFileSystem.layer, BunHttpPlatform.layer, BunPath.layer)),
-    );
+    ),
+  );
 
-    return Effect.acquireUseRelease(
-      Effect.sync(() => HttpRouter.toWebHandler(HttpLayer, { disableLogger: true })),
-      ({ handler }) =>
-        Effect.gen(function* () {
-          const pageResponse = yield* Effect.promise(() =>
-            handler(new Request('http://effective-rsc.test/protected')),
-          );
-          expect(pageResponse.status).toBe(200);
-          expect(pageResponse.headers.get('x-middleware-order')).toBe('inner,outer');
-          expect(pageResponse.headers.get('x-global-middleware')).toBe('true');
-          const pageBody = yield* Effect.promise(() => pageResponse.text());
-          expect(pageBody).toBe('Routes middleware response');
-          expect(events).toEqual([
-            'outer:request',
-            'inner:request',
-            'inner:response',
-            'outer:response',
-          ]);
-
-          events.length = 0;
-          const headResponse = yield* Effect.promise(() =>
-            handler(
-              new Request('http://effective-rsc.test/protected', {
-                method: 'HEAD',
-              }),
-            ),
-          );
-          expect(headResponse.status).toBe(200);
-          expect(headResponse.headers.get('x-middleware-order')).toBe('inner,outer');
-          expect(events).toEqual([
-            'outer:request',
-            'inner:request',
-            'inner:response',
-            'outer:response',
-          ]);
-
-          events.length = 0;
-          const missingOriginResponse = yield* Effect.promise(() =>
-            handler(
-              new Request('http://effective-rsc.test/protected', {
-                headers: { host: 'effective-rsc.test' },
-                method: 'POST',
-              }),
-            ),
-          );
-          expect(missingOriginResponse.status).toBe(403);
-
-          const crossOriginResponse = yield* Effect.promise(() =>
-            handler(
-              new Request('http://effective-rsc.test/protected', {
-                headers: {
-                  host: 'effective-rsc.test',
-                  origin: 'https://cross-origin.example',
-                },
-                method: 'POST',
-              }),
-            ),
-          );
-          expect(crossOriginResponse.status).toBe(403);
-
-          const forwardedOriginResponse = yield* Effect.promise(() =>
-            handler(
-              new Request('http://effective-rsc.test/protected', {
-                headers: {
-                  host: 'internal-proxy.test',
-                  origin: 'https://public.example',
-                  [ServerFnIdHeader]: 'forwarded-origin',
-                  'x-forwarded-host': 'public.example, internal-proxy.test',
-                },
-                method: 'POST',
-              }),
-            ),
-          );
-          expect(forwardedOriginResponse.status).toBe(400);
-          expect(decodeReply).toHaveBeenCalledTimes(1);
-
-          const wrongForwardedOriginResponse = yield* Effect.promise(() =>
-            handler(
-              new Request('http://effective-rsc.test/protected', {
-                headers: {
-                  host: 'internal-proxy.test',
-                  origin: 'https://internal-proxy.test',
-                  [ServerFnIdHeader]: 'wrong-forwarded-origin',
-                  'x-forwarded-host': 'public.example, internal-proxy.test',
-                },
-                method: 'POST',
-              }),
-            ),
-          );
-          expect(wrongForwardedOriginResponse.status).toBe(403);
-          expect(decodeReply).toHaveBeenCalledTimes(1);
-
-          const knownOversizedResponse = yield* Effect.promise(() =>
-            handler(
-              new Request('http://effective-rsc.test/protected', {
-                headers: {
-                  'content-length': String(10 * 1024 * 1024 + 1),
-                  host: 'effective-rsc.test',
-                  origin: 'http://effective-rsc.test',
-                  [ServerFnIdHeader]: 'known-oversized',
-                },
-                method: 'POST',
-              }),
-            ),
-          );
-          expect(knownOversizedResponse.status).toBe(413);
-
-          const chunk = new Uint8Array(64 * 1024);
-          let chunksRemaining = 161;
-          const streamingBody = new ReadableStream<Uint8Array>({
-            pull(controller) {
-              if (chunksRemaining === 0) {
-                controller.close();
-                return;
-              }
-              chunksRemaining -= 1;
-              controller.enqueue(chunk);
-            },
-          });
-          const streamingRequestInit: RequestInit & { readonly duplex: 'half' } = {
-            body: streamingBody,
-            duplex: 'half',
-            headers: {
-              host: 'effective-rsc.test',
-              origin: 'http://effective-rsc.test',
-              [ServerFnIdHeader]: 'streaming-oversized',
-            },
+  it.effect('rejects a Server Function POST whose Origin does not match the request host', () =>
+    withHarness(({ call }) =>
+      Effect.gen(function* () {
+        const missingOrigin = yield* call(
+          new Request(ProtectedUrl, {
+            headers: { host: 'effective-rsc.test' },
             method: 'POST',
-          };
-          const streamingOversizedResponse = yield* Effect.promise(() =>
-            handler(new Request('http://effective-rsc.test/protected', streamingRequestInit)),
-          );
-          expect(streamingOversizedResponse.status).toBe(413);
-          expect(decodeReply).toHaveBeenCalledTimes(1);
+          }),
+        );
+        expect(missingOrigin.status).toBe(403);
 
-          const serverFnResponse = yield* Effect.promise(() =>
-            handler(
-              new Request('http://effective-rsc.test/protected', {
-                headers: {
-                  host: 'effective-rsc.test',
-                  origin: 'http://effective-rsc.test',
-                  [ServerFnIdHeader]: 'direct-host',
-                },
-                method: 'POST',
-              }),
-            ),
-          );
-          expect(serverFnResponse.status).toBe(400);
-          expect(serverFnResponse.headers.get('cache-control')).toBe('private, no-store');
-          expect(serverFnResponse.headers.get('vary')).toBe('Accept');
-          expect(serverFnResponse.headers.get('x-middleware-order')).toBeNull();
-          expect(serverFnResponse.headers.get('x-global-middleware')).toBe('true');
+        const crossOrigin = yield* call(
+          serverFnRequest('cross-origin', {
+            headers: { origin: 'https://cross-origin.example' },
+          }),
+        );
+        expect(crossOrigin.status).toBe(403);
+
+        const wrongForwardedOrigin = yield* call(
+          serverFnRequest('wrong-forwarded-origin', {
+            headers: {
+              host: 'internal-proxy.test',
+              origin: 'https://internal-proxy.test',
+              'x-forwarded-host': 'public.example, internal-proxy.test',
+            },
+          }),
+        );
+        expect(wrongForwardedOrigin.status).toBe(403);
+        expect(decodeReply).not.toHaveBeenCalled();
+      }),
+    ),
+  );
+
+  it.effect('accepts a Server Function POST matching the first forwarded host', () =>
+    withHarness(({ call }) =>
+      Effect.gen(function* () {
+        const response = yield* call(
+          serverFnRequest('forwarded-origin', {
+            headers: {
+              host: 'internal-proxy.test',
+              origin: 'https://public.example',
+              'x-forwarded-host': 'public.example, internal-proxy.test',
+            },
+          }),
+        );
+
+        expect(response.status).toBe(400);
+        expect(decodeReply).toHaveBeenCalledTimes(1);
+      }),
+    ),
+  );
+
+  it.effect('rejects Server Function bodies over the limit before React decodes them', () =>
+    withHarness(({ call }) =>
+      Effect.gen(function* () {
+        const knownOversized = yield* call(
+          serverFnRequest('known-oversized', {
+            headers: { 'content-length': String(MaximumBodyBytes + 1) },
+          }),
+        );
+        expect(knownOversized.status).toBe(413);
+
+        const chunk = new Uint8Array(64 * 1024);
+        let chunksRemaining = 161;
+        const streamingBody = new ReadableStream<Uint8Array>({
+          pull(controller) {
+            if (chunksRemaining === 0) {
+              controller.close();
+              return;
+            }
+            chunksRemaining -= 1;
+            controller.enqueue(chunk);
+          },
+        });
+        const streamingInit: ServerFnRequestOptions & { readonly duplex: 'half' } = {
+          body: streamingBody,
+          duplex: 'half',
+        };
+        const streamingOversized = yield* call(
+          serverFnRequest('streaming-oversized', streamingInit),
+        );
+
+        expect(streamingOversized.status).toBe(413);
+        expect(decodeReply).not.toHaveBeenCalled();
+      }),
+    ),
+  );
+
+  it.effect(
+    'leaves Server Function POST outside Routes middleware but inside global middleware',
+    () =>
+      withHarness(({ call, events }) =>
+        Effect.gen(function* () {
+          const response = yield* call(serverFnRequest('direct-host'));
+
+          expect(response.status).toBe(400);
+          expect(response.headers.get('cache-control')).toBe('private, no-store');
+          expect(response.headers.get('vary')).toBe('Accept');
+          expect(response.headers.get('x-middleware-order')).toBeNull();
+          expect(response.headers.get('x-global-middleware')).toBe('true');
           expect(events).toEqual([]);
           expect(decodeAction).not.toHaveBeenCalled();
-          expect(decodeReply).toHaveBeenCalledTimes(2);
-
-          const apiResponse = yield* Effect.promise(() =>
-            handler(new Request('http://effective-rsc.test/api/health')),
-          );
-          const apiBody = yield* Effect.promise(() => apiResponse.text());
-          expect(apiBody).toBe('healthy');
-          expect(apiResponse.headers.get('x-global-middleware')).toBe('true');
-          expect(apiResponse.headers.get('x-middleware-order')).toBeNull();
-          expect(apiResponse.headers.get('cache-control')).toBeNull();
-          expect(apiResponse.headers.get('vary')).toBeNull();
-          expect(events).toEqual(['api']);
-
-          const missingResponse = yield* Effect.promise(() =>
-            handler(new Request('http://effective-rsc.test/missing')),
-          );
-          expect(missingResponse.status).toBe(404);
-          expect(missingResponse.headers.get('x-global-middleware')).toBe('true');
-          expect(globalRequests).toBe(11);
-          expect(acquisitions).toBe(1);
+          expect(decodeReply).toHaveBeenCalledTimes(1);
         }),
-      ({ dispose }) => Effect.promise(dispose),
-    );
-  });
+      ),
+  );
+
+  it.effect('leaves userland HTTP outside Routes middleware and dynamic response headers', () =>
+    withHarness(({ call, events }) =>
+      Effect.gen(function* () {
+        const response = yield* call(new Request(`${Origin}/api/health`));
+
+        const body = yield* Effect.promise(() => response.text());
+
+        expect(body).toBe('healthy');
+        expect(response.headers.get('x-global-middleware')).toBe('true');
+        expect(response.headers.get('x-middleware-order')).toBeNull();
+        expect(response.headers.get('cache-control')).toBeNull();
+        expect(response.headers.get('vary')).toBeNull();
+        expect(events).toEqual(['api']);
+      }),
+    ),
+  );
+
+  it.effect('keeps the native 404 for an unmatched path inside global middleware', () =>
+    withHarness(({ call }) =>
+      Effect.gen(function* () {
+        const response = yield* call(new Request(`${Origin}/missing`));
+
+        expect(response.status).toBe(404);
+        expect(response.headers.get('x-global-middleware')).toBe('true');
+      }),
+    ),
+  );
+
+  it.effect('acquires application services once for the server rather than once per request', () =>
+    withHarness(({ call, counters }) =>
+      Effect.gen(function* () {
+        yield* call(new Request(ProtectedUrl));
+        yield* call(new Request(`${Origin}/api/health`));
+        yield* call(new Request(`${Origin}/missing`));
+
+        expect(counters.globalRequests).toBe(3);
+        expect(counters.acquisitions).toBe(1);
+      }),
+    ),
+  );
 });

@@ -24,8 +24,9 @@ In `src/application.tsx`, create one ERSC instance, define a root Layout and Pag
 and export `ERSC.make(...)`.
 
 Run `bun run check`, `bun run build`, and `bun run start`. The default URL is
-`http://localhost:18193`. `ersc start` accepts `--hostname` and `--port`; command-line flags take
-precedence over `HOST` and `PORT`. See the package README for requirements and manual installation.
+`http://localhost:18193`. Both `ersc dev` and `ersc start` accept `--hostname` and `--port`;
+command-line flags take precedence over `HOST` and `PORT`. See the package README for requirements
+and manual installation.
 
 Files in `public/` are served from `/` with `Cache-Control: public, max-age=0`.
 
@@ -148,7 +149,10 @@ Give work that must outlive a request an explicit application-owned scope.
 ## Client navigation
 
 ERSC handles eligible document navigations through the browser Navigation API and
-`NavigationPrecommitController`. There is no History API fallback.
+`NavigationPrecommitController`. There is no History API fallback. A browser missing either one
+never hydrates: the streamed document stays as served and the application behaves as a plain
+multi-page application, with document navigations and natively submitted forms but no interactive
+Client Components.
 
 An intercepted Page navigation has two milestones:
 
@@ -238,7 +242,6 @@ from `render`; requirements must fit the ERSC service union. Use it only in the 
   in a resolved chain is rejected.
 - Routes middleware wraps matched Page GET and native HEAD fallback only. It does not wrap Server
   Function POST, userland HTTP, assets, or unmatched paths.
-
 - `routes.page(path, page)` adds a Page at an absolute Effect HTTP pattern. Parameter Schema keys must
   exactly match the path parameters.
 - `routes.mount(prefix, childRoutes)` mounts a non-empty same-ERSC graph below an absolute,

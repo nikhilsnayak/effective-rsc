@@ -59,29 +59,42 @@ test.describe('Server Functions', () => {
     }
   });
 
-  test('returns a complete document when submitted before hydration', async ({ page }) => {
+  test('submits progressively when client navigation is unavailable', async ({ page }) => {
     const title = 'A router that waits for the UI';
+    const browserErrors = observeBrowserErrors(page);
+    await page.addInitScript(() => {
+      Object.defineProperty(window, 'navigation', { configurable: true, value: undefined });
+    });
     await page.goto('/schedule/saturday');
     await setAgendaSelection(page, title, false);
-    await page.route('**/_ersc/assets/main*.js', (route) => route.abort());
 
     try {
-      await page.reload({ waitUntil: 'domcontentloaded' });
       let session = sessionCard(page, title);
-      const navigation = page.waitForNavigation({ waitUntil: 'domcontentloaded' });
-      await session.getByRole('button', { name: 'Add to the agenda' }).click();
-      const response = await navigation;
+      await page.evaluate(() => Reflect.set(window, '__ersc_document_marker__', true));
+      const [response] = await Promise.all([
+        page.waitForResponse((candidateResponse) => {
+          const request = candidateResponse.request();
+          return request.isNavigationRequest() && request.method() === 'POST';
+        }),
+        page.waitForEvent('load'),
+        session.getByRole('button', { name: 'Add to the agenda' }).click(),
+      ]);
 
-      expect(response?.status()).toBe(200);
+      expect(response.status()).toBe(200);
       session = sessionCard(page, title);
       await expect(session.getByRole('button', { name: 'Remove from the agenda' })).toBeVisible();
+      expect(
+        await page.evaluate(() => Reflect.get(window, '__ersc_document_marker__')),
+      ).toBeUndefined();
       await expect(session.getByText('Added to the agenda.')).toBeVisible();
       await expect(
         page.locator('section[aria-labelledby="conference-agenda-heading"]'),
       ).toContainText(title);
+      expect(browserErrors).toEqual([]);
     } finally {
-      await page.unroute('**/_ersc/assets/main*.js');
-      await page.goto('/schedule/saturday');
+      await expect(page.getByRole('heading', { level: 1, name: 'Saturday schedule' })).toBeVisible({
+        timeout: 15_000,
+      });
       await setAgendaSelection(page, title, false);
     }
   });

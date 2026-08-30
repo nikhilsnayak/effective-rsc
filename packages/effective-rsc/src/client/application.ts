@@ -1,8 +1,9 @@
+// oxlint-disable effecttsgo/process-env -- Rspack replaces NODE_ENV at compile time.
 import * as BrowserHttpClient from '@effect/platform-browser/BrowserHttpClient';
 import { Effect, Layer } from 'effect';
 
 import { BrowserNavigation } from './browser-navigation';
-import { showBrowserFailure, showUnsupportedBrowser } from './browser-screen';
+import { showBrowserFailure } from './browser-screen';
 import { ClientRuntime } from './client-runtime';
 import { hydrate } from './hydrate';
 
@@ -11,14 +12,20 @@ const ClientLayer = Layer.mergeAll(BrowserNavigation.layer, ClientRuntime.layer)
 );
 
 const renderBrowserFailure = Effect.sync(showBrowserFailure);
-const renderUnsupportedBrowser = Effect.sync(showUnsupportedBrowser);
+
+const skipHydration = (missingApi: string) =>
+  process.env.NODE_ENV === 'development'
+    ? Effect.logWarning(
+        `effective-rsc did not hydrate because this browser does not provide ${missingApi}. The server-rendered document remains a plain multi-page application.`,
+      )
+    : Effect.void;
 
 export const browserApplication = hydrate.pipe(
   Effect.provide(ClientLayer),
   Effect.catchTags({
     BrowserHydrationError: () => renderBrowserFailure,
     BrowserRootHydrationError: () => renderBrowserFailure,
-    NavigationApiUnavailableError: () => renderUnsupportedBrowser,
-    NavigationPrecommitUnavailableError: () => renderUnsupportedBrowser,
+    NavigationApiUnavailableError: () => skipHydration('the Navigation API'),
+    NavigationPrecommitUnavailableError: () => skipHydration('NavigationPrecommitController'),
   }),
 );

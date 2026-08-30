@@ -3,16 +3,26 @@ import { expect, it } from '@effect/vitest';
 import { Effect, FileSystem, Layer, Path, Stream } from 'effect';
 import { vi } from 'vitest';
 
-import { BuildClientOutputDir, DevClientOutputDir } from '../../src/build/contract';
+import { BuildClientOutputDir, DevClientOutputDir, ErscOutputDir } from '../../src/build/contract';
 import { Rspack, type RspackWatchEvent } from '../../src/build/rspack';
 import { makeRspackBuildConfig, makeRspackDevConfig } from '../../src/build/rspack-config';
 import { DevHmrPath } from '../../src/dev/hmr';
 
 type Compiled = Extract<RspackWatchEvent, { readonly _tag: 'Compiled' }>;
 
-const applicationSource = (version: string) => `
+const makeFixtureDirectory = Effect.fnUntraced(function* (prefix: string) {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const fixtureRoot = path.join(path.resolve('.'), ErscOutputDir);
+
+  yield* fileSystem.makeDirectory(fixtureRoot, { recursive: true });
+
+  return yield* fileSystem.makeTempDirectoryScoped({ directory: fixtureRoot, prefix });
+});
+
+const applicationSource = (applicationModule: string, version: string) => `
   import { Effect } from 'effect';
-  import { Application } from 'effective-rsc';
+  import { Application } from ${JSON.stringify(applicationModule)};
 
   const ERSC = Application.ersc();
   const RootLayout = ERSC.Layout.make({
@@ -46,10 +56,8 @@ it.effect(
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const frameworkRoot = path.resolve('.');
-      const directory = yield* fileSystem.makeTempDirectoryScoped({
-        directory: frameworkRoot,
-        prefix: '.ersc-rspack-dev-',
-      });
+      const applicationModule = path.join(frameworkRoot, 'src/application/ersc.ts');
+      const directory = yield* makeFixtureDirectory('ersc-rspack-dev-');
       const sourceDirectory = path.join(directory, 'src');
       const application = path.join(sourceDirectory, 'application.tsx');
 
@@ -67,7 +75,7 @@ it.effect(
         "include": ["src"]
       }`,
       );
-      yield* fileSystem.writeFileString(application, applicationSource('first'));
+      yield* fileSystem.writeFileString(application, applicationSource(applicationModule, 'first'));
 
       const rspack = yield* Rspack;
       const onCompilationStart = vi.fn();
@@ -93,7 +101,10 @@ it.effect(
           Stream.zipWithIndex,
           Stream.tap(([, index]) =>
             index === 0
-              ? fileSystem.writeFileString(application, applicationSource('second'))
+              ? fileSystem.writeFileString(
+                  application,
+                  applicationSource(applicationModule, 'second'),
+                )
               : Effect.void,
           ),
           Stream.take(2),
@@ -119,10 +130,8 @@ it.effect(
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const frameworkRoot = path.resolve('.');
-      const directory = yield* fileSystem.makeTempDirectoryScoped({
-        directory: frameworkRoot,
-        prefix: '.ersc-rspack-build-',
-      });
+      const applicationModule = path.join(frameworkRoot, 'src/application/ersc.ts');
+      const directory = yield* makeFixtureDirectory('ersc-rspack-build-');
       const sourceDirectory = path.join(directory, 'src');
       const application = path.join(sourceDirectory, 'application.tsx');
 
@@ -140,7 +149,10 @@ it.effect(
         "include": ["src"]
       }`,
       );
-      yield* fileSystem.writeFileString(application, applicationSource('production'));
+      yield* fileSystem.writeFileString(
+        application,
+        applicationSource(applicationModule, 'production'),
+      );
 
       const rspack = yield* Rspack;
       yield* rspack.build(

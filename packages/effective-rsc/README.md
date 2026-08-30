@@ -24,8 +24,9 @@ native RSC support.
 ## Requirements
 
 - Bun 1.4 or newer is the only supported server runtime.
-- The browser must support the Navigation API and `NavigationPrecommitController`; there is no
-  History API fallback.
+- Client navigation and hydration require the Navigation API and `NavigationPrecommitController`;
+  there is no History API fallback. Browsers without them receive the server-rendered document as a
+  plain multi-page application, with working links and natively submitted forms.
 - React, React DOM, Effect, Effect's browser and Bun platforms, and
   `react-server-dom-rspack` must use the exact compatible versions shown below.
 

@@ -36,6 +36,7 @@ const TailwindLoaderPath = require.resolve('@tailwindcss/webpack');
 const SupportedBrowserTargets = ['chrome >= 141', 'edge >= 141', 'firefox >= 147'] as const;
 
 const BunModulePrefix = 'bun:';
+const BunPlatformPackage = '@effect/platform-bun';
 const EffectModuleName = 'effect';
 const EffectModulePrefix = `${EffectModuleName}/`;
 const EffectPackagePrefix = '@effect/';
@@ -47,6 +48,9 @@ export type ExternalsRequest = {
 const isBunModule = (request: string | undefined): request is string =>
   request !== undefined && request.startsWith(BunModulePrefix);
 
+const isBunPlatformModule = (request: string | undefined): request is string =>
+  request === BunPlatformPackage || request?.startsWith(`${BunPlatformPackage}/`) === true;
+
 const isEffectModule = (request: string | undefined): request is string =>
   request === EffectModuleName ||
   request?.startsWith(EffectModulePrefix) === true ||
@@ -55,10 +59,10 @@ const isEffectModule = (request: string | undefined): request is string =>
 export const externalizeServerModule = ({ request }: ExternalsRequest): string | false =>
   isBunModule(request) || isEffectModule(request) ? `module ${request}` : false;
 
-export const rejectBunModule = ({ request }: ExternalsRequest): false => {
-  if (isBunModule(request)) {
+export const guardBrowserModule = ({ request }: ExternalsRequest): false => {
+  if (isBunModule(request) || isBunPlatformModule(request)) {
     throw new Error(
-      `"${request}" is a Bun built-in and cannot enter the browser module graph. Move the import behind a Server Component, Layout, Page, or ServerFn boundary so it stays in the server graph.`,
+      `"${request}" runs only on Bun and cannot enter the browser module graph. Move the import behind a Server Component, Layout, Page, or ServerFn boundary so it stays in the server graph.`,
     );
   }
 
@@ -152,7 +156,7 @@ const makeRspackConfig = (
     entry: {
       [ClientEntryName]: entries.client,
     },
-    externals: [rejectBunModule],
+    externals: [guardBrowserModule],
     mode,
     module: {
       rules: [makeCssRule(root, mode), makeSwcRule('browser', mode)],

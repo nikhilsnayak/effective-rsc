@@ -1,4 +1,4 @@
-import type { Types } from 'effect';
+import { Predicate, type Types } from 'effect';
 
 import {
   type ERSCIdentity,
@@ -26,6 +26,8 @@ import {
 } from './routes-middleware';
 
 declare const RoutesContractTypeId: unique symbol;
+
+const RoutesDefinitionTypeId: unique symbol = Symbol.for('ersc/RoutesDefinition');
 
 type RoutesState<HasLayout extends boolean, Paths extends AbsolutePath> = {
   readonly hasLayout: Types.Covariant<HasLayout>;
@@ -146,12 +148,19 @@ type RuntimeRoutesOptions<Services> = RoutesImplementationState<Services> & {
   readonly routeShapes: ReadonlySet<string>;
 };
 
+const isRoutesDefinition = <Services>(
+  value: unknown,
+): value is AnyRoutes<Services> & RoutesImplementationState<Services> =>
+  Predicate.hasProperty(value, RoutesDefinitionTypeId) &&
+  value[RoutesDefinitionTypeId] === RoutesDefinitionTypeId;
+
 class RoutesDefinitionImpl<
   Services,
   HasLayout extends boolean,
   Paths extends AbsolutePath,
 > implements RoutesDefinition<Services, HasLayout, Paths> {
   declare readonly [RoutesContractTypeId]: RoutesState<HasLayout, Paths>;
+  readonly [RoutesDefinitionTypeId] = RoutesDefinitionTypeId;
   readonly [ERSCIdentityTypeId]: ERSCIdentity<Services>;
 
   readonly layout: LayoutComponent<Services> | null;
@@ -196,7 +205,7 @@ class RoutesDefinitionImpl<
     if (this.#routeShapes.has(route.shape)) {
       throw new TypeError(`Route "${path}" conflicts with an existing route pattern.`);
     }
-    if (!isPageDefinition(page)) {
+    if (!isPageDefinition<Services>(page)) {
       throw new TypeError(`Page for "${path}" must be created with ERSC.Page.make.`);
     }
     if (getERSCIdentity(page) !== this[ERSCIdentityTypeId]) {
@@ -236,7 +245,7 @@ class RoutesDefinitionImpl<
     if (route._tag === 'Parameterized') {
       throw new TypeError(`Routes cannot be mounted beneath parameterized path "${path}".`);
     }
-    if (!(routes instanceof RoutesDefinitionImpl)) {
+    if (!isRoutesDefinition<Services>(routes)) {
       throw new TypeError(`Routes mounted at "${path}" must be created with ERSC.Routes.make.`);
     }
     const routesState = getRoutesState(routes);
@@ -270,15 +279,10 @@ class RoutesDefinitionImpl<
   }
 }
 
-const isRoutesImplementation = <Services>(
-  routes: AnyRoutes<Services>,
-): routes is AnyRoutes<Services> & RoutesDefinitionImpl<Services, boolean, AbsolutePath> =>
-  routes instanceof RoutesDefinitionImpl;
-
 export const getRoutesState = <Services>(
   routes: AnyRoutes<Services>,
 ): RoutesImplementationState<Services> => {
-  if (!isRoutesImplementation(routes)) {
+  if (!isRoutesDefinition<Services>(routes)) {
     throw new TypeError('Routes must be created with ERSC.Routes.make.');
   }
   return routes;
@@ -327,7 +331,7 @@ export const makeRoutesFactory = <Services>(
       }
       const seen = new Set<RoutesMiddleware<Services>>();
       for (const routeMiddleware of options.middleware) {
-        if (!isRoutesMiddleware(routeMiddleware)) {
+        if (!isRoutesMiddleware<Services>(routeMiddleware)) {
           throw new TypeError(
             'Every Routes middleware must be created with ERSC.Routes.middleware.',
           );

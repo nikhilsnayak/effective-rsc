@@ -13,15 +13,6 @@ export function BrowserFailureScreen() {
   );
 }
 
-export function UnsupportedBrowserScreen() {
-  return (
-    <main>
-      <h1>Unsupported browser</h1>
-      <p>effective-rsc requires the Navigation API and NavigationPrecommitController.</p>
-    </main>
-  );
-}
-
 const renderBrowserScreen = (screen: ReactNode) => {
   const container = document.createElement('div');
   document.body.replaceChildren(container);
@@ -29,4 +20,3 @@ const renderBrowserScreen = (screen: ReactNode) => {
 };
 
 export const showBrowserFailure = () => renderBrowserScreen(<BrowserFailureScreen />);
-export const showUnsupportedBrowser = () => renderBrowserScreen(<UnsupportedBrowserScreen />);

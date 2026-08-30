@@ -1,4 +1,4 @@
-import { Layer, type Types } from 'effect';
+import { Layer, Predicate, type Types } from 'effect';
 import type { HttpRouter } from 'effect/unstable/http';
 
 import {
@@ -12,6 +12,8 @@ import type { AbsolutePath, ReservedRoutePath } from './route-path';
 import { type AnyRoutes, type RoutesHasLayout, type RoutesPaths } from './routes';
 
 declare const ApplicationContractTypeId: unique symbol;
+
+const ApplicationDefinitionTypeId: unique symbol = Symbol.for('ersc/ApplicationDefinition');
 
 export interface ApplicationDefinition<
   Services,
@@ -34,6 +36,7 @@ class ApplicationDefinitionImpl<Services, ApplicationError> implements Applicati
   declare readonly [ApplicationContractTypeId]: {
     readonly error: Types.Covariant<ApplicationError>;
   };
+  readonly [ApplicationDefinitionTypeId] = ApplicationDefinitionTypeId;
   readonly [ERSCIdentityTypeId]: ERSCIdentity<Services>;
   readonly layer: Layer.Layer<Services, ApplicationError, HttpRouter.HttpRouter>;
   readonly routes: ReadonlyArray<CompiledDestination<Services>>;
@@ -49,16 +52,17 @@ class ApplicationDefinitionImpl<Services, ApplicationError> implements Applicati
   }
 }
 
-const isApplicationImplementation = <Services, ApplicationError>(
-  application: ApplicationDefinition<Services, ApplicationError>,
-): application is ApplicationDefinition<Services, ApplicationError> &
-  ApplicationDefinitionImpl<Services, ApplicationError> =>
-  application instanceof ApplicationDefinitionImpl;
+const isApplicationDefinition = <Services, ApplicationError>(
+  value: unknown,
+): value is ApplicationDefinition<Services, ApplicationError> &
+  ApplicationImplementationState<Services, ApplicationError> =>
+  Predicate.hasProperty(value, ApplicationDefinitionTypeId) &&
+  value[ApplicationDefinitionTypeId] === ApplicationDefinitionTypeId;
 
 export const getApplicationState = <Services, ApplicationError>(
   application: ApplicationDefinition<Services, ApplicationError>,
 ): ApplicationImplementationState<Services, ApplicationError> => {
-  if (!isApplicationImplementation(application)) {
+  if (!isApplicationDefinition<Services, ApplicationError>(application)) {
     throw new TypeError('Application must be created with ERSC.make.');
   }
   return application;

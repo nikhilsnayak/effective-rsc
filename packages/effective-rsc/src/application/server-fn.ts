@@ -2,32 +2,17 @@ import { Effect, Predicate, Schema } from 'effect';
 
 import { attachERSCIdentity, type ERSCIdentity, type ERSCMember } from './ersc-identity';
 
-const ServerFnInvocationTypeId: unique symbol = Symbol('ersc/ServerFnInvocation');
+const ServerFnInvocationTypeId: unique symbol = Symbol.for('ersc/ServerFnInvocation');
 
 class ServerFnOperationError extends Schema.TaggedError<ServerFnOperationError>()(
   'ServerFnOperationError',
   { cause: Schema.Defect() },
 ) {}
 
-abstract class ServerFnInvocationMetadataBase {
-  readonly identity: object;
-
-  constructor(identity: object) {
-    this.identity = identity;
-  }
-}
-
-class ServerFnInvocationMetadata<Output, Services> extends ServerFnInvocationMetadataBase {
+type ServerFnInvocationMetadata<Output, Services> = {
   readonly effect: Effect.Effect<Output, ServerFnOperationError, Services>;
-
-  constructor(
-    effect: Effect.Effect<Output, ServerFnOperationError, Services>,
-    identity: ERSCIdentity<Services>,
-  ) {
-    super(identity);
-    this.effect = effect;
-  }
-}
+  readonly identity: ERSCIdentity<Services>;
+};
 
 type ServerFnInvocationMatch<Services> =
   | { readonly _tag: 'Native' }
@@ -58,9 +43,13 @@ const directInvocationError = () =>
   );
 
 const isServerFnInvocationMetadataFor = <Services>(
-  value: ServerFnInvocationMetadataBase,
+  value: unknown,
   identity: ERSCIdentity<Services>,
-): value is ServerFnInvocationMetadata<unknown, Services> => value.identity === identity;
+): value is ServerFnInvocationMetadata<unknown, Services> =>
+  Predicate.hasProperty(value, 'effect') &&
+  Effect.isEffect(value.effect) &&
+  Predicate.hasProperty(value, 'identity') &&
+  value.identity === identity;
 
 export const matchServerFnInvocation = <Services>(
   value: unknown,
@@ -71,11 +60,10 @@ export const matchServerFnInvocation = <Services>(
   }
 
   const metadata = value[ServerFnInvocationTypeId];
-  if (!(metadata instanceof ServerFnInvocationMetadataBase)) {
-    return { _tag: 'Native' };
-  }
   if (!isServerFnInvocationMetadataFor(metadata, identity)) {
-    return { _tag: 'IdentityMismatch' };
+    return Predicate.hasProperty(metadata, 'identity')
+      ? { _tag: 'IdentityMismatch' }
+      : { _tag: 'Native' };
   }
 
   return { _tag: 'Match', effect: metadata.effect };
@@ -95,7 +83,7 @@ export const makeServerFnFactory = <Services>(
       void unavailable.catch(() => undefined);
 
       return Object.assign(unavailable, {
-        [ServerFnInvocationTypeId]: new ServerFnInvocationMetadata(effect, identity),
+        [ServerFnInvocationTypeId]: Object.freeze({ effect, identity }),
       });
     };
 

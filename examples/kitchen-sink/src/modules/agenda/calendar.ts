@@ -27,7 +27,7 @@ export function formatAgendaCalendar({ agenda, conference, generatedAt }: Agenda
 
     return [
       'BEGIN:VEVENT',
-      `UID:converge-${conference.year}-${item.id}@effective-rsc.dev`,
+      `UID:effective-rsc-conf-${conference.year}-${item.id}@effective-rsc.dev`,
       `DTSTAMP:${calendarTimestamp(generatedAt)}`,
       `DTSTART;TZID=Asia/Kolkata:${calendarTime(item.calendarDate, item.startsAt)}`,
       `DTEND;TZID=Asia/Kolkata:${calendarTime(item.calendarDate, item.endsAt)}`,
@@ -40,7 +40,7 @@ export function formatAgendaCalendar({ agenda, conference, generatedAt }: Agenda
   return `${[
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//Converge//Attendee Agenda//EN',
+    'PRODID:-//effective-rsc Conf//Attendee Agenda//EN',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
     `X-WR-CALNAME:${escapeText(`${conference.name} ${conference.year} agenda`)}`,

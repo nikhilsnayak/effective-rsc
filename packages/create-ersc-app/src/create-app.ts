@@ -1,3 +1,5 @@
+import { styleText } from 'node:util';
+
 import { Console, Effect, FileSystem, Path, Schema } from 'effect';
 import { ChildProcess, ChildProcessSpawner } from 'effect/unstable/process';
 
@@ -62,7 +64,7 @@ export const createApplication = Effect.fn('create-ersc-app/createApplication')(
 
   const templateDirectory = yield* path.fromFileUrl(options.templateUrl);
 
-  yield* Console.log(`Creating ${packageName} in ${directory}`);
+  yield* Console.log(`${styleText('cyan', '●')} Creating ${packageName} in ${directory}`);
   yield* fileSystem.copy(templateDirectory, directory);
   yield* fileSystem.rename(path.join(directory, 'gitignore'), path.join(directory, '.gitignore'));
 
@@ -94,7 +96,7 @@ export const createApplication = Effect.fn('create-ersc-app/createApplication')(
   if (options.install) {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
 
-    yield* Console.log('Installing dependencies with Bun');
+    yield* Console.log(`${styleText('cyan', '●')} Installing dependencies with Bun`);
 
     const exitCode = yield* spawner.exitCode(
       ChildProcess.make('bun', ['install'], {
@@ -112,14 +114,14 @@ export const createApplication = Effect.fn('create-ersc-app/createApplication')(
     }
   }
 
-  yield* Console.log(`\nCreated ${packageName}.`);
-  yield* Console.log(`\n  cd ${shellArgument(options.directory)}`);
+  yield* Console.log(`\n${styleText('green', '✓')} Created ${packageName}.`);
+  yield* Console.log(`\n  ${styleText('dim', 'cd')} ${shellArgument(options.directory)}`);
 
   if (!options.install) {
-    yield* Console.log('  bun install');
+    yield* Console.log(`  ${styleText('dim', 'bun')} install`);
   }
 
-  yield* Console.log('  bun run dev');
+  yield* Console.log(`  ${styleText('dim', 'bun run')} dev`);
 
   return { directory, packageName } as const;
 });

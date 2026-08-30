@@ -22,7 +22,7 @@ const ConferenceInfrastructureLayer = ConferenceRepository.layer.pipe(
 const ConferenceLayer = ConferenceService.layer.pipe(Layer.provide(ConferenceInfrastructureLayer));
 const PublicHttpLayer = HttpRouter.cors({
   allowedMethods: ['GET', 'HEAD'],
-  allowedOrigins: ['https://app.converge.example'],
+  allowedOrigins: ['https://app.effective-rsc.example'],
 });
 const ApplicationLayer = Layer.mergeAll(AgendaHttpLayer, PublicHttpLayer).pipe(
   Layer.provideMerge(ConferenceLayer),

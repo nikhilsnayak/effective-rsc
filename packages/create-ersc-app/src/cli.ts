@@ -42,7 +42,7 @@ const cli = Command.make(
     }).pipe(Effect.mapError((cause) => new CliError.UserError({ cause })));
   }),
 ).pipe(
-  Command.withDescription('Create a new effective-rsc application.'),
+  Command.withDescription('Scaffold an effective-rsc application with Bun.'),
   Command.withExamples([
     {
       command: 'create-ersc-app my-application',

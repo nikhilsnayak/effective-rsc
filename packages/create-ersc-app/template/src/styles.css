@@ -1,1 +1,24 @@
 @import 'tailwindcss';
+
+:root {
+  --paper: #f7f5f1;
+  --ink: #14131a;
+  --muted: #56535f;
+  --accent: #5b3ff0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0e0e15;
+    --ink: #f2f0f6;
+    --muted: #a5a1b2;
+    --accent: #a18cff;
+  }
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+}

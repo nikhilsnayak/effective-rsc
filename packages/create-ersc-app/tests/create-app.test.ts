@@ -83,6 +83,7 @@ describe('createApplication', () => {
       expect(gitignoreExists).toBe(true);
       expect(templateGitignoreExists).toBe(false);
       expect(robots).toBe('User-agent: *\nAllow: /\n');
+      expect(application).toContain('<title>effective-rsc application</title>');
       expect(application).toContain("import './styles.css';");
     }).pipe(Effect.provide(BunServices.layer), Effect.scoped),
   );

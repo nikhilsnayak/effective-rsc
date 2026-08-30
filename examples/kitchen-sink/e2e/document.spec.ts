@@ -13,7 +13,7 @@ const readRenderTimestamp = (html: string, attribute: string) => {
 
 test('streams a complete React document with its hydration payload', async ({ request }) => {
   const { body: html, response } = await getText(request, '/schedule/saturday', {
-    origin: 'https://app.converge.example',
+    origin: 'https://app.effective-rsc.example',
   });
 
   expect(response.status()).toBe(200);
@@ -26,10 +26,12 @@ test('streams a complete React document with its hydration payload', async ({ re
       .map((field) => field.trim())
       .sort(),
   ).toEqual(['Accept', 'Origin']);
-  expect(response.headers()['access-control-allow-origin']).toBe('https://app.converge.example');
+  expect(response.headers()['access-control-allow-origin']).toBe(
+    'https://app.effective-rsc.example',
+  );
   expect(html.startsWith('<!DOCTYPE html>')).toBe(true);
   expect(html).toMatch(/<html[^>]* lang="en"[^>]*>/);
-  expect(html).toContain('<title>Converge 2026 — Conference schedule</title>');
+  expect(html).toContain('<title>effective-rsc Conf 2026 — Conference schedule</title>');
   expect(html).toContain('Loading conference schedule...');
   expect(html).toMatch(/<h1[^>]*>Saturday schedule<\/h1>/);
   expect(html).toContain('self.__FLIGHT_DATA');

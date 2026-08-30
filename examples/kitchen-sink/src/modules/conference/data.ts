@@ -11,8 +11,8 @@ import type {
 export const conference = {
   dates: '22–23 August 2026',
   location: 'Bengaluru, India',
-  name: 'Converge',
-  tagline: 'Two days for people building ambitious software.',
+  name: 'effective-rsc Conf',
+  tagline: 'Two days on React Server Components and the Effect runtime.',
   venue: 'Bangalore International Centre',
   year: 2026,
 } satisfies Conference;

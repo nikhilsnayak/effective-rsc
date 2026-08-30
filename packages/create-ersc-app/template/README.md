@@ -1,6 +1,6 @@
 # effective-rsc application
 
-An effective-rsc application.
+A new effective-rsc application.
 
 ## Requirements
 

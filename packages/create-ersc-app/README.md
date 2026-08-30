@@ -1,6 +1,6 @@
 # create-ersc-app
 
-Create a new effective-rsc application with Bun.
+Scaffold an effective-rsc application with Bun.
 
 ## Requirements
 

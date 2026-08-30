@@ -23,10 +23,17 @@ export default ERSC.Layout.make({
         <body>
           <header className='bg-background border-b'>
             <div className='mx-auto flex max-w-7xl items-center justify-between gap-6 px-5 py-4 sm:px-8'>
-              <a className='flex items-center gap-3' href='/' aria-label='Converge home'>
-                <span className='bg-foreground text-background grid size-9 place-items-center rounded-md font-mono text-xs font-semibold'>
-                  C26
-                </span>
+              <a
+                className='flex items-center gap-3'
+                href='/'
+                aria-label={`${conference.data.name} home`}
+              >
+                <svg aria-hidden='true' className='size-9 shrink-0' viewBox='0 0 64 64'>
+                  <rect x='16' y='27.5' width='26' height='9' rx='4.5' fill='var(--primary)' />
+                  <rect x='16' y='11' width='9' height='42' rx='4.5' fill='var(--foreground)' />
+                  <rect x='16' y='11' width='32' height='9' rx='4.5' fill='var(--foreground)' />
+                  <rect x='16' y='44' width='32' height='9' rx='4.5' fill='var(--foreground)' />
+                </svg>
                 <span>
                   <span className='block leading-none font-semibold'>{conference.data.name}</span>
                   <span className='text-muted-foreground mt-1 block text-xs'>

@@ -3,24 +3,24 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(0.985 0.003 85);
-  --foreground: oklch(0.205 0.006 70);
+  --background: oklch(0.971 0.006 85);
+  --foreground: oklch(0.191 0.014 292);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.205 0.006 70);
+  --card-foreground: oklch(0.191 0.014 292);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.205 0.006 70);
-  --primary: oklch(0.245 0.01 70);
-  --primary-foreground: oklch(0.985 0.003 85);
+  --popover-foreground: oklch(0.191 0.014 292);
+  --primary: oklch(0.52 0.248 281);
+  --primary-foreground: oklch(1 0 0);
   --secondary: oklch(0.95 0.006 80);
-  --secondary-foreground: oklch(0.245 0.01 70);
+  --secondary-foreground: oklch(0.191 0.014 292);
   --muted: oklch(0.955 0.005 80);
-  --muted-foreground: oklch(0.52 0.01 70);
+  --muted-foreground: oklch(0.449 0.02 297);
   --accent: oklch(0.94 0.016 82);
-  --accent-foreground: oklch(0.245 0.01 70);
+  --accent-foreground: oklch(0.191 0.014 292);
   --destructive: oklch(0.58 0.22 27);
   --border: oklch(0.89 0.008 80);
   --input: oklch(0.89 0.008 80);
-  --ring: oklch(0.62 0.025 70);
+  --ring: oklch(0.6 0.211 286);
   --radius: 0.625rem;
 }
 

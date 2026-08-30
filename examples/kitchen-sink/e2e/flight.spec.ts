@@ -6,7 +6,7 @@ import { getText } from './support/http';
 const requestFlight = (request: APIRequestContext, pathname = '/schedule/saturday') =>
   getText(request, pathname, {
     accept: 'text/x-component',
-    origin: 'https://app.converge.example',
+    origin: 'https://app.effective-rsc.example',
   });
 
 test('serves the complete application route tree through the native Flight protocol', async ({
@@ -25,7 +25,9 @@ test('serves the complete application route tree through the native Flight proto
       .map((field) => field.trim())
       .sort(),
   ).toEqual(['Accept', 'Origin']);
-  expect(response.headers()['access-control-allow-origin']).toBe('https://app.converge.example');
+  expect(response.headers()['access-control-allow-origin']).toBe(
+    'https://app.effective-rsc.example',
+  );
   expect(flight).toContain('Saturday schedule');
   expect(flight).toContain('Server Components from first principles');
   expect(flight).toContain('Conference agenda');

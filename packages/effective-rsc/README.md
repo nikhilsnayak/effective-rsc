@@ -1,7 +1,25 @@
-# effective-rsc ![Experimental](https://img.shields.io/badge/status-experimental-orange)
+<picture>
+  <source
+    media="(prefers-color-scheme: dark)"
+    srcset="https://raw.githubusercontent.com/nikhilsnayak/effective-rsc/main/packages/effective-rsc/logo-dark.svg"
+  />
+  <img
+    src="https://raw.githubusercontent.com/nikhilsnayak/effective-rsc/main/packages/effective-rsc/logo.svg"
+    alt=""
+    width="72"
+    height="72"
+  />
+</picture>
 
-A React Server Components framework where React owns the UI protocol and Effect owns the application
-runtime. It uses Rspack's native RSC support and targets Bun.
+# effective-rsc
+
+**React owns the UI. Effect owns the runtime.**
+
+An experimental, Effect-native React Server Components framework for Bun. Built on Rspack's
+native RSC support.
+
+> A research framework, not a production-safe default. It runs on React Canary, Effect v4 RC,
+> TypeScript 7, Rspack's RSC support, and browser APIs with no legacy fallbacks. Expect breakage.
 
 ## Requirements
 

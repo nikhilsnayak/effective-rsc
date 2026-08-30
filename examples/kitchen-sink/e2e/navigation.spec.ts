@@ -242,7 +242,7 @@ test('aborts a committed streaming navigation when it is superseded', async ({ p
 
   await page
     .getByRole('banner')
-    .getByRole('link', { name: 'Converge home' })
+    .getByRole('link', { name: 'effective-rsc Conf home' })
     .evaluate((element: HTMLAnchorElement) => element.click());
   expect(await sundayFlightOutcome.promise).toBe('failed');
   expect(await page.evaluate(() => Reflect.get(window, '__ersc_sunday_navigation_aborted__'))).toBe(
@@ -264,7 +264,7 @@ test('aborts a committed streaming navigation when it is superseded', async ({ p
 
   releaseSupersedingFlight.resolve();
   await expect(page).toHaveURL('/');
-  await expect(page.getByRole('heading', { level: 1, name: 'Converge' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'effective-rsc Conf' })).toBeVisible();
   expect(
     await page.evaluate(() => Reflect.get(window, '__ersc_supersession_rolled_back__')),
   ).not.toBe(true);
@@ -324,7 +324,7 @@ test('retains the root Layout when navigating from the landing page into a day',
 
   await expect(page).toHaveURL('/schedule/saturday');
   await expect(page.getByRole('heading', { level: 1, name: 'Saturday schedule' })).toBeVisible();
-  await expect(page.getByRole('heading', { level: 1, name: 'Converge' })).toBeHidden();
+  await expect(page.getByRole('heading', { level: 1, name: 'effective-rsc Conf' })).toBeHidden();
   expect(
     await conferenceHeader.evaluate((element) => Reflect.get(element, '__ersc_shell_marker__')),
   ).toBe(true);

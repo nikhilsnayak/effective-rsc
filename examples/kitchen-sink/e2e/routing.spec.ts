@@ -8,7 +8,7 @@ test('renders every declared route as HTML and Flight', async ({ request }) => {
   const flight = await getText(request, '/schedule/sunday', { accept: 'text/x-component' });
 
   expect(html.response.status()).toBe(200);
-  expect(html.body).toContain('<title>Converge 2026 — Conference schedule</title>');
+  expect(html.body).toContain('<title>effective-rsc Conf 2026 — Conference schedule</title>');
   expect(html.body).toMatch(/<h1[^>]*>Sunday schedule<\/h1>/);
   expect(html.body).toContain('Mutation protocols that compose');
   expect(html.body).not.toMatch(/<h1[^>]*>Saturday schedule<\/h1>/);
@@ -23,9 +23,9 @@ test('renders a parameter-free Page at the application root', async ({ request }
   const flight = await getText(request, '/', { accept: 'text/x-component' });
 
   expect(html.response.status()).toBe(200);
-  expect(html.body).toContain('<title>Converge 2026 — Conference schedule</title>');
-  expect(html.body).toMatch(/<h1[^>]*>Converge<\/h1>/);
-  expect(html.body).toContain('Two days for people building ambitious software.');
+  expect(html.body).toContain('<title>effective-rsc Conf 2026 — Conference schedule</title>');
+  expect(html.body).toMatch(/<h1[^>]*>effective-rsc Conf<\/h1>/);
+  expect(html.body).toContain('Two days on React Server Components and the Effect runtime.');
   expect(html.body).toContain('/schedule/saturday');
   expect(html.body).not.toMatch(/<h1[^>]*>Saturday schedule<\/h1>/);
 

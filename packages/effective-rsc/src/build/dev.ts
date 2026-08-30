@@ -1,6 +1,7 @@
 import { Deferred, Effect, Layer, Path, Ref, Schema, ScopedRef, Stream } from 'effect';
 import { HttpRouter, HttpServer } from 'effect/unstable/http';
 
+import PackageJson from '../../package.json' with { type: 'json' };
 import { DevHmrPath } from '../dev/hmr';
 import { resolveApplicationBuild } from './build';
 import { loadServerBundle, makeRunnableHttpLayer } from './compiled-server';
@@ -205,7 +206,11 @@ export const makeDevApplication = Effect.fnUntraced(function* ({
 type DevApplication = Effect.Success<ReturnType<typeof makeDevApplication>>;
 
 export const launchDevApplication = Effect.fnUntraced(function* (application: DevApplication) {
-  yield* HttpServer.logAddress;
+  yield* HttpServer.addressFormattedWith((address) =>
+    Effect.logInfo(
+      `${Terminal.magenta('▌')} effective-rsc ${Terminal.dim(PackageJson.version)}  ${address}`,
+    ),
+  );
 
   return yield* Effect.raceFirst(
     application.watch,

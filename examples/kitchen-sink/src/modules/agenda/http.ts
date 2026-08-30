@@ -22,7 +22,7 @@ export const AgendaHttpLayer = HttpRouter.use(
         contentType: 'text/calendar; charset=utf-8',
         headers: {
           'cache-control': 'private, no-store',
-          'content-disposition': `attachment; filename="converge-${conference.data.year}-agenda.ics"`,
+          'content-disposition': `attachment; filename="effective-rsc-conf-${conference.data.year}-agenda.ics"`,
         },
       });
     }).pipe(

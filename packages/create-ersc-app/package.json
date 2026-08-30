@@ -1,7 +1,7 @@
 {
   "name": "create-ersc-app",
   "version": "0.1.0",
-  "description": "Create a new effective-rsc application",
+  "description": "Scaffold an effective-rsc application with Bun",
   "keywords": [
     "bun",
     "effect",

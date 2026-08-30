@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="effective-rsc">
   <rect width="64" height="64" rx="14" fill="#14131A" />
   <g transform="translate(32 32) scale(0.72) translate(-32 -32)">
     <rect x="16" y="27.5" width="26" height="9" rx="4.5" fill="#A18CFF" />

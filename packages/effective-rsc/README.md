@@ -16,20 +16,18 @@ runtime. It uses Rspack's native RSC support and targets Bun.
 ```sh
 bunx create-ersc-app my-effective-rsc-app
 cd my-effective-rsc-app
-bun run check
-bun run build
-bun run start
+bun run dev
 ```
 
 Run `bunx create-ersc-app` without a directory for the interactive flow.
 
 ## Why effective-rsc
 
-- **[Effect is the application runtime](./docs/03-advanced/01-request-runtime-and-lifetimes/index.md).**
+- **[Effect is the application runtime](https://github.com/nikhilsnayak/effective-rsc/blob/main/packages/effective-rsc/docs/03-advanced/01-request-runtime-and-lifetimes/index.md).**
   Pages, Layouts, Components, and Server Functions retain inferred service requirements and run as
   request-scoped Effects. Provide the application Layer once; native Effect HTTP routes, APIs, RPC,
   and middleware share the same Bun server and lifetime.
-- **[Navigation owns the full request lifetime](./docs/03-advanced/02-client-navigation/index.md).**
+- **[Navigation owns the full request lifetime](https://github.com/nikhilsnayak/effective-rsc/blob/main/packages/effective-rsc/docs/03-advanced/02-client-navigation/index.md).**
   The URL commits with visible UI while navigation remains active through Flight EOF. Cancellation
   and supersession interrupt obsolete browser and server work without desynchronizing the URL and
   visible UI.
@@ -62,6 +60,7 @@ Add the framework commands to `package.json`:
 {
   "type": "module",
   "scripts": {
+    "dev": "ersc dev",
     "check": "tsc --noEmit",
     "build": "ersc build",
     "start": "ersc start"
@@ -97,7 +96,8 @@ export default ERSC.make({
 });
 ```
 
-Run `bun run check`, `bun run build`, and `bun run start`, then open `http://localhost:18193`.
+Run `bun run dev`, then open `http://localhost:18193`. For a production run, use `bun run check`,
+`bun run build`, and `bun run start`.
 
 For deployment, `ersc start` accepts `--hostname` and `--port`. Command-line flags take precedence
 over `HOST` and `PORT`; the defaults are `localhost` and `18193`.
@@ -148,11 +148,11 @@ runtime, including a Client Component, throws immediately.
 The [kitchen-sink conference](https://github.com/nikhilsnayak/effective-rsc/tree/main/examples/kitchen-sink)
 is the complete application example.
 
-- [Getting started](./docs/01-getting-started/index.md)
-- [Guides](./docs/02-guides/index.md)
-- [Advanced](./docs/03-advanced/index.md)
-- [API reference](./docs/04-api-reference/index.md)
-- [Combined LLM reference](./LLMS.md)
+- [Getting started](https://github.com/nikhilsnayak/effective-rsc/blob/main/packages/effective-rsc/docs/01-getting-started/index.md)
+- [Guides](https://github.com/nikhilsnayak/effective-rsc/blob/main/packages/effective-rsc/docs/02-guides/index.md)
+- [Advanced](https://github.com/nikhilsnayak/effective-rsc/blob/main/packages/effective-rsc/docs/03-advanced/index.md)
+- [API reference](https://github.com/nikhilsnayak/effective-rsc/blob/main/packages/effective-rsc/docs/04-api-reference/index.md)
+- [Combined LLM reference](https://github.com/nikhilsnayak/effective-rsc/blob/main/packages/effective-rsc/LLMS.md)
 
 ## Credits
 

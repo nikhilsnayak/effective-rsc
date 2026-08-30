@@ -22,17 +22,20 @@ const calendarTimestamp = (dateTime: DateTime.Utc) =>
   DateTime.formatIso(dateTime).replaceAll('-', '').replaceAll(':', '').replace('.000', '');
 
 export function formatAgendaCalendar({ agenda, conference, generatedAt }: AgendaCalendarOptions) {
-  const location = escapeText(`${conference.venue}, ${conference.location}`);
-  const events = agenda.flatMap((item) => [
-    'BEGIN:VEVENT',
-    `UID:converge-${conference.year}-${item.id}@effective-rsc.dev`,
-    `DTSTAMP:${calendarTimestamp(generatedAt)}`,
-    `DTSTART;TZID=Asia/Kolkata:${calendarTime(item.calendarDate, item.startsAt)}`,
-    `DTEND;TZID=Asia/Kolkata:${calendarTime(item.calendarDate, item.endsAt)}`,
-    `SUMMARY:${escapeText(item.title)}`,
-    `LOCATION:${location}`,
-    'END:VEVENT',
-  ]);
+  const events = agenda.flatMap((item) => {
+    const location = escapeText(`${item.room}, ${conference.venue}, ${conference.location}`);
+
+    return [
+      'BEGIN:VEVENT',
+      `UID:converge-${conference.year}-${item.id}@effective-rsc.dev`,
+      `DTSTAMP:${calendarTimestamp(generatedAt)}`,
+      `DTSTART;TZID=Asia/Kolkata:${calendarTime(item.calendarDate, item.startsAt)}`,
+      `DTEND;TZID=Asia/Kolkata:${calendarTime(item.calendarDate, item.endsAt)}`,
+      `SUMMARY:${escapeText(item.title)}`,
+      `LOCATION:${location}`,
+      'END:VEVENT',
+    ];
+  });
 
   return `${[
     'BEGIN:VCALENDAR',

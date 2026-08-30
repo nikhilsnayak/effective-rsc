@@ -38,7 +38,9 @@ describe('formatAgendaCalendar', () => {
       'DTSTART;TZID=Asia/Kolkata:20260822T093000\r\nDTEND;TZID=Asia/Kolkata:20260822T101500',
     );
     expect(calendar).toContain('SUMMARY:Mutation protocols that compose');
-    expect(calendar).toContain('LOCATION:Bangalore International Centre\\, Bengaluru\\, India');
+    expect(calendar).toContain(
+      'LOCATION:Studio\\, Bangalore International Centre\\, Bengaluru\\, India',
+    );
     expect(calendar.match(/BEGIN:VEVENT/g)).toHaveLength(2);
     expect(calendar.endsWith('END:VCALENDAR\r\n')).toBe(true);
   });

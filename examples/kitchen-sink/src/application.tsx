@@ -3,6 +3,7 @@ import { Layer } from 'effect';
 import { HttpRouter } from 'effect/unstable/http';
 
 import { ERSC } from '@/ersc';
+import { AgendaHttpLayer } from '@/modules/agenda/http';
 import { ConferenceHomePage } from '@/modules/conference/components/conference-home';
 import ConferenceShell from '@/modules/conference/components/conference-shell';
 import { ConferenceRepository } from '@/modules/conference/repository';
@@ -23,7 +24,9 @@ const PublicHttpLayer = HttpRouter.cors({
   allowedMethods: ['GET', 'HEAD'],
   allowedOrigins: ['https://app.converge.example'],
 });
-const ApplicationLayer = Layer.mergeAll(ConferenceLayer, PublicHttpLayer);
+const ApplicationLayer = Layer.mergeAll(AgendaHttpLayer, PublicHttpLayer).pipe(
+  Layer.provideMerge(ConferenceLayer),
+);
 
 export default ERSC.make({
   routes: ERSC.Routes.make({ layout: ConferenceShell })

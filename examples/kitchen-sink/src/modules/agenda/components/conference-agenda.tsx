@@ -1,6 +1,8 @@
-import { CalendarCheck2, MapPin } from 'lucide-react';
+import { CalendarArrowDown, CalendarCheck2, MapPin } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
+import { buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import type { AgendaItem, ObservedQuery } from '@/modules/conference/model';
 
 type ConferenceAgendaProps = {
@@ -37,9 +39,19 @@ export default function ConferenceAgenda({ agenda }: ConferenceAgendaProps) {
           </li>
         ))}
       </ol>
-      <p className='text-muted-foreground mt-4 text-xs leading-5'>
-        Your selected sessions are ready across both conference days.
-      </p>
+      <div className='mt-4 flex flex-wrap items-center justify-between gap-3'>
+        <p className='text-muted-foreground text-xs leading-5'>
+          Your selected sessions are ready across both conference days.
+        </p>
+        <a
+          className={cn(buttonVariants({ size: 'sm', variant: 'outline' }))}
+          download
+          href='/agenda/calendar.ics'
+        >
+          <CalendarArrowDown aria-hidden='true' />
+          Download calendar
+        </a>
+      </div>
     </section>
   );
 }

@@ -8,15 +8,14 @@ import { HttpRouter, HttpServerResponse } from 'effect/unstable/http';
 
 import { Catalog } from '../02-services/10_catalog';
 
-const CatalogApi = HttpRouter.add(
-  'GET',
-  '/api/catalog',
-  Effect.gen(function* () {
+const CatalogApi = HttpRouter.use(
+  Effect.fnUntraced(function* (router) {
     const catalog = yield* Catalog;
-    const featured = yield* catalog.featured;
-    return HttpServerResponse.jsonUnsafe(featured);
+    const featuredResponse = Effect.map(catalog.featured, HttpServerResponse.jsonUnsafe);
+
+    yield* router.add('GET', '/api/catalog', featuredResponse);
   }),
-).pipe(HttpRouter.provideRequest(Catalog.layer));
+);
 
 const GlobalHeaders = HttpRouter.middleware(
   (httpEffect) =>
@@ -24,4 +23,6 @@ const GlobalHeaders = HttpRouter.middleware(
   { global: true },
 );
 
-export const ApplicationLayer = Layer.mergeAll(Catalog.layer, CatalogApi, GlobalHeaders);
+export const ApplicationLayer = Layer.mergeAll(CatalogApi, GlobalHeaders).pipe(
+  Layer.provideMerge(Catalog.layer),
+);

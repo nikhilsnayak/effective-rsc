@@ -1,27 +1,19 @@
 /**
- * @title Rendering a Server Function form
+ * @title Rendering a direct form action
  *
- * Receive the server-bound action as a Client Component prop.
+ * A FormData Server Function can be passed directly to form action.
  */
-'use client';
+import { Effect } from 'effect';
 
-import { useActionState } from 'react';
+import { ERSC } from './10_ersc';
+import { followAuthor } from './20_follow-author';
 
-import type { FollowAuthorState } from './20_follow-author';
-
-export function FollowAuthorButton({
-  action,
-}: {
-  readonly action: () => Promise<FollowAuthorState>;
-}) {
-  const [state, formAction, pending] = useActionState<FollowAuthorState | null>(action, null);
-
-  return (
-    <form action={formAction}>
-      <button disabled={pending} type='submit'>
-        {pending ? 'Saving…' : state?.following ? 'Following' : 'Follow author'}
-      </button>
-      {state?.following ? <p>Following {state.authorId}</p> : null}
-    </form>
-  );
-}
+export const FollowAuthorButton = ERSC.Component.make({
+  render: ({ authorId }: { readonly authorId: string }) =>
+    Effect.succeed(
+      <form action={followAuthor}>
+        <input name='authorId' type='hidden' value={authorId} />
+        <button type='submit'>Follow author</button>
+      </form>,
+    ),
+});

@@ -70,14 +70,16 @@ Effect HTTP. Familiarity with React Server Components and Effect is assumed.
 
 `ERSC.ServerFn.make` decodes Schema input and runs an Effect handler with application services.
 
-Let the input Schema infer the handler parameter. Bind input known on the server before passing the
-action to a Client Component when the form must work without JavaScript.
+Callers pass the Schema's encoded type and the handler receives its decoded type. Use an ordinary
+`Schema.Struct(...)` for object input. Use `Schema.fromFormData(...)` when a native form supplies the
+input; a function returning `void` can then be passed directly to `<form action>`. Let the Schema
+infer the handler parameter.
 
 A successful invocation refreshes the current route.
 
 - **[Creating the Server Function authoring module](./docs/02-guides/01-server-functions/10_ersc.ts)**
-- **[Defining a Server Function](./docs/02-guides/01-server-functions/20_follow-author.ts)**: ERSC decodes input before running the Effect handler.
-- **[Rendering a Server Function form](./docs/02-guides/01-server-functions/30_follow-author-button.tsx)**: Receive the server-bound action as a Client Component prop.
+- **[Defining a Server Function](./docs/02-guides/01-server-functions/20_follow-author.ts)**: ERSC decodes FormData before running the Effect handler.
+- **[Rendering a direct form action](./docs/02-guides/01-server-functions/30_follow-author-button.tsx)**: A FormData Server Function can be passed directly to form action.
 - **[Closing the Server Function application](./docs/02-guides/01-server-functions/40_application.tsx)**
 
 ## Services
@@ -251,15 +253,31 @@ Root Routes require a Layout and at least one Page.
 `ERSC.ServerFn.make({ input, handler })` creates a Server Function reference. `input` decodes the
 invocation payload and automatically infers the `handler` parameter. Do not annotate it. `handler`
 returns an Effect whose requirements fit the ERSC service union. The returned client reference
-accepts the same inferred input type and resolves `Promise<Output>`.
+accepts the Schema's encoded type and resolves `Promise<Output>`; the handler receives its decoded
+type.
 
 ```ts
-const Input = Schema.Struct({ authorId: Schema.NonEmptyString });
-
 const followAuthor = ERSC.ServerFn.make({
-  input: Input,
-  handler: (input) => Effect.succeed(input.authorId),
+  input: Schema.Struct({ authorId: Schema.NonEmptyString }),
+  handler: ({ authorId }) => Effect.succeed({ authorId, following: true }),
 });
+```
+
+Its client reference accepts `{ authorId: string }`.
+
+Schema transformations may use a different encoded type. For a native form, decode `FormData` and
+return `void` so React accepts the function directly as `form.action`:
+
+```tsx
+const followAuthorForm = ERSC.ServerFn.make({
+  input: Schema.fromFormData(Schema.Struct({ authorId: Schema.NonEmptyString })),
+  handler: ({ authorId }) => Effect.logInfo('Followed author', { authorId }),
+});
+
+<form action={followAuthorForm}>
+  <input name='authorId' />
+  <button type='submit'>Follow</button>
+</form>;
 ```
 
 Direct server invocation throws. The handler's Effect error type is not part of the client Promise

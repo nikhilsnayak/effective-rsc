@@ -320,6 +320,9 @@ sequenceDiagram
 
 Progressive enhancement uses the initial-document pipeline after mutation. Binding a named
 `ERSC.ServerFn.make` in a Server Component emits the native metadata needed by both invocation paths.
+Its Schema decodes the encoded invocation value before the request-scoped handler runs; a
+`Schema.fromFormData(...)` function therefore accepts native `FormData` and, when it returns `void`,
+may be used directly as a form action.
 
 Request or protocol failures return non-2xx responses. After an invocation executes, the server
 returns 200 Flight containing both the route refresh and an imperative `Success` or `Failure` result.

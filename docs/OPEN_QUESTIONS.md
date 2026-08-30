@@ -68,3 +68,18 @@ IDs are append-only and never reused, including after a question is resolved.
 - **Resolution:** Future exploration; use the first run to define assertions and a result schema
   without embedding its solution.
 - **Status:** Deferred until the baseline framework feature set is ready.
+
+## OQ-008 — Multi-argument Server Function input
+
+- **Question:** How should ERSC model React actions that receive both previous state and submitted
+  input?
+- **Why:** `ERSC.ServerFn.make` currently models one encoded input. Direct form actions fit that
+  contract, while `useActionState` payload actions receive `(previousState, payload)`.
+- **Affected:** Server Function Schema authoring, `useActionState`, progressive enhancement, and
+  client reference typing.
+- **Evidence:** `Schema.fromFormData(...)` provides a sound one-argument `FormData` contract but
+  cannot describe React's two-argument action signature without loosening inference or adding an
+  explicit API shape.
+- **Related:** D-009, D-036, D-040, OQ-006.
+- **Resolution:** Unresolved.
+- **Status:** Open.

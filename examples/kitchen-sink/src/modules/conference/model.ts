@@ -30,6 +30,7 @@ export type Speaker = {
 };
 
 export type Schedule = {
+  readonly calendarDate: string;
   readonly date: string;
   readonly day: ConferenceDay;
   readonly label: string;
@@ -43,6 +44,7 @@ export type ScheduleDefinition = Omit<Schedule, 'sessions'> & {
 };
 
 export type AgendaItem = Pick<Session, 'endsAt' | 'id' | 'room' | 'startsAt' | 'title'> & {
+  readonly calendarDate: string;
   readonly dayLabel: string;
 };
 

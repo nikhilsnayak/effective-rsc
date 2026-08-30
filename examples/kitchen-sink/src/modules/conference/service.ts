@@ -37,9 +37,10 @@ export class ConferenceService extends Context.Service<ConferenceService>()(
           unavailable('load agenda'),
           Effect.flatMap((selectedIds) => {
             const items: Array<AgendaItem> = [];
-            for (const [sessionId, { dayLabel, session }] of sessionById) {
+            for (const [sessionId, { calendarDate, dayLabel, session }] of sessionById) {
               if (selectedIds.has(sessionId)) {
                 items.push({
+                  calendarDate,
                   dayLabel,
                   endsAt: session.endsAt,
                   id: session.id,

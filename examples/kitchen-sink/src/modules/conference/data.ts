@@ -19,6 +19,7 @@ export const conference = {
 
 export const schedules = {
   saturday: {
+    calendarDate: '2026-08-22',
     date: '22 August',
     day: 'saturday',
     label: 'Saturday',
@@ -70,6 +71,7 @@ export const schedules = {
     ],
   },
   sunday: {
+    calendarDate: '2026-08-23',
     date: '23 August',
     day: 'sunday',
     label: 'Sunday',
@@ -170,18 +172,20 @@ export const speakers: ReadonlyMap<
   ],
 ]);
 
-export const sessionById: ReadonlyMap<
-  string,
-  { readonly dayLabel: string; readonly session: SessionDefinition }
-> = new Map(
+type IndexedSession = {
+  readonly calendarDate: string;
+  readonly dayLabel: string;
+  readonly session: SessionDefinition;
+};
+
+export const sessionById: ReadonlyMap<string, IndexedSession> = new Map(
   Object.values(schedules).flatMap((schedule) =>
     schedule.sessions.map(
-      (
-        session,
-      ): readonly [string, { readonly dayLabel: string; readonly session: SessionDefinition }] => [
-        session.id,
-        { dayLabel: schedule.label, session },
-      ],
+      (session) =>
+        [
+          session.id,
+          { calendarDate: schedule.calendarDate, dayLabel: schedule.label, session },
+        ] satisfies readonly [string, IndexedSession],
     ),
   ),
 );

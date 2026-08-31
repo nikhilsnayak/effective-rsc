@@ -1,18 +1,18 @@
 import * as BrowserSocket from '@effect/platform-browser/BrowserSocket';
-import { Effect, Ref, Schedule, Schema, Semaphore } from 'effect';
-import * as Socket from 'effect/unstable/socket/Socket';
+import { Effect, Layer, Ref, Semaphore, Stream } from 'effect';
+import { RpcClient, RpcSerialization } from 'effect/unstable/rpc';
 
 import { makeBrowserRefresh } from './browser-refresh';
-import { DevChannelMessageJson, DevChannelPath, type DevChannelMessage } from './channel';
+import { DevChannelPath, DevRpcs, type DevUpdate } from './channel';
 import { decideHotUpdate, type HotUpdateCheck, type PendingDevUpdate } from './hmr-update';
 import { makeDevPanel } from './panel';
 import { reportBrowserFailures } from './runtime-failure';
 
 const reload = Effect.sync(() => location.reload());
 
-type DevUpdate = Exclude<DevChannelMessage, { readonly _tag: 'BuildFailed' }>;
+type DevHotUpdate = Exclude<DevUpdate, { readonly _tag: 'BuildFailed' }>;
 
-const recordUpdate = (pending: PendingDevUpdate, message: DevUpdate): PendingDevUpdate => ({
+const recordUpdate = (pending: PendingDevUpdate, message: DevHotUpdate): PendingDevUpdate => ({
   acknowledgedClientHash: pending.acknowledgedClientHash,
   clientHash: message.clientHash,
   rscRefresh:
@@ -69,11 +69,9 @@ const runDevClient = Effect.fnUntraced(function* (panel: Effect.Success<typeof m
     rscRefresh: 'Current',
   });
   const updateLock = yield* Semaphore.make(1);
-  const socket = yield* Socket.Socket;
-  const decode = Schema.decodeUnknownEffect(DevChannelMessageJson);
+  const client = yield* RpcClient.make(DevRpcs);
   const refreshCurrentRoute = yield* makeBrowserRefresh;
-  const handleMessage = Effect.fnUntraced(function* (data: string) {
-    const message = yield* decode(data);
+  const handleUpdate = Effect.fnUntraced(function* (message: DevUpdate) {
     if (message._tag === 'BuildFailed') {
       yield* panel.dispatch(message);
       return;
@@ -90,7 +88,7 @@ const runDevClient = Effect.fnUntraced(function* (panel: Effect.Success<typeof m
     yield* panel.dispatch({ _tag: 'Reconciled' });
   });
 
-  yield* socket.runString(handleMessage);
+  yield* client.ObserveDevUpdates().pipe(Stream.runForEach(handleUpdate));
 });
 
 export const startDevClient = Effect.gen(function* () {
@@ -101,8 +99,10 @@ export const startDevClient = Effect.gen(function* () {
   const socketProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const socketUrl = `${socketProtocol}//${location.host}${DevChannelPath}`;
 
-  yield* runDevClient(panel).pipe(
-    Effect.provide(BrowserSocket.layerWebSocket(socketUrl)),
-    Effect.retry(Schedule.exponential('1 second')),
+  const ProtocolLayer = RpcClient.layerProtocolSocket({ retryTransientErrors: true }).pipe(
+    Layer.provide(BrowserSocket.layerWebSocket(socketUrl)),
+    Layer.provide(RpcSerialization.layerJson),
   );
+
+  yield* runDevClient(panel).pipe(Effect.provide(ProtocolLayer));
 });

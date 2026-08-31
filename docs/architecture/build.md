@@ -30,9 +30,10 @@ CSS remains in Rspack's pipeline, including Tailwind CSS v4 through `@tailwindcs
 
 `ersc dev` watches the same browser and server compiler graphs. A successful generation atomically
 replaces the active server application. Browser updates use the compiler's HMR protocol; RSC changes
-refresh the current route through the Navigation API. Development-only branches are removed from
-production builds. On shutdown, the development channel closes active `/_ersc/dev` WebSockets
-before stopping the Bun HTTP server, so connected browser tabs cannot retain the process.
+refresh the current route through the Navigation API. A streaming Effect RPC carries development
+updates over `/_ersc/dev`. Development-only branches are removed from production builds. On
+shutdown, the development channel closes active WebSockets before stopping the Bun HTTP server, so
+connected browser tabs cannot retain the process.
 
 React Server Components Performance Tracks remain native. Initial hydration uses the document
 timeline origin; navigation and Server Function decoding receive a timestamp captured before HTTP

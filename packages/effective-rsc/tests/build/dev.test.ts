@@ -1,20 +1,11 @@
 import * as BunHttpServer from '@effect/platform-bun/BunHttpServer';
 import * as BunServices from '@effect/platform-bun/BunServices';
 import { expect, it } from '@effect/vitest';
-import {
-  Deferred,
-  Effect,
-  Fiber,
-  FileSystem,
-  Layer,
-  Logger,
-  Path,
-  Ref,
-  Schedule,
-  Stream,
-} from 'effect';
+import { Deferred, Effect, Fiber, FileSystem, Layer, Logger, Path, Ref, Stream } from 'effect';
 import { TestClock } from 'effect/testing';
 import { HttpServer, HttpServerRequest } from 'effect/unstable/http';
+import { RpcClient, RpcSerialization } from 'effect/unstable/rpc';
+import * as Socket from 'effect/unstable/socket/Socket';
 
 import {
   acquireDevGeneration,
@@ -25,7 +16,7 @@ import {
 import { makeDevChannel } from '../../src/build/dev-channel';
 import { Rspack, RspackError } from '../../src/build/rspack';
 import { Terminal } from '../../src/build/terminal';
-import { DevChannelPath } from '../../src/dev/channel';
+import { DevChannelPath, DevRpcs } from '../../src/dev/channel';
 
 const EffectModuleUrl = import.meta.resolve('effect');
 const HttpModuleUrl = import.meta.resolve('effect/unstable/http');
@@ -256,14 +247,6 @@ it.effect('continues watching after a generation fails to start', () =>
     );
 
     expect(response.status).toBe(204);
-    const hmrError = yield* application.httpEffect.pipe(
-      Effect.provideService(
-        HttpServerRequest.HttpServerRequest,
-        HttpServerRequest.fromWeb(new Request(`http://localhost${DevChannelPath}`)),
-      ),
-      Effect.flip,
-    );
-    expect(hmrError).toMatchObject({ _tag: 'HttpServerError' });
     expect(messages).toHaveLength(4);
     expect(messages[0]).toEqual([`${Terminal.cyan('●')} Compiling application...`]);
     expect(messages[1]).toMatchObject([
@@ -364,7 +347,7 @@ it.effect('keeps one HTTP server across successful generations', () =>
   }).pipe(Effect.provide(BunServices.layer), Effect.scoped),
 );
 
-it.effect('stops development while a dev channel WebSocket is active', () =>
+it.effect('streams updates and stops development through the Effect RPC channel', () =>
   Effect.gen(function* () {
     const channel = yield* makeDevChannel;
     const server = yield* HttpServer.HttpServer;
@@ -377,28 +360,22 @@ it.effect('stops development while a dev channel WebSocket is active', () =>
     const launched = yield* launchDevApplication(application).pipe(
       Effect.forkScoped({ startImmediately: true }),
     );
-
-    yield* Effect.acquireRelease(
-      Effect.callback<WebSocket, 'ConnectionFailed'>((resume) => {
-        const socket = new WebSocket(socketUrl);
-        socket.addEventListener('open', () => resume(Effect.succeed(socket)), { once: true });
-        socket.addEventListener(
-          'error',
-          () => {
-            socket.close();
-            resume(Effect.fail('ConnectionFailed'));
-          },
-          { once: true },
-        );
-
-        return Effect.sync(() => socket.close());
-      }).pipe(
-        Effect.retry(Schedule.spaced('10 millis')),
-        Effect.timeout('1 second'),
-        TestClock.withLive,
-      ),
-      (socket) => Effect.sync(() => socket.close()),
+    const ProtocolLayer = RpcClient.layerProtocolSocket({ retryTransientErrors: true }).pipe(
+      Layer.provide(Socket.layerWebSocket(socketUrl)),
+      Layer.provide(Socket.layerWebSocketConstructorGlobal),
+      Layer.provide(RpcSerialization.layerJson),
     );
+    const updates = yield* Effect.gen(function* () {
+      const client = yield* RpcClient.make(DevRpcs);
+      return yield* client.ObserveDevUpdates().pipe(Stream.take(1), Stream.runCollect);
+    }).pipe(Effect.provide(ProtocolLayer), Effect.forkScoped({ startImmediately: true }));
+
+    yield* channel.publishCompilation('client-one');
+    const received = yield* Fiber.join(updates).pipe(
+      Effect.timeout('1 second'),
+      TestClock.withLive,
+    );
+    expect(Array.from(received)).toEqual([{ _tag: 'ClientUpdate', clientHash: 'client-one' }]);
 
     yield* Fiber.interrupt(launched).pipe(Effect.timeout('1 second'), TestClock.withLive);
   }).pipe(Effect.provide(BunHttpServer.layer({ hostname: '127.0.0.1', port: 0 })), Effect.scoped),

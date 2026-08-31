@@ -1,24 +1,15 @@
 import { expect, it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, Schema, Stream } from 'effect';
+import { Deferred, Effect, Fiber, Stream } from 'effect';
 
 import { makeDevChannel } from '../../src/build/dev-channel';
-import { DevChannelMessageJson, type DevChannelMessage } from '../../src/dev/channel';
+import type { DevUpdate } from '../../src/dev/channel';
 
-const ClientUpdate: DevChannelMessage = { _tag: 'ClientUpdate', clientHash: 'client-one' };
-const RscUpdate: DevChannelMessage = { _tag: 'RscUpdate', clientHash: 'client-two' };
-const BuildFailed: DevChannelMessage = {
+const ClientUpdate: DevUpdate = { _tag: 'ClientUpdate', clientHash: 'client-one' };
+const RscUpdate: DevUpdate = { _tag: 'RscUpdate', clientHash: 'client-two' };
+const BuildFailed: DevUpdate = {
   _tag: 'BuildFailed',
   diagnostics: 'Module build failed',
 };
-
-it('round-trips the development HMR wire protocol through Schema', () => {
-  const encode = Schema.encodeSync(DevChannelMessageJson);
-  const decode = Schema.decodeSync(DevChannelMessageJson);
-
-  expect(decode(encode(ClientUpdate))).toEqual(ClientUpdate);
-  expect(decode(encode(RscUpdate))).toEqual(RscUpdate);
-  expect(decode(encode(BuildFailed))).toEqual(BuildFailed);
-});
 
 it.effect('replays the latest update and streams later updates to each subscriber', () =>
   Effect.gen(function* () {
@@ -41,5 +32,5 @@ it.effect('replays the latest update and streams later updates to each subscribe
 
     const received = yield* Fiber.join(updates);
     expect(Array.from(received)).toEqual([ClientUpdate, BuildFailed, RscUpdate]);
-  }),
+  }).pipe(Effect.scoped),
 );

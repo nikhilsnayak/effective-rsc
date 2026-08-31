@@ -1,41 +1,44 @@
-import { Effect, Predicate } from 'effect';
+import { Effect } from 'effect';
 import type { ReactNode } from 'react';
 
-import { attachERSCIdentity, type ERSCIdentity, type ERSCMember } from './ersc-identity';
-
-const LayoutTypeId: unique symbol = Symbol.for('ersc/LayoutConcern');
-
-export type LayoutConcern = {
-  readonly [LayoutTypeId]: typeof LayoutTypeId;
-};
-
-export const isLayoutConcern = (value: unknown): value is LayoutConcern =>
-  Predicate.hasProperty(value, LayoutTypeId) && value[LayoutTypeId] === LayoutTypeId;
+import { attachERSCMember, type ERSCIdentity, type ERSCMember } from './ersc-identity';
+import type { AnyMiddleware } from './middleware';
 
 type LayoutProps = {
   readonly children: Awaited<ReactNode>;
 };
 
-export interface LayoutComponent<Services> extends LayoutConcern, ERSCMember<Services> {
+export interface LayoutComponent<ApplicationServices> extends ERSCMember<
+  ApplicationServices,
+  'Layout'
+> {
   (props: LayoutProps): Promise<Awaited<ReactNode>>;
 }
 
-type LayoutOptions<Error, Services> = {
-  readonly render: (props: LayoutProps) => Effect.Effect<Awaited<ReactNode>, Error, Services>;
+type LayoutOptions<Error, AvailableServices> = {
+  readonly render: (
+    props: LayoutProps,
+  ) => Effect.Effect<Awaited<ReactNode>, Error, AvailableServices>;
 };
 
-export type LayoutFactory<Services> = {
-  readonly make: <Error>(options: LayoutOptions<Error, Services>) => LayoutComponent<Services>;
+export type LayoutFactory<ApplicationServices, AvailableServices> = {
+  readonly make: <Error>(
+    options: LayoutOptions<Error, AvailableServices>,
+  ) => LayoutComponent<ApplicationServices>;
 };
 
-export const makeLayoutFactory = <Services>(
-  identity: ERSCIdentity<Services>,
-): LayoutFactory<Services> => ({
+export const makeLayoutFactory = <ApplicationServices, AvailableServices>(
+  identity: ERSCIdentity<ApplicationServices>,
+  middleware: ReadonlyArray<AnyMiddleware<ApplicationServices>>,
+): LayoutFactory<ApplicationServices, AvailableServices> => ({
   make: ({ render }) => {
     const LayoutComponent = (props: LayoutProps) =>
-      identity.requestRuntime.run(Effect.suspend(() => render(props)));
+      identity.renderRuntime.run(
+        'Layout',
+        Effect.suspend(() => render(props)),
+        middleware,
+      );
 
-    const concern: LayoutConcern = { [LayoutTypeId]: LayoutTypeId };
-    return attachERSCIdentity(Object.assign(LayoutComponent, concern), identity);
+    return attachERSCMember(LayoutComponent, identity, 'Layout');
   },
 });

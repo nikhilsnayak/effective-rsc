@@ -19,7 +19,7 @@ describe('ERSC.Layout.make', () => {
     });
 
     expect(() => Layout({ children: null })).toThrow(
-      new TypeError('An ERSC concern rendered outside its application request runtime.'),
+      new TypeError('ERSC Layout rendered outside its application request runtime.'),
     );
   });
 
@@ -37,7 +37,7 @@ describe('ERSC.Layout.make', () => {
       const child = <main>Home</main>;
 
       const rendered = yield* Effect.promise(() =>
-        getERSCIdentity(App).requestRuntime.bind(runtime, () =>
+        getERSCIdentity(App).renderRuntime.bind(runtime, [], () =>
           PassthroughLayout({ children: child }),
         ),
       );
@@ -70,7 +70,7 @@ describe('ERSC.Layout.make', () => {
       });
 
       const rendered = yield* Effect.promise(() =>
-        getERSCIdentity(App).requestRuntime.bind(runtime, () =>
+        getERSCIdentity(App).renderRuntime.bind(runtime, [], () =>
           LayoutComponent({ children: <main>Home</main> }),
         ),
       );
@@ -106,7 +106,7 @@ describe('ERSC.Layout.make', () => {
         routes: InterruptERSC.Routes.make({ layout: LayoutComponent }).page('/', Page),
       });
       const execution = getERSCIdentity(App)
-        .requestRuntime.bind(runtime, () => LayoutComponent({ children: null }))
+        .renderRuntime.bind(runtime, [], () => LayoutComponent({ children: null }))
         .then(
           () => 'completed' as const,
           () => 'interrupted' as const,

@@ -3,7 +3,7 @@ import { Context, Deferred, Effect, Exit, FiberSet, Ref, Scope } from 'effect';
 
 import { Application } from '../../src/application/ersc';
 import { getERSCIdentity } from '../../src/application/ersc-identity';
-import type { RequestRuntime } from '../../src/application/request-runtime';
+import type { RenderRuntime } from '../../src/application/render-runtime';
 
 class Greeting extends Context.Service<Greeting, { readonly prefix: string }>()(
   'ersc/tests/application/component/Greeting',
@@ -15,7 +15,7 @@ describe('ERSC.Component.make', () => {
     const Component = ERSC.Component.make({ render: () => Effect.succeed(null) });
 
     expect(() => Component({})).toThrow(
-      new TypeError('An ERSC concern rendered outside its application request runtime.'),
+      new TypeError('ERSC Component rendered outside its application request runtime.'),
     );
   });
 
@@ -31,7 +31,7 @@ describe('ERSC.Component.make', () => {
       });
 
       const rendered = yield* Effect.promise(() =>
-        getERSCIdentity(ERSC).requestRuntime.bind(runtime, () =>
+        getERSCIdentity(ERSC).renderRuntime.bind(runtime, [], () =>
           GreetingComponent({ name: 'Nikhil' }),
         ),
       );
@@ -40,11 +40,32 @@ describe('ERSC.Component.make', () => {
     }).pipe(Effect.provideService(Greeting, { prefix: 'Hello' })),
   );
 
+  it.effect('rejects rendering outside its authored middleware scope', () =>
+    Effect.gen(function* () {
+      const ERSC = Application.ersc();
+      const RequireScope = ERSC.Middleware.make((httpEffect) => httpEffect);
+      const ScopedERSC = ERSC.withMiddleware(RequireScope);
+      const Component = ScopedERSC.Component.make({ render: () => Effect.succeed('scoped') });
+      const runtime = yield* FiberSet.makeRuntimePromise<never>();
+      const renderRuntime = getERSCIdentity(ERSC).renderRuntime;
+
+      expect(() => renderRuntime.bind(runtime, [], () => Component({}))).toThrow(
+        new TypeError(
+          'ERSC Component requires a middleware scope that is not active for this request.',
+        ),
+      );
+      const rendered = yield* Effect.promise(() =>
+        renderRuntime.bind(runtime, [RequireScope], () => Component({})),
+      );
+      expect(rendered).toBe('scoped');
+    }),
+  );
+
   it.effect('invokes the authored renderer from inside Effect execution', () =>
     Effect.gen(function* () {
       const ERSC = Application.ersc();
       let runtimeEntered = false;
-      const runtime: RequestRuntime<never> = (effect) => {
+      const runtime: RenderRuntime<never> = (effect) => {
         runtimeEntered = true;
         // oxlint-disable-next-line effecttsgo/run-effect-inside-effect -- custom request runner under test
         return Effect.runPromise(effect).finally(() => {
@@ -59,7 +80,7 @@ describe('ERSC.Component.make', () => {
       });
 
       const rendered = yield* Effect.promise(() =>
-        getERSCIdentity(ERSC).requestRuntime.bind(runtime, () => Component({})),
+        getERSCIdentity(ERSC).renderRuntime.bind(runtime, [], () => Component({})),
       );
 
       expect(rendered).toEqual(<p>Rendered</p>);
@@ -81,7 +102,7 @@ describe('ERSC.Component.make', () => {
         }),
       });
       const execution = getERSCIdentity(ERSC)
-        .requestRuntime.bind(runtime, () => Component({}))
+        .renderRuntime.bind(runtime, [], () => Component({}))
         .then(
           () => 'completed' as const,
           () => 'interrupted' as const,

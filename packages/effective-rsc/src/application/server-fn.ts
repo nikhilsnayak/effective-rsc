@@ -1,6 +1,7 @@
 import { Effect, Predicate, Schema } from 'effect';
 
-import { attachERSCIdentity, type ERSCIdentity, type ERSCMember } from './ersc-identity';
+import { attachERSCMember, type ERSCIdentity, type ERSCMember } from './ersc-identity';
+import type { AnyMiddleware } from './middleware';
 
 const ServerFnInvocationTypeId: unique symbol = Symbol.for('ersc/ServerFnInvocation');
 
@@ -9,20 +10,27 @@ class ServerFnOperationError extends Schema.TaggedError<ServerFnOperationError>(
   { cause: Schema.Defect() },
 ) {}
 
-type ServerFnInvocationMetadata<Output, Services> = {
-  readonly effect: Effect.Effect<Output, ServerFnOperationError, Services>;
-  readonly identity: ERSCIdentity<Services>;
+type ServerFnInvocation<ApplicationServices> = {
+  readonly [ServerFnInvocationTypeId]: {
+    readonly effect: Effect.Effect<unknown, ServerFnOperationError, ApplicationServices>;
+    readonly identity: ERSCIdentity<ApplicationServices>;
+    readonly middleware: ReadonlyArray<AnyMiddleware<ApplicationServices>>;
+  };
 };
 
-type ServerFnInvocationMatch<Services> =
+type ServerFnInvocationMatch<ApplicationServices> =
   | { readonly _tag: 'Native' }
   | { readonly _tag: 'IdentityMismatch' }
   | {
       readonly _tag: 'Match';
-      readonly effect: Effect.Effect<unknown, ServerFnOperationError, Services>;
+      readonly effect: Effect.Effect<unknown, ServerFnOperationError, ApplicationServices>;
+      readonly middleware: ReadonlyArray<AnyMiddleware<ApplicationServices>>;
     };
 
-interface ServerFunction<Input, Output, Services> extends ERSCMember<Services> {
+interface ServerFunction<Input, Output, ApplicationServices> extends ERSCMember<
+  ApplicationServices,
+  'ServerFn'
+> {
   (input: Input): Promise<Output>;
 }
 
@@ -31,47 +39,48 @@ type ServerFnOptions<InputSchema extends Schema.Constraint, Output, Error, Servi
   readonly handler: (input: InputSchema['Type']) => Effect.Effect<Output, Error, Services>;
 };
 
-export type ServerFnFactory<Services> = {
-  readonly make: <InputSchema extends Schema.ConstraintDecoder<unknown, Services>, Output, Error>(
-    options: ServerFnOptions<InputSchema, Output, Error, Services>,
-  ) => ServerFunction<InputSchema['Encoded'], Output, Services>;
+export type ServerFnFactory<ApplicationServices, AvailableServices> = {
+  readonly make: <
+    InputSchema extends Schema.ConstraintDecoder<unknown, AvailableServices>,
+    Output,
+    Error,
+  >(
+    options: ServerFnOptions<InputSchema, Output, Error, AvailableServices>,
+  ) => ServerFunction<InputSchema['Encoded'], Output, ApplicationServices>;
 };
 
 const directInvocationError = () =>
-  new Error(
+  new TypeError(
     'An ERSC ServerFn is a framework intrinsic and cannot be invoked directly in the server graph.',
   );
 
-const isServerFnInvocationMetadataFor = <Services>(
+const isServerFnInvocation = <ApplicationServices>(
   value: unknown,
-  identity: ERSCIdentity<Services>,
-): value is ServerFnInvocationMetadata<unknown, Services> =>
-  Predicate.hasProperty(value, 'effect') &&
-  Effect.isEffect(value.effect) &&
-  Predicate.hasProperty(value, 'identity') &&
-  value.identity === identity;
+): value is ServerFnInvocation<ApplicationServices> =>
+  Predicate.hasProperty(value, ServerFnInvocationTypeId);
 
-export const matchServerFnInvocation = <Services>(
+export const matchServerFnInvocation = <ApplicationServices>(
   value: unknown,
-  identity: ERSCIdentity<Services>,
-): ServerFnInvocationMatch<Services> => {
-  if (!Predicate.hasProperty(value, ServerFnInvocationTypeId)) {
+  identity: ERSCIdentity<ApplicationServices>,
+): ServerFnInvocationMatch<ApplicationServices> => {
+  if (!isServerFnInvocation<ApplicationServices>(value)) {
     return { _tag: 'Native' };
   }
 
+  // The framework-owned brand proves the state shape; matching the opaque identity proves the
+  // application service universe erased by the native React invocation.
   const metadata = value[ServerFnInvocationTypeId];
-  if (!isServerFnInvocationMetadataFor(metadata, identity)) {
-    return Predicate.hasProperty(metadata, 'identity')
-      ? { _tag: 'IdentityMismatch' }
-      : { _tag: 'Native' };
+  if (metadata.identity !== identity) {
+    return { _tag: 'IdentityMismatch' };
   }
 
-  return { _tag: 'Match', effect: metadata.effect };
+  return { _tag: 'Match', effect: metadata.effect, middleware: metadata.middleware };
 };
 
-export const makeServerFnFactory = <Services>(
-  identity: ERSCIdentity<Services>,
-): ServerFnFactory<Services> => ({
+export const makeServerFnFactory = <ApplicationServices, AvailableServices>(
+  identity: ERSCIdentity<ApplicationServices>,
+  middleware: ReadonlyArray<AnyMiddleware<ApplicationServices>>,
+): ServerFnFactory<ApplicationServices, AvailableServices> => ({
   make: ({ input, handler }) => {
     const decode = Schema.decodeUnknownEffect(input);
     const serverFunction = (untrustedInput: typeof input.Encoded) => {
@@ -83,10 +92,10 @@ export const makeServerFnFactory = <Services>(
       void unavailable.catch(() => undefined);
 
       return Object.assign(unavailable, {
-        [ServerFnInvocationTypeId]: Object.freeze({ effect, identity }),
+        [ServerFnInvocationTypeId]: Object.freeze({ effect, identity, middleware }),
       });
     };
 
-    return attachERSCIdentity(serverFunction, identity);
+    return attachERSCMember(serverFunction, identity, 'ServerFn');
   },
 });

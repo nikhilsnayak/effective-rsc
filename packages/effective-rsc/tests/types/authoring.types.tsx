@@ -57,20 +57,13 @@ const RenamedParamsPage = ERSC.Page.make({
   render: ({ params }) => Effect.succeed(params.id),
 });
 
-const middleware = ERSC.Routes.middleware({ handler: (httpEffect) => httpEffect });
-ERSC.Routes.make({ middleware: [middleware] });
-ERSC.Routes.make({
-  // @ts-expect-error Middleware must be a non-empty ordered list.
-  middleware: [],
-});
-ERSC.Routes.make({
-  // @ts-expect-error A single middleware must still be placed in a list.
-  middleware,
-});
-ERSC.Routes.middleware({
-  // @ts-expect-error Routes middleware must handle every typed failure it introduces.
-  handler: (httpEffect) => Effect.andThen(Effect.fail('failure'), httpEffect), // oxlint-disable-line effecttsgo/missing-effect-error -- intentional invalid Effect fixture
-});
+const middleware = ERSC.Middleware.make((httpEffect) => httpEffect);
+ERSC.withMiddleware(middleware).Routes.make();
+ERSC.Middleware.make(
+  // @ts-expect-error Middleware must handle every typed failure it introduces.
+  // oxlint-disable-next-line effecttsgo/missing-effect-context, effecttsgo/missing-effect-error -- intentional invalid Effect fixture
+  (httpEffect) => Effect.andThen(Effect.fail('failure'), httpEffect),
+);
 
 const notesRoutes = ERSC.Routes.make().page('/', HomePage).page('/history', HistoryPage);
 const mountedRoutes = ERSC.Routes.make().mount('/notes', notesRoutes);
@@ -237,15 +230,46 @@ const layoutServicePageOptions = {
 };
 // @ts-expect-error LayoutService is not part of this application's declared contracts.
 NarrowERSC.Page.make(layoutServicePageOptions); // oxlint-disable-line effecttsgo/missing-effect-context -- intentional invalid Effect fixture
-NarrowERSC.Routes.middleware({
-  handler: (httpEffect) =>
-    // @ts-expect-error LayoutService is not part of this application's declared contracts.
-    // oxlint-disable-next-line effecttsgo/missing-effect-context -- intentional invalid Effect fixture
-    Effect.gen(function* () {
-      yield* LayoutService;
-      return yield* httpEffect;
-    }),
+const ProvideLayoutService = NarrowERSC.Middleware.make<{ provides: LayoutService }>((httpEffect) =>
+  httpEffect.pipe(Effect.provideService(LayoutService, LayoutService.of({}))),
+);
+const LayoutServiceERSC = NarrowERSC.withMiddleware(ProvideLayoutService);
+LayoutServiceERSC.Page.make(layoutServicePageOptions);
+const ProvideLayoutDependencies = NarrowERSC.Middleware.make<{
+  provides: LayoutService | LayerDependency;
+}>((httpEffect) =>
+  httpEffect.pipe(
+    Effect.provideService(LayoutService, LayoutService.of({})),
+    Effect.provideService(LayerDependency, LayerDependency.of({})),
+  ),
+);
+const LayoutDependenciesERSC = NarrowERSC.withMiddleware(ProvideLayoutDependencies);
+LayoutDependenciesERSC.Page.make({
+  render: Effect.fnUntraced(function* () {
+    yield* LayoutService;
+    yield* LayerDependency;
+    return null;
+  }),
 });
+NarrowERSC.Middleware.make<{ provides: LayoutService }>(
+  // @ts-expect-error A middleware must provide every service declared in `provides`.
+  // oxlint-disable-next-line effecttsgo/missing-effect-context, effecttsgo/missing-effect-error -- intentional invalid middleware fixture
+  (httpEffect) => httpEffect,
+);
+const RequiresLayoutService = LayoutServiceERSC.Middleware.make((httpEffect) =>
+  Effect.andThen(LayoutService, httpEffect),
+);
+LayoutServiceERSC.withMiddleware(RequiresLayoutService);
+// @ts-expect-error Middleware requirements must already be available in the current scope.
+NarrowERSC.withMiddleware(RequiresLayoutService);
+NarrowERSC.Middleware.make((httpEffect) =>
+  // @ts-expect-error LayoutService is not available to this middleware.
+  // oxlint-disable-next-line effecttsgo/missing-effect-context, effecttsgo/missing-effect-error -- intentional invalid Effect fixture
+  Effect.gen(function* () {
+    yield* LayoutService;
+    return yield* httpEffect;
+  }),
+);
 NarrowERSC.Layout.make({
   // @ts-expect-error LayoutService is not part of this application's declared contracts.
   // oxlint-disable-next-line effecttsgo/missing-effect-context -- intentional invalid Effect fixture

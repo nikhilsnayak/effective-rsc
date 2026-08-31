@@ -3,17 +3,18 @@ import { ArrowRight, CalendarDays, MapPin } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
-import { ERSC } from '@/ersc';
 import { cn } from '@/lib/utils';
+import { AttendeeERSC, CurrentAttendee } from '@/modules/conference/attendee';
 import type { ObservedQuery, Schedule } from '@/modules/conference/model';
 import { ConferenceService } from '@/modules/conference/service';
 import { SessionCard } from '@/modules/schedule/components/session-card';
 
 type ScheduleViewProps = {
+  readonly attendeeName: string | null;
   readonly schedule: ObservedQuery<Schedule>;
 };
 
-const ScheduleView = ({ schedule }: ScheduleViewProps) => {
+const ScheduleView = ({ attendeeName, schedule }: ScheduleViewProps) => {
   const nextDay = schedule.data.day === 'saturday';
 
   return (
@@ -41,6 +42,9 @@ const ScheduleView = ({ schedule }: ScheduleViewProps) => {
           <MapPin aria-hidden='true' className='size-4' />
           Bangalore International Centre
         </p>
+        {attendeeName === null ? null : (
+          <p className='text-muted-foreground mt-2 text-sm'>Personalized for {attendeeName}</p>
+        )}
       </header>
 
       <section className='py-7' aria-label={`${schedule.data.label} sessions`}>
@@ -65,14 +69,15 @@ const ScheduleView = ({ schedule }: ScheduleViewProps) => {
   );
 };
 
-export const SchedulePage = ERSC.Page.make({
+export const SchedulePage = AttendeeERSC.Page.make({
   params: Schema.Struct({
     day: Schema.Literals(['saturday', 'sunday']),
   }),
   render: Effect.fn('SchedulePage')(function* ({ params }) {
+    const attendee = yield* CurrentAttendee;
     const service = yield* ConferenceService;
     const schedule = yield* service.schedule(params.day);
 
-    return <ScheduleView schedule={schedule} />;
+    return <ScheduleView attendeeName={attendee.name} schedule={schedule} />;
   }),
 });

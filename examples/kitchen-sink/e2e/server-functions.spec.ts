@@ -34,7 +34,13 @@ test.describe('Server Functions', () => {
   }) => {
     const title = 'Effect is the runtime, not a utility belt';
     const browserErrors = observeBrowserErrors(page);
+    await page
+      .context()
+      .addCookies([
+        { domain: 'localhost', name: 'conference-attendee', path: '/', value: 'Nikhil' },
+      ]);
     await page.goto('/schedule/saturday');
+    await expect(page.getByText('Personalized for Nikhil')).toBeVisible();
     await setAgendaSelection(page, title, false);
 
     try {
@@ -42,7 +48,7 @@ test.describe('Server Functions', () => {
       await observeScheduleFallback(page);
       await session.getByRole('button', { name: 'Add to the agenda' }).click();
 
-      await expect(session.getByText('Added to the agenda.')).toBeVisible();
+      await expect(session.getByText("Added to Nikhil's agenda.")).toBeVisible();
       await expect(session.getByRole('button', { name: 'Remove from the agenda' })).toBeVisible();
       const agenda = page.locator('section[aria-labelledby="conference-agenda-heading"]');
       await expect(agenda).not.toContainText(title);

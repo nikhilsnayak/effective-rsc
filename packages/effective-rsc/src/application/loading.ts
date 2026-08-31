@@ -1,18 +1,9 @@
-import { type Effect, Predicate } from 'effect';
+import { type Effect } from 'effect';
 import type { ReactNode } from 'react';
 
-import { attachERSCIdentity, type ERSCIdentity, type ERSCMember } from './ersc-identity';
+import { attachERSCMember, type ERSCIdentity, type ERSCMember } from './ersc-identity';
 
-const LoadingTypeId: unique symbol = Symbol.for('ersc/LoadingConcern');
-
-export type LoadingConcern = {
-  readonly [LoadingTypeId]: typeof LoadingTypeId;
-};
-
-export const isLoadingConcern = (value: unknown): value is LoadingConcern =>
-  Predicate.hasProperty(value, LoadingTypeId) && value[LoadingTypeId] === LoadingTypeId;
-
-export interface LoadingComponent<Services> extends LoadingConcern, ERSCMember<Services> {
+export interface LoadingComponent<Services> extends ERSCMember<Services, 'Loading'> {
   (): Awaited<ReactNode>;
 }
 
@@ -37,8 +28,6 @@ export const makeLoadingFactory = <Services>(
 ): LoadingFactory<Services> => ({
   make: ({ render }) => {
     const LoadingComponent = () => render();
-    const concern: LoadingConcern = { [LoadingTypeId]: LoadingTypeId };
-
-    return attachERSCIdentity(Object.assign(LoadingComponent, concern), identity);
+    return attachERSCMember(LoadingComponent, identity, 'Loading');
   },
 });

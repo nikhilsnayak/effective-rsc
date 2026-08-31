@@ -42,28 +42,21 @@ const RenamedParamsPage = ERSC.Page.make({
 });
 
 describe('Routes', () => {
-  it('owns immutable non-empty middleware lists', () => {
-    const First = ERSC.Routes.middleware({ handler: (httpEffect) => httpEffect });
-    const Second = ERSC.Routes.middleware({ handler: (httpEffect) => httpEffect });
-    const routes = ERSC.Routes.make({ middleware: [First, Second] });
+  it('captures immutable middleware scopes from a derived ERSC view', () => {
+    const First = ERSC.Middleware.make((httpEffect) => httpEffect);
+    const Second = ERSC.Middleware.make((httpEffect) => httpEffect);
+    const FirstScope = ERSC.withMiddleware(First);
+    const SecondScope = FirstScope.withMiddleware(Second);
+    const routes = SecondScope.Routes.make();
     expect(getRoutesState(routes).middleware).toEqual([First, Second]);
     expect(Object.isFrozen(First)).toBe(true);
     expect(Object.isFrozen(getRoutesState(routes).middleware)).toBe(true);
-    expect(() =>
-      ERSC.Routes.make({
-        // @ts-expect-error Exercise runtime validation for an empty list.
-        middleware: [],
-      }),
-    ).toThrow('must be a non-empty ordered list');
-    expect(() => ERSC.Routes.make({ middleware: [First, First] })).toThrow(
-      'cannot appear twice in the same scope',
+    expect(() => FirstScope.withMiddleware(First)).toThrow('cannot appear twice in the same scope');
+    const OtherERSC = Application.ersc();
+    const OtherMiddleware = OtherERSC.Middleware.make((httpEffect) => httpEffect);
+    expect(() => ERSC.withMiddleware(OtherMiddleware)).toThrow(
+      'created by a different ERSC module',
     );
-    expect(() =>
-      ERSC.Routes.middleware({
-        // @ts-expect-error Exercise runtime validation for a non-function handler.
-        handler: null,
-      }),
-    ).toThrow('handler must be a function');
   });
 
   it('composes immutable mountable route descriptions', () => {

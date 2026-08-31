@@ -126,4 +126,20 @@ describe('ServerFn.make', () => {
 
     expect(match._tag).toBe('IdentityMismatch');
   });
+
+  it('retains the middleware scope on the native invocation metadata', () => {
+    const ERSC = Application.ersc();
+    const RequireScope = ERSC.Middleware.make((httpEffect) => httpEffect);
+    const serverFn = ERSC.withMiddleware(RequireScope).ServerFn.make({
+      input: Schema.String,
+      handler: Effect.succeed,
+    });
+
+    const match = matchServerFnInvocation(serverFn('value'), getERSCIdentity(ERSC));
+
+    expect(match._tag).toBe('Match');
+    if (match._tag === 'Match') {
+      expect(match.middleware).toEqual([RequireScope]);
+    }
+  });
 });

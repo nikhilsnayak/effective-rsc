@@ -11,6 +11,7 @@ import {
 } from '../../src/application/page';
 import type { CompiledDestination } from '../../src/application/route-graph';
 import type { AbsolutePath } from '../../src/application/route-path';
+import { getRoutesState } from '../../src/application/routes';
 import { RouteOutlet } from '../../src/client/route-tree';
 import { renderRouteTree } from '../../src/rsc/render-route-tree';
 import type { RouteTreeModel } from '../../src/rsc/route-tree';
@@ -238,16 +239,15 @@ describe('ERSC.make', () => {
     expect(applicationRoutes(App)[1]?.page.component).toBe(pageComponent(SaturdayPage));
   });
 
-  it('compiles inherited Routes middleware without adding React scopes', () => {
-    const RootMiddleware = ERSC.Routes.middleware({ handler: (httpEffect) => httpEffect });
-    const NestedMiddleware = ERSC.Routes.middleware({ handler: (httpEffect) => httpEffect });
+  it('compiles inherited middleware without adding React scopes', () => {
+    const RootMiddleware = ERSC.Middleware.make((httpEffect) => httpEffect);
+    const NestedMiddleware = ERSC.Middleware.make((httpEffect) => httpEffect);
+    const RootScope = ERSC.withMiddleware(RootMiddleware);
+    const NestedScope = RootScope.withMiddleware(NestedMiddleware);
     const App = ERSC.make({
-      routes: ERSC.Routes.make({ layout: RootLayout, middleware: [RootMiddleware] })
+      routes: RootScope.Routes.make({ layout: RootLayout })
         .page('/', HomePage)
-        .mount(
-          '/schedule',
-          ERSC.Routes.make({ middleware: [NestedMiddleware] }).page('/', SaturdayPage),
-        ),
+        .mount('/schedule', NestedScope.Routes.make().page('/', SaturdayPage)),
     });
     const [home, schedule] = applicationRoutes(App);
 
@@ -257,16 +257,41 @@ describe('ERSC.make', () => {
     expect(Object.isFrozen(schedule?.middleware)).toBe(true);
   });
 
-  it('rejects duplicate middleware inherited by one destination', () => {
-    const RequireUser = ERSC.Routes.middleware({ handler: (httpEffect) => httpEffect });
-    const routes = ERSC.Routes.make({ layout: RootLayout, middleware: [RequireUser] }).mount(
+  it('does not duplicate inherited middleware across nested scopes', () => {
+    const RequireUser = ERSC.Middleware.make((httpEffect) => httpEffect);
+    const Authenticated = ERSC.withMiddleware(RequireUser);
+    const routes = Authenticated.Routes.make({ layout: RootLayout }).mount(
       '/account',
-      ERSC.Routes.make({ middleware: [RequireUser] }).page('/', HomePage),
+      Authenticated.Routes.make().page('/', HomePage),
     );
+    const App = ERSC.make({ routes });
+
+    expect(applicationRoutes(App)[0]?.middleware).toEqual([RequireUser]);
+  });
+
+  it('rejects repeated middleware in a divergent mounted scope without Pages', () => {
+    const Shared = ERSC.Middleware.make((httpEffect) => httpEffect);
+    const NestedOnly = ERSC.Middleware.make((httpEffect) => httpEffect);
+    const ParentERSC = ERSC.withMiddleware(Shared);
+    const DivergentERSC = ERSC.withMiddleware(NestedOnly).withMiddleware(Shared);
+    const leafRoutes = ERSC.Routes.make().page('/', HomePage);
+    const divergentRoutes = DivergentERSC.Routes.make().mount('/leaf', leafRoutes);
+    const routes = ParentERSC.Routes.make({ layout: RootLayout }).mount('/nested', divergentRoutes);
 
     expect(() => ERSC.make({ routes })).toThrow(
-      'Routes middleware for destination "/account" appears more than once',
+      new TypeError(
+        'Middleware beneath route prefix "/nested" appears more than once in its resolved chain.',
+      ),
     );
+  });
+
+  it('allocates route scope IDs across derived ERSC views', () => {
+    const Middleware = ERSC.Middleware.make((httpEffect) => httpEffect);
+    const ScopedERSC = ERSC.withMiddleware(Middleware);
+    const rootRoutes = ERSC.Routes.make({ layout: RootLayout }).page('/', HomePage);
+    const scopedRoutes = ScopedERSC.Routes.make({ layout: ScheduleLayout }).page('/', SaturdayPage);
+
+    expect(getRoutesState(rootRoutes).scopeId).not.toBe(getRoutesState(scopedRoutes).scopeId);
   });
 
   it('declares service contracts once and chooses their implementations at application assembly', () => {
@@ -326,9 +351,7 @@ describe('ERSC.make', () => {
     });
     const OtherLoading = OtherERSC.Loading.make({ render: () => <p>Loading...</p> });
     const OtherPage = OtherERSC.Page.make({ render: () => Effect.succeed(<h1>Other</h1>) });
-    const OtherMiddleware = OtherERSC.Routes.middleware({
-      handler: (httpEffect) => httpEffect,
-    });
+    const OtherMiddleware = OtherERSC.Middleware.make((httpEffect) => httpEffect);
     const OtherRoutes = OtherERSC.Routes.make({ layout: OtherLayout }).page('/', OtherPage);
 
     expect(() => ERSC.Routes.make({ layout: OtherLayout })).toThrow(
@@ -337,11 +360,9 @@ describe('ERSC.make', () => {
     expect(() => ERSC.Routes.make({ loading: OtherLoading })).toThrow(
       'Loading was created by a different ERSC module.',
     );
-    expect(() =>
-      ERSC.Routes.make({
-        middleware: [OtherMiddleware],
-      }),
-    ).toThrow('Routes middleware was created by a different ERSC module.');
+    expect(() => ERSC.withMiddleware(OtherMiddleware)).toThrow(
+      'Middleware was created by a different ERSC module.',
+    );
     expect(() =>
       ERSC.make({
         routes: ERSC.Routes.make({ layout: RootLayout }).page('/', OtherPage),
@@ -376,6 +397,6 @@ describe('ERSC.make', () => {
         // @ts-expect-error Component is not a Page concern.
         Leaf,
       ),
-    ).toThrow('Page for "/" must be created with ERSC.Page.make.');
+    ).toThrow('Page must be created with ERSC.Page.make.');
   });
 });

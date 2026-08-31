@@ -1,14 +1,18 @@
-import { Predicate, type Types } from 'effect';
+import { type Types } from 'effect';
 
 import {
   type ERSCIdentity,
   ERSCIdentityTypeId,
-  type ERSCMember,
+  ERSCMemberKindTypeId,
+  type ERSCStatefulMember,
+  ERSCStateTypeId,
   getERSCIdentity,
+  isERSCMember,
 } from './ersc-identity';
-import { isLayoutConcern, type LayoutComponent } from './layout';
-import { isLoadingConcern, type LoadingComponent } from './loading';
-import { type AnyPageDefinition, getPageState, isPageDefinition, type PageConcern } from './page';
+import type { LayoutComponent } from './layout';
+import type { LoadingComponent } from './loading';
+import type { AnyMiddleware } from './middleware';
+import { type AnyPageDefinition, getPageState, type PageConcern } from './page';
 import {
   type AbsolutePath,
   analyzeRoutePath,
@@ -18,16 +22,8 @@ import {
   type RouteShape,
   type ValidRoutePath,
 } from './route-path';
-import {
-  isRoutesMiddleware,
-  makeRoutesMiddlewareFactory,
-  type RoutesMiddleware,
-  type RoutesMiddlewareOptions,
-} from './routes-middleware';
 
 declare const RoutesContractTypeId: unique symbol;
-
-const RoutesDefinitionTypeId: unique symbol = Symbol.for('ersc/RoutesDefinition');
 
 type RoutesState<HasLayout extends boolean, Paths extends AbsolutePath> = {
   readonly hasLayout: Types.Covariant<HasLayout>;
@@ -86,7 +82,7 @@ export interface RoutesDefinition<
   Services,
   out HasLayout extends boolean,
   out Paths extends AbsolutePath,
-> extends ERSCMember<Services> {
+> extends ERSCStatefulMember<Services, 'Routes', RoutesImplementationState<Services>> {
   readonly [RoutesContractTypeId]: RoutesState<HasLayout, Paths>;
 
   page<const Path extends AbsolutePath, const Page extends AnyPageDefinition<Services>>(
@@ -127,19 +123,16 @@ type RoutesMount<Services> = {
 export type RoutesImplementationState<Services> = {
   readonly layout: LayoutComponent<Services> | null;
   readonly loading: LoadingComponent<Services> | null;
-  readonly middleware: ReadonlyArray<RoutesMiddleware<Services>>;
+  readonly middleware: ReadonlyArray<AnyMiddleware<Services>>;
   readonly mounts: ReadonlyArray<RoutesMount<Services>>;
   readonly pages: ReadonlyArray<RoutesPage<Services>>;
   readonly paths: ReadonlyArray<AbsolutePath>;
   readonly scopeId: number;
 };
 
-type NonEmptyReadonlyArray<Value> = readonly [Value, ...ReadonlyArray<Value>];
-
 type RoutesOptions<Services> = {
   readonly layout?: LayoutComponent<Services>;
   readonly loading?: LoadingComponent<Services>;
-  readonly middleware?: NonEmptyReadonlyArray<RoutesMiddleware<Services>>;
 };
 
 type HasLayoutFromOptions<Options> = Options extends { readonly layout: unknown } ? true : false;
@@ -148,24 +141,21 @@ type RuntimeRoutesOptions<Services> = RoutesImplementationState<Services> & {
   readonly routeShapes: ReadonlySet<string>;
 };
 
-const isRoutesDefinition = <Services>(
-  value: unknown,
-): value is AnyRoutes<Services> & RoutesImplementationState<Services> =>
-  Predicate.hasProperty(value, RoutesDefinitionTypeId) &&
-  value[RoutesDefinitionTypeId] === RoutesDefinitionTypeId;
-
 class RoutesDefinitionImpl<
   Services,
   HasLayout extends boolean,
   Paths extends AbsolutePath,
 > implements RoutesDefinition<Services, HasLayout, Paths> {
   declare readonly [RoutesContractTypeId]: RoutesState<HasLayout, Paths>;
-  readonly [RoutesDefinitionTypeId] = RoutesDefinitionTypeId;
   readonly [ERSCIdentityTypeId]: ERSCIdentity<Services>;
+  readonly [ERSCMemberKindTypeId] = 'Routes' as const;
+  get [ERSCStateTypeId](): RoutesImplementationState<Services> {
+    return this;
+  }
 
   readonly layout: LayoutComponent<Services> | null;
   readonly loading: LoadingComponent<Services> | null;
-  readonly middleware: ReadonlyArray<RoutesMiddleware<Services>>;
+  readonly middleware: ReadonlyArray<AnyMiddleware<Services>>;
   readonly mounts: ReadonlyArray<RoutesMount<Services>>;
   readonly pages: ReadonlyArray<RoutesPage<Services>>;
   readonly paths: ReadonlyArray<AbsolutePath>;
@@ -205,14 +195,11 @@ class RoutesDefinitionImpl<
     if (this.#routeShapes.has(route.shape)) {
       throw new TypeError(`Route "${path}" conflicts with an existing route pattern.`);
     }
-    if (!isPageDefinition<Services>(page)) {
-      throw new TypeError(`Page for "${path}" must be created with ERSC.Page.make.`);
-    }
+    const pageState = getPageState(page);
     if (getERSCIdentity(page) !== this[ERSCIdentityTypeId]) {
       throw new TypeError(`Page for "${path}" was created by a different ERSC module.`);
     }
 
-    const pageState = getPageState(page);
     if (route._tag === 'ParameterFree' && pageState.paramsSchema !== null) {
       throw new TypeError(`Parameterized Page for "${path}" requires route parameters.`);
     }
@@ -244,9 +231,6 @@ class RoutesDefinitionImpl<
     const route = analyzeRoutePath(path);
     if (route._tag === 'Parameterized') {
       throw new TypeError(`Routes cannot be mounted beneath parameterized path "${path}".`);
-    }
-    if (!isRoutesDefinition<Services>(routes)) {
-      throw new TypeError(`Routes mounted at "${path}" must be created with ERSC.Routes.make.`);
     }
     const routesState = getRoutesState(routes);
     if (routesState.paths.length === 0) {
@@ -282,10 +266,10 @@ class RoutesDefinitionImpl<
 export const getRoutesState = <Services>(
   routes: AnyRoutes<Services>,
 ): RoutesImplementationState<Services> => {
-  if (!isRoutesDefinition<Services>(routes)) {
+  if (!isERSCMember(routes, 'Routes')) {
     throw new TypeError('Routes must be created with ERSC.Routes.make.');
   }
-  return routes;
+  return routes[ERSCStateTypeId];
 };
 
 export type RoutesFactory<Services> = {
@@ -295,22 +279,20 @@ export type RoutesFactory<Services> = {
       options: Options,
     ): RoutesDefinition<Services, HasLayoutFromOptions<Options>, never>;
   };
-  readonly middleware: (options: RoutesMiddlewareOptions<Services>) => RoutesMiddleware<Services>;
 };
 
 export const makeRoutesFactory = <Services>(
   identity: ERSCIdentity<Services>,
+  middleware: ReadonlyArray<AnyMiddleware<Services>>,
+  allocateScopeId: () => number,
 ): RoutesFactory<Services> => {
-  let nextScopeId = 0;
-  const middleware = makeRoutesMiddlewareFactory(identity);
-
   function make(): RoutesDefinition<Services, false, never>;
   function make<Options extends RoutesOptions<Services>>(
     options: Options,
   ): RoutesDefinition<Services, HasLayoutFromOptions<Options>, never>;
   function make(options: RoutesOptions<Services> = {}): AnyRoutes<Services> {
     if (options.layout !== undefined) {
-      if (!isLayoutConcern(options.layout)) {
+      if (!isERSCMember(options.layout, 'Layout')) {
         throw new TypeError('Layout must be created with ERSC.Layout.make.');
       }
       if (getERSCIdentity(options.layout) !== identity) {
@@ -318,41 +300,19 @@ export const makeRoutesFactory = <Services>(
       }
     }
     if (options.loading !== undefined) {
-      if (!isLoadingConcern(options.loading)) {
+      if (!isERSCMember(options.loading, 'Loading')) {
         throw new TypeError('Loading must be created with ERSC.Loading.make.');
       }
       if (getERSCIdentity(options.loading) !== identity) {
         throw new TypeError('Loading was created by a different ERSC module.');
       }
     }
-    if (options.middleware !== undefined) {
-      if (!Array.isArray(options.middleware) || options.middleware.length === 0) {
-        throw new TypeError('Routes middleware must be a non-empty ordered list.');
-      }
-      const seen = new Set<RoutesMiddleware<Services>>();
-      for (const routeMiddleware of options.middleware) {
-        if (!isRoutesMiddleware<Services>(routeMiddleware)) {
-          throw new TypeError(
-            'Every Routes middleware must be created with ERSC.Routes.middleware.',
-          );
-        }
-        if (getERSCIdentity(routeMiddleware) !== identity) {
-          throw new TypeError('Routes middleware was created by a different ERSC module.');
-        }
-        if (seen.has(routeMiddleware)) {
-          throw new TypeError('A Routes middleware cannot appear twice in the same scope.');
-        }
-        seen.add(routeMiddleware);
-      }
-    }
-
-    const scopeId = nextScopeId;
-    nextScopeId += 1;
+    const scopeId = allocateScopeId();
 
     return new RoutesDefinitionImpl(identity, {
       layout: options.layout ?? null,
       loading: options.loading ?? null,
-      middleware: Object.freeze([...(options.middleware ?? [])]),
+      middleware,
       mounts: Object.freeze([]),
       pages: Object.freeze([]),
       paths: Object.freeze([]),
@@ -361,5 +321,5 @@ export const makeRoutesFactory = <Services>(
     });
   }
 
-  return { make, middleware };
+  return { make };
 };

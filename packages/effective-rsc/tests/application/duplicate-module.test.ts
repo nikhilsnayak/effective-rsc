@@ -4,7 +4,7 @@ import { vi } from 'vitest';
 
 import { getApplicationState } from '../../src/application/definition';
 import { getERSCIdentity } from '../../src/application/ersc-identity';
-import { getPageState, isPageDefinition } from '../../src/application/page';
+import { getPageState } from '../../src/application/page';
 import { getRoutesState } from '../../src/application/routes';
 import { matchServerFnInvocation } from '../../src/application/server-fn';
 
@@ -22,7 +22,6 @@ it.effect('composes values loaded from a duplicated framework module instance', 
     const Routes = ERSC.Routes.make({ layout: RootLayout }).page('/', Page);
     const App = ERSC.make({ routes: Routes });
 
-    expect(isPageDefinition(Page)).toBe(true);
     expect(getPageState(Page).paramsSchema).toBeNull();
     expect(getRoutesState(Routes).paths).toEqual(['/']);
     expect(getApplicationState(App).routes).toHaveLength(1);

@@ -2,22 +2,30 @@ import * as BunFileSystem from '@effect/platform-bun/BunFileSystem';
 import * as BunHttpPlatform from '@effect/platform-bun/BunHttpPlatform';
 import * as BunPath from '@effect/platform-bun/BunPath';
 import { describe, expect, it, vi } from '@effect/vitest';
-import { Context, Effect, Layer } from 'effect';
+import { Context, Effect, Layer, Schema } from 'effect';
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from 'effect/unstable/http';
 
 import { Application } from '../../src/application/ersc';
 import { ServerFnIdHeader } from '../../src/rsc/flight';
 import { ServerConfig } from '../../src/server/server-config';
 
-const decodeAction = vi.fn(() => Promise.resolve(null));
-const decodeReply = vi.fn(() => Promise.resolve([]));
+const decodeAction = vi.fn((..._args: Array<unknown>): Promise<null | (() => Promise<string>)> =>
+  Promise.resolve(null),
+);
+const decodeReply = vi.fn((..._args: Array<unknown>): Promise<ReadonlyArray<unknown>> =>
+  Promise.resolve([]),
+);
+let scopedServerAction: ((input: string) => Promise<string>) | undefined;
 
 vi.doMock('react-server-dom-rspack/server.node', () => ({
   createTemporaryReferenceSet: () => ({}),
   decodeAction,
   decodeFormState: () => Promise.resolve(null),
   decodeReply,
-  loadServerAction: () => {
+  loadServerAction: (id: string) => {
+    if (id === 'scoped-action' && scopedServerAction !== undefined) {
+      return scopedServerAction;
+    }
     throw new Error('Unexpected Server Function action load.');
   },
   renderToReadableStream: () => {
@@ -29,6 +37,10 @@ const { ServerApplication } = await import('../../src/server/application');
 
 class RequestTrace extends Context.Service<RequestTrace, { readonly events: Array<string> }>()(
   'ersc/tests/server/application/RequestTrace',
+) {}
+
+class CurrentUser extends Context.Service<CurrentUser, { readonly name: string }>()(
+  'ersc/tests/server/application/CurrentUser',
 ) {}
 
 const ServerConfigLayer = Layer.succeed(
@@ -55,32 +67,62 @@ type Harness = {
 
 const makeHttpLayer = (counters: Harness['counters'], events: Harness['events']) => {
   const ERSC = Application.ersc<RequestTrace>();
-  const Outer = ERSC.Routes.middleware({
-    handler: (httpEffect) =>
-      Effect.gen(function* () {
-        const trace = yield* RequestTrace;
-        trace.events.push('outer:request');
-        const response = yield* httpEffect;
-        trace.events.push('outer:response');
-        const innerOrder = response.headers['x-middleware-order'];
-        return HttpServerResponse.setHeader(
-          response,
-          'x-middleware-order',
-          innerOrder === undefined ? 'outer' : `${innerOrder},outer`,
-        );
-      }),
-  });
-  const Inner = ERSC.Routes.middleware({
-    handler: () =>
-      Effect.gen(function* () {
-        const trace = yield* RequestTrace;
-        const request = yield* HttpServerRequest.HttpServerRequest;
-        expect(request.url).toBe('/protected');
-        trace.events.push('inner:request');
-        const response = HttpServerResponse.text('Routes middleware response');
-        trace.events.push('inner:response');
-        return HttpServerResponse.setHeader(response, 'x-middleware-order', 'inner');
-      }),
+  const Outer = ERSC.Middleware.make((httpEffect) =>
+    Effect.gen(function* () {
+      const trace = yield* RequestTrace;
+      trace.events.push('outer:request');
+      const response = yield* httpEffect;
+      trace.events.push('outer:response');
+      const innerOrder = response.headers['x-middleware-order'];
+      return HttpServerResponse.setHeader(
+        response,
+        'x-middleware-order',
+        innerOrder === undefined ? 'outer' : `${innerOrder},outer`,
+      );
+    }),
+  );
+  const Inner = ERSC.Middleware.make(() =>
+    Effect.gen(function* () {
+      const trace = yield* RequestTrace;
+      const request = yield* HttpServerRequest.HttpServerRequest;
+      expect(request.url).toBe('/protected');
+      trace.events.push('inner:request');
+      const response = HttpServerResponse.text('Routes middleware response');
+      trace.events.push('inner:response');
+      return HttpServerResponse.setHeader(response, 'x-middleware-order', 'inner');
+    }),
+  );
+  const OuterScope = ERSC.withMiddleware(Outer);
+  const Shared = OuterScope.Middleware.make((httpEffect) =>
+    Effect.gen(function* () {
+      const trace = yield* RequestTrace;
+      trace.events.push('shared:request');
+      const response = yield* httpEffect;
+      trace.events.push('shared:response');
+      return response;
+    }),
+  );
+  const InnerScope = OuterScope.withMiddleware(Shared).withMiddleware(Inner);
+  const RequireUser = OuterScope.Middleware.make<{ provides: CurrentUser }>((httpEffect) =>
+    Effect.gen(function* () {
+      const trace = yield* RequestTrace;
+      trace.events.push('auth:request');
+      const response = yield* httpEffect.pipe(
+        Effect.provideService(CurrentUser, { name: 'Nikhil' }),
+      );
+      trace.events.push('auth:response');
+      return response;
+    }),
+  );
+  const AuthenticatedScope = OuterScope.withMiddleware(RequireUser).withMiddleware(Shared);
+  scopedServerAction = AuthenticatedScope.ServerFn.make({
+    input: Schema.String,
+    handler: Effect.fnUntraced(function* (input) {
+      const trace = yield* RequestTrace;
+      const user = yield* CurrentUser;
+      trace.events.push(`action:${user.name}`);
+      return input;
+    }),
   });
   const RootLayout = ERSC.Layout.make({
     render: ({ children }) => Effect.succeed(<html lang='en'>{children}</html>),
@@ -116,10 +158,9 @@ const makeHttpLayer = (counters: Harness['counters'], events: Harness['events'])
   const ApplicationLayer = Layer.mergeAll(RequestTraceLayer, GlobalMiddlewareLayer, ApiLayer);
   const App = ERSC.make({
     layer: ApplicationLayer,
-    routes: ERSC.Routes.make({
+    routes: OuterScope.Routes.make({
       layout: RootLayout,
-      middleware: [Outer],
-    }).mount('/protected', ERSC.Routes.make({ middleware: [Inner] }).page('/', Page)),
+    }).mount('/protected', InnerScope.Routes.make().page('/', Page)),
   });
 
   return ServerApplication.httpLayer(App).pipe(
@@ -133,6 +174,7 @@ const withHarness = <Value, Error>(
 ): Effect.Effect<Value, Error> => {
   decodeAction.mockClear();
   decodeReply.mockClear();
+  scopedServerAction = undefined;
   const counters = { acquisitions: 0, globalRequests: 0 };
   const events: Array<string> = [];
 
@@ -164,6 +206,16 @@ const serverFnRequest = (id: string, { headers, ...init }: ServerFnRequestOption
     method: 'POST',
   });
 
+const progressiveServerFnRequest = (body: FormData) =>
+  new Request(ProtectedUrl, {
+    body,
+    headers: {
+      host: 'effective-rsc.test',
+      origin: Origin,
+    },
+    method: 'POST',
+  });
+
 describe('ServerApplication.httpLayer', () => {
   it.effect('runs inherited Routes middleware from ancestor to descendant around a Page GET', () =>
     withHarness(({ call, events }) =>
@@ -178,8 +230,10 @@ describe('ServerApplication.httpLayer', () => {
         expect(response.headers.get('x-global-middleware')).toBe('true');
         expect(events).toEqual([
           'outer:request',
+          'shared:request',
           'inner:request',
           'inner:response',
+          'shared:response',
           'outer:response',
         ]);
       }),
@@ -195,8 +249,10 @@ describe('ServerApplication.httpLayer', () => {
         expect(response.headers.get('x-middleware-order')).toBe('inner,outer');
         expect(events).toEqual([
           'outer:request',
+          'shared:request',
           'inner:request',
           'inner:response',
+          'shared:response',
           'outer:response',
         ]);
       }),
@@ -291,23 +347,76 @@ describe('ServerApplication.httpLayer', () => {
     ),
   );
 
-  it.effect(
-    'leaves Server Function POST outside Routes middleware but inside global middleware',
-    () =>
-      withHarness(({ call, events }) =>
-        Effect.gen(function* () {
-          const response = yield* call(serverFnRequest('direct-host'));
+  it.effect('leaves an invalid Server Function request outside scoped middleware', () =>
+    withHarness(({ call, events }) =>
+      Effect.gen(function* () {
+        const response = yield* call(serverFnRequest('direct-host'));
 
-          expect(response.status).toBe(400);
-          expect(response.headers.get('cache-control')).toBe('private, no-store');
-          expect(response.headers.get('vary')).toBe('Accept');
-          expect(response.headers.get('x-middleware-order')).toBeNull();
-          expect(response.headers.get('x-global-middleware')).toBe('true');
-          expect(events).toEqual([]);
-          expect(decodeAction).not.toHaveBeenCalled();
-          expect(decodeReply).toHaveBeenCalledTimes(1);
-        }),
-      ),
+        expect(response.status).toBe(400);
+        expect(response.headers.get('cache-control')).toBe('private, no-store');
+        expect(response.headers.get('vary')).toBe('Accept');
+        expect(response.headers.get('x-middleware-order')).toBeNull();
+        expect(response.headers.get('x-global-middleware')).toBe('true');
+        expect(events).toEqual([]);
+        expect(decodeAction).not.toHaveBeenCalled();
+        expect(decodeReply).toHaveBeenCalledTimes(1);
+      }),
+    ),
+  );
+
+  it.effect('runs shared middleware once even when the action and route scopes diverge', () =>
+    withHarness(({ call, events }) =>
+      Effect.gen(function* () {
+        decodeReply.mockResolvedValueOnce(['hello']);
+
+        const response = yield* call(serverFnRequest('scoped-action'));
+        const body = yield* Effect.promise(() => response.text());
+
+        expect(response.status).toBe(200);
+        expect(body).toBe('Routes middleware response');
+        expect(events).toEqual([
+          'outer:request',
+          'auth:request',
+          'shared:request',
+          'action:Nikhil',
+          'inner:request',
+          'inner:response',
+          'shared:response',
+          'auth:response',
+          'outer:response',
+        ]);
+      }),
+    ),
+  );
+
+  it.effect('applies the same middleware scope to a progressive Server Function', () =>
+    withHarness(({ call, events }) =>
+      Effect.gen(function* () {
+        decodeAction.mockResolvedValueOnce(() => {
+          if (scopedServerAction === undefined) {
+            throw new Error('Expected the scoped Server Function to be registered.');
+          }
+          return scopedServerAction('progressive');
+        });
+
+        const response = yield* call(progressiveServerFnRequest(new FormData()));
+        const body = yield* Effect.promise(() => response.text());
+
+        expect(response.status).toBe(200);
+        expect(body).toBe('Routes middleware response');
+        expect(events).toEqual([
+          'outer:request',
+          'auth:request',
+          'shared:request',
+          'action:Nikhil',
+          'inner:request',
+          'inner:response',
+          'shared:response',
+          'auth:response',
+          'outer:response',
+        ]);
+      }),
+    ),
   );
 
   it.effect('leaves userland HTTP outside Routes middleware and dynamic response headers', () =>

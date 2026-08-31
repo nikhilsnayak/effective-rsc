@@ -1,7 +1,7 @@
 import { expect, it, vi } from '@effect/vitest';
 import { Deferred, Effect } from 'effect';
 
-import type { RequestRuntime, RequestRuntimeContext } from '../../src/application/request-runtime';
+import type { RenderRuntimeContext } from '../../src/application/render-runtime';
 
 let renderSignal: AbortSignal | undefined;
 
@@ -17,10 +17,18 @@ const { FlightRenderer } = await import('../../src/server/flight-renderer');
 it.effect('interrupts application work when its Flight render is released', () =>
   Effect.scoped(
     Effect.gen(function* () {
-      let runRequest: RequestRuntime<never> | undefined;
-      const requestRuntime: RequestRuntimeContext<never> = {
-        bind: (runtime, evaluate) => {
-          runRequest = runtime;
+      let runApplicationWork: (() => Promise<never>) | undefined;
+      const started = yield* Deferred.make<void>();
+      const interrupted = yield* Deferred.make<void>();
+      const renderRuntime: RenderRuntimeContext = {
+        bind: (runtime, _middleware, evaluate) => {
+          runApplicationWork = () =>
+            runtime(
+              Deferred.succeed(started, void 0).pipe(
+                Effect.andThen(Effect.never),
+                Effect.onInterrupt(() => Deferred.succeed(interrupted, void 0)),
+              ),
+            );
           return evaluate();
         },
         run: () => {
@@ -28,9 +36,10 @@ it.effect('interrupts application work when its Flight render is released', () =
         },
       };
       const renderer = yield* FlightRenderer;
-      const flight = yield* renderer.render({
+      const flight = yield* renderer.render<never>({
         formState: null,
-        requestRuntime,
+        middleware: [],
+        renderRuntime,
         routeTree: {
           child: null,
           content: null,
@@ -38,18 +47,11 @@ it.effect('interrupts application work when its Flight render is released', () =
         },
         serverFnResult: null,
       });
-      if (runRequest === undefined) {
+      if (runApplicationWork === undefined) {
         return yield* Effect.die('Expected Flight rendering to bind its request runtime.');
       }
 
-      const started = yield* Deferred.make<void>();
-      const interrupted = yield* Deferred.make<void>();
-      const applicationWork = runRequest(
-        Deferred.succeed(started, void 0).pipe(
-          Effect.andThen(Effect.never),
-          Effect.onInterrupt(() => Deferred.succeed(interrupted, void 0)),
-        ),
-      );
+      const applicationWork = runApplicationWork();
       const applicationWorkOutcome = applicationWork.then(
         () => 'completed' as const,
         () => 'interrupted' as const,

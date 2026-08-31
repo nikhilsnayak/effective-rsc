@@ -1,24 +1,29 @@
-import { Layer, Predicate, type Types } from 'effect';
+import { Layer, type Types } from 'effect';
 import type { HttpRouter } from 'effect/unstable/http';
 
 import {
   type ERSCIdentity,
   ERSCIdentityTypeId,
-  type ERSCMember,
+  ERSCMemberKindTypeId,
+  type ERSCStatefulMember,
+  ERSCStateTypeId,
   getERSCIdentity,
+  isERSCMember,
 } from './ersc-identity';
-import { type CompiledDestination, compileRouteGraph } from './route-graph';
+import { type CompiledRouteGraph, compileRouteGraph } from './route-graph';
 import type { AbsolutePath, ReservedRoutePath } from './route-path';
 import { type AnyRoutes, type RoutesHasLayout, type RoutesPaths } from './routes';
 
 declare const ApplicationContractTypeId: unique symbol;
 
-const ApplicationDefinitionTypeId: unique symbol = Symbol.for('ersc/ApplicationDefinition');
-
 export interface ApplicationDefinition<
   Services,
   out ApplicationError = never,
-> extends ERSCMember<Services> {
+> extends ERSCStatefulMember<
+  Services,
+  'Application',
+  ApplicationImplementationState<Services, ApplicationError>
+> {
   readonly [ApplicationContractTypeId]: {
     readonly error: Types.Covariant<ApplicationError>;
   };
@@ -26,7 +31,7 @@ export interface ApplicationDefinition<
 
 export type ApplicationImplementationState<Services, ApplicationError> = {
   readonly layer: Layer.Layer<Services, ApplicationError, HttpRouter.HttpRouter>;
-  readonly routes: ReadonlyArray<CompiledDestination<Services>>;
+  readonly routes: CompiledRouteGraph<Services>;
 };
 
 class ApplicationDefinitionImpl<Services, ApplicationError> implements ApplicationDefinition<
@@ -36,14 +41,17 @@ class ApplicationDefinitionImpl<Services, ApplicationError> implements Applicati
   declare readonly [ApplicationContractTypeId]: {
     readonly error: Types.Covariant<ApplicationError>;
   };
-  readonly [ApplicationDefinitionTypeId] = ApplicationDefinitionTypeId;
   readonly [ERSCIdentityTypeId]: ERSCIdentity<Services>;
+  readonly [ERSCMemberKindTypeId] = 'Application' as const;
+  get [ERSCStateTypeId](): ApplicationImplementationState<Services, ApplicationError> {
+    return this;
+  }
   readonly layer: Layer.Layer<Services, ApplicationError, HttpRouter.HttpRouter>;
-  readonly routes: ReadonlyArray<CompiledDestination<Services>>;
+  readonly routes: CompiledRouteGraph<Services>;
 
   constructor(
     identity: ERSCIdentity<Services>,
-    routes: ReadonlyArray<CompiledDestination<Services>>,
+    routes: CompiledRouteGraph<Services>,
     layer: Layer.Layer<Services, ApplicationError, HttpRouter.HttpRouter>,
   ) {
     this[ERSCIdentityTypeId] = identity;
@@ -52,20 +60,13 @@ class ApplicationDefinitionImpl<Services, ApplicationError> implements Applicati
   }
 }
 
-const isApplicationDefinition = <Services, ApplicationError>(
-  value: unknown,
-): value is ApplicationDefinition<Services, ApplicationError> &
-  ApplicationImplementationState<Services, ApplicationError> =>
-  Predicate.hasProperty(value, ApplicationDefinitionTypeId) &&
-  value[ApplicationDefinitionTypeId] === ApplicationDefinitionTypeId;
-
 export const getApplicationState = <Services, ApplicationError>(
   application: ApplicationDefinition<Services, ApplicationError>,
 ): ApplicationImplementationState<Services, ApplicationError> => {
-  if (!isApplicationDefinition<Services, ApplicationError>(application)) {
+  if (!isERSCMember(application, 'Application')) {
     throw new TypeError('Application must be created with ERSC.make.');
   }
-  return application;
+  return application[ERSCStateTypeId];
 };
 
 export type ApplicationServices<Application> =

@@ -9,6 +9,7 @@ import {
 } from 'react-server-dom-rspack/server.node';
 
 import type { ERSCIdentity } from '../application/ersc-identity';
+import type { AnyMiddleware } from '../application/middleware';
 import { matchServerFnInvocation } from '../application/server-fn';
 import { ServerFnIdHeader } from '../rsc/flight';
 import type { RequestOutcome } from './request-outcome';
@@ -17,6 +18,7 @@ import { serverFnOutcome } from './server-fn-outcome';
 const ServerFnArraySizeLimit = 10_000;
 const ServerFnBodySizeLimit = 10 * 1024 * 1024;
 const ServerFnBodySizeLimitLabel = `${ServerFnBodySizeLimit / 1024 / 1024} MiB`;
+const NoMiddleware = Object.freeze([]);
 
 type StreamingRequestInit = RequestInit & { readonly duplex: 'half' };
 
@@ -36,16 +38,32 @@ class ServerFnExecutionError extends Schema.TaggedError<ServerFnExecutionError>(
   { cause: Schema.Defect() },
 ) {}
 
-class ServerFnIdentityMismatchError extends Schema.TaggedError<ServerFnIdentityMismatchError>()(
-  'ServerFnIdentityMismatchError',
-  {},
-) {}
-
 const requestError = (message: string, status: 400 | 403 | 413 | 500, cause: unknown) =>
   new ServerFnRequestError({ cause, message, status });
 
 const bodyReadError = (message: string, cause: unknown) =>
   isServerFnRequestError(cause) ? cause : requestError(message, 400, cause);
+
+const normalizeServerFnFailure = <Output, Error, Services>(
+  effect: Effect.Effect<Output, Error, Services>,
+): Effect.Effect<Output, ServerFnExecutionError, Services> =>
+  effect.pipe(
+    Effect.catchCause((cause) =>
+      Cause.hasInterrupts(cause)
+        ? Effect.interrupt
+        : Effect.fail(new ServerFnExecutionError({ cause: Cause.squash(cause) })),
+    ),
+  );
+
+type ServerFnOperation<ApplicationServices> = {
+  readonly effect: Effect.Effect<unknown, ServerFnExecutionError, ApplicationServices>;
+  readonly middleware: ReadonlyArray<AnyMiddleware<ApplicationServices>>;
+};
+
+export type PreparedServerFnRequest<ApplicationServices> = {
+  readonly execute: Effect.Effect<RequestOutcome, ServerFnRequestError, ApplicationServices>;
+  readonly middleware: ReadonlyArray<AnyMiddleware<ApplicationServices>>;
+};
 
 const validateOrigin = (request: HttpServerRequest.HttpServerRequest) =>
   Effect.try({
@@ -125,34 +143,39 @@ const readBody = Effect.fnUntraced(function* (request: Request) {
   });
 });
 
-const invokeServerReference = <Services>(
-  identity: ERSCIdentity<Services>,
+const prepareServerFnOperation = <ApplicationServices>(
+  identity: ERSCIdentity<ApplicationServices>,
   action: (...args: ReadonlyArray<unknown>) => unknown,
   args: ReadonlyArray<unknown>,
 ) =>
-  Effect.suspend(() => {
+  Effect.sync((): ServerFnOperation<ApplicationServices> => {
     const invocation = action(...args);
     const match = matchServerFnInvocation(invocation, identity);
     switch (match._tag) {
       case 'Match':
-        return match.effect;
+        return {
+          effect: normalizeServerFnFailure(match.effect),
+          middleware: match.middleware,
+        };
       case 'IdentityMismatch':
-        return Effect.die(new ServerFnIdentityMismatchError());
+        return {
+          effect: Effect.die(
+            new TypeError('Server Function was created by a different ERSC module.'),
+          ),
+          middleware: NoMiddleware,
+        };
       case 'Native':
-        return Effect.promise(() => Promise.resolve(invocation));
+        return {
+          effect: normalizeServerFnFailure(Effect.promise(() => Promise.resolve(invocation))),
+          middleware: NoMiddleware,
+        };
     }
-  }).pipe(
-    Effect.catchCause((cause) =>
-      Cause.hasInterrupts(cause)
-        ? Effect.interrupt
-        : Effect.fail(new ServerFnExecutionError({ cause: Cause.squash(cause) })),
-    ),
-  );
+  }).pipe(normalizeServerFnFailure);
 
-const runClientServerFn = Effect.fnUntraced(function* <Services>(
+const prepareClientServerFn = Effect.fnUntraced(function* <ApplicationServices>(
   request: Request,
   actionId: string,
-  identity: ERSCIdentity<Services>,
+  identity: ERSCIdentity<ApplicationServices>,
 ) {
   const temporaryReferences = createTemporaryReferenceSet();
   const body = yield* readBody(request);
@@ -168,18 +191,27 @@ const runClientServerFn = Effect.fnUntraced(function* <Services>(
     try: () => loadServerAction(actionId),
     catch: (cause) => requestError('The requested Server Function does not exist.', 400, cause),
   });
-  const outcome = yield* serverFnOutcome(invokeServerReference(identity, action, args));
+  const operation = yield* prepareServerFnOperation(identity, action, args);
 
-  return {
-    formState: null,
-    ...outcome,
-    temporaryReferences,
-  } satisfies RequestOutcome;
+  const prepared: PreparedServerFnRequest<ApplicationServices> = {
+    execute: serverFnOutcome(operation.effect).pipe(
+      Effect.map(
+        (outcome) =>
+          ({
+            formState: null,
+            ...outcome,
+            temporaryReferences,
+          }) satisfies RequestOutcome,
+      ),
+    ),
+    middleware: operation.middleware,
+  };
+  return prepared;
 });
 
-const runProgressiveServerFn = Effect.fnUntraced(function* <Services>(
+const prepareProgressiveServerFn = Effect.fnUntraced(function* <ApplicationServices>(
   request: Request,
-  identity: ERSCIdentity<Services>,
+  identity: ERSCIdentity<ApplicationServices>,
 ) {
   const formData = yield* Effect.tryPromise({
     try: () => request.formData(),
@@ -197,34 +229,45 @@ const runProgressiveServerFn = Effect.fnUntraced(function* <Services>(
     );
   }
 
-  const actionResult = yield* invokeServerReference(identity, decodedAction, []).pipe(
-    Effect.mapError((error) =>
-      requestError('The Server Function form action failed.', 500, error.cause),
-    ),
-  );
-  const decodedFormState = yield* Effect.tryPromise({
-    try: () => decodeFormState(actionResult, formData),
-    catch: (cause) => requestError('Failed to decode React form state.', 500, cause),
+  const operation = yield* prepareServerFnOperation(identity, decodedAction, []);
+  const execute = Effect.gen(function* () {
+    const actionResult = yield* operation.effect.pipe(
+      Effect.mapError((error) =>
+        requestError('The Server Function form action failed.', 500, error.cause),
+      ),
+    );
+    const decodedFormState = yield* Effect.tryPromise({
+      try: () => decodeFormState(actionResult, formData),
+      catch: (cause) => requestError('Failed to decode React form state.', 500, cause),
+    });
+
+    return {
+      formState: decodedFormState,
+      serverFnResult: null,
+      status: 200,
+    } satisfies RequestOutcome;
   });
 
-  return {
-    formState: decodedFormState,
-    serverFnResult: null,
-    status: 200,
-  } satisfies RequestOutcome;
+  const prepared: PreparedServerFnRequest<ApplicationServices> = {
+    execute,
+    middleware: operation.middleware,
+  };
+  return prepared;
 });
 
-export const handleServerFnRequest = Effect.fnUntraced(function* <Services>(
+export const prepareServerFnRequest = Effect.fnUntraced(function* <Services>(
   request: HttpServerRequest.HttpServerRequest,
   identity: ERSCIdentity<Services>,
 ) {
   yield* validateOrigin(request);
   const webRequest = yield* limitRequestBody(request);
   const actionId = request.headers[ServerFnIdHeader];
-  const handleRequest =
+  const prepareRequest =
     actionId === undefined
-      ? runProgressiveServerFn(webRequest, identity)
-      : runClientServerFn(webRequest, actionId, identity);
+      ? prepareProgressiveServerFn(webRequest, identity)
+      : prepareClientServerFn(webRequest, actionId, identity);
 
-  return yield* handleRequest;
+  return yield* prepareRequest;
 });
+
+export type ServerFnRequestFailure = Effect.Error<ReturnType<typeof prepareServerFnRequest>>;

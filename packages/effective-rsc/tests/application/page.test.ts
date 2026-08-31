@@ -29,7 +29,7 @@ describe('ERSC.Page.make', () => {
     const Page = ServiceFreeERSC.Page.make({ render: () => Effect.succeed(null) });
 
     expect(() => getPageState(Page).component({ params: {} })).toThrow(
-      new TypeError('An ERSC concern rendered outside its application request runtime.'),
+      new TypeError('ERSC Page rendered outside its application request runtime.'),
     );
   });
 
@@ -46,7 +46,7 @@ describe('ERSC.Page.make', () => {
         }),
       });
       const rendered = yield* Effect.promise(() =>
-        getERSCIdentity(PageComponent).requestRuntime.bind(runtime, () =>
+        getERSCIdentity(PageComponent).renderRuntime.bind(runtime, [], () =>
           getPageState(PageComponent).component({ params: { day: 'sunday' } }),
         ),
       );
@@ -72,7 +72,7 @@ describe('ERSC.Page.make', () => {
       });
 
       const rendered = yield* Effect.promise(() =>
-        getERSCIdentity(App).requestRuntime.bind(runtime, () =>
+        getERSCIdentity(App).renderRuntime.bind(runtime, [], () =>
           getPageState(PageComponent).component({ params: {} }),
         ),
       );
@@ -99,7 +99,7 @@ describe('ERSC.Page.make', () => {
         render: ({ params }) => Effect.succeed(params.id),
       });
       const rendered = yield* Effect.promise(() =>
-        getERSCIdentity(PageComponent).requestRuntime.bind(runtime, () =>
+        getERSCIdentity(PageComponent).renderRuntime.bind(runtime, [], () =>
           getPageState(PageComponent).component({ params: { slug: 'opening-keynote' } }),
         ),
       );
@@ -129,7 +129,9 @@ describe('ERSC.Page.make', () => {
         routes: InterruptERSC.Routes.make({ layout: InterruptLayout }).page('/', InterruptPage),
       });
       const execution = getERSCIdentity(App)
-        .requestRuntime.bind(runtime, () => getPageState(InterruptPage).component({ params: {} }))
+        .renderRuntime.bind(runtime, [], () =>
+          getPageState(InterruptPage).component({ params: {} }),
+        )
         .then(
           () => 'completed' as const,
           () => 'interrupted' as const,

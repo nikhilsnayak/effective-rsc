@@ -2,17 +2,13 @@ import { Dialog } from '@base-ui/react/dialog';
 import { Effect, Queue, Ref, Stream } from 'effect';
 import { createRoot, type Root } from 'react-dom/client';
 
+import type { DevRuntimeFailure } from './runtime-failure';
+
 import PanelStyles from './panel.css?raw';
 
-export const DevPanelElementName = 'ersc-dev-panel';
+export type { DevRuntimeFailure } from './runtime-failure';
 
-export type DevRuntimeFailure = {
-  readonly _tag: 'RuntimeError' | 'UnhandledRejection';
-  readonly name: string;
-  readonly message: string;
-  readonly stack?: string;
-  readonly componentStack?: string;
-};
+export const DevPanelElementName = 'ersc-dev-panel';
 
 type DevPanelContent =
   | { readonly _tag: 'BuildFailed'; readonly diagnostics: string }

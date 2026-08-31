@@ -6,6 +6,7 @@ import { makeBrowserRefresh } from './browser-refresh';
 import { DevChannelMessageJson, DevChannelPath, type DevChannelMessage } from './channel';
 import { decideHotUpdate, type HotUpdateCheck, type PendingDevUpdate } from './hmr-update';
 import { makeDevPanel } from './panel';
+import { reportBrowserFailures } from './runtime-failure';
 
 const reload = Effect.sync(() => location.reload());
 
@@ -94,6 +95,9 @@ const runDevClient = Effect.fnUntraced(function* (panel: Effect.Success<typeof m
 
 export const startDevClient = Effect.gen(function* () {
   const panel = yield* makeDevPanel;
+  yield* reportBrowserFailures((failure) =>
+    panel.dispatch({ _tag: 'RuntimeFailed', failure }),
+  ).pipe(Effect.forkScoped);
   const socketProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const socketUrl = `${socketProtocol}//${location.host}${DevChannelPath}`;
 

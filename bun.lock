@@ -19,7 +19,7 @@
       "name": "@effective-rsc/example-kitchen-sink",
       "version": "0.0.0",
       "dependencies": {
-        "@base-ui/react": "^1.7.0",
+        "@base-ui/react": "catalog:",
         "@effect/platform-browser": "catalog:",
         "@effect/platform-bun": "catalog:",
         "@effect/sql-sqlite-bun": "4.0.0-rc.112",
@@ -81,6 +81,7 @@
         "rsc-html-stream": "0.0.8",
       },
       "devDependencies": {
+        "@base-ui/react": "catalog:",
         "@effect/platform-browser": "catalog:",
         "@effect/platform-bun": "catalog:",
         "@effect/vitest": "catalog:",
@@ -107,6 +108,7 @@
     },
   },
   "catalog": {
+    "@base-ui/react": "^1.7.0",
     "@effect/platform-browser": "4.0.0-rc.112",
     "@effect/platform-bun": "4.0.0-rc.112",
     "@effect/vitest": "4.0.0-rc.112",

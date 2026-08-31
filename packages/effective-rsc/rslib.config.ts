@@ -1,6 +1,8 @@
 import { pluginReact } from '@rsbuild/plugin-react';
 import { defineConfig } from '@rslib/core';
 
+const PanelExternals = [/^(?:effect|react|react-dom)(?:\/.*)?$/];
+
 export default defineConfig({
   lib: [
     {
@@ -10,7 +12,41 @@ export default defineConfig({
         tsgo: true,
       },
       format: 'esm',
+      source: {
+        entry: {
+          index: ['src/**', '!src/dev/panel.tsx'],
+        },
+      },
       syntax: 'es2022',
+    },
+    {
+      bundle: true,
+      format: 'esm',
+      output: {
+        externals: PanelExternals,
+        filename: {
+          js: '[name].js',
+        },
+        target: 'web',
+      },
+      source: {
+        entry: {
+          'dev/panel': './src/dev/panel.tsx',
+        },
+      },
+      syntax: 'es2022',
+      tools: {
+        rspack: {
+          module: {
+            rules: [
+              {
+                resourceQuery: /raw/,
+                type: 'asset/source',
+              },
+            ],
+          },
+        },
+      },
     },
   ],
   output: {

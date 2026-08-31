@@ -46,16 +46,18 @@ type RouteTreeProps = { readonly root: RouteTreeModel };
 
 const RouteNodeContext = createContext<RouteTreeModel | null>(null);
 
-const RouteNodeRenderer = ({ node }: RouteNodeRendererProps) => (
-  <RouteNodeContext value={node}>{node.content}</RouteNodeContext>
-);
+function RouteNodeRenderer({ node }: RouteNodeRendererProps) {
+  return <RouteNodeContext value={node}>{node.content}</RouteNodeContext>;
+}
 
-export const RouteTree = ({ root }: RouteTreeProps) => <RouteNodeRenderer node={root} />;
+export function RouteTree({ root }: RouteTreeProps) {
+  return <RouteNodeRenderer node={root} />;
+}
 
-export const RouteOutlet = () => {
+export function RouteOutlet() {
   const node = use(RouteNodeContext);
   if (node === null) {
     throw new Error('RouteOutlet rendered outside its route node.');
   }
   return node.child === null ? null : <RouteNodeRenderer key={node.child.id} node={node.child} />;
-};
+}

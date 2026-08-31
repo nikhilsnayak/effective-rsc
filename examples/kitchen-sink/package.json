@@ -11,7 +11,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@base-ui/react": "^1.7.0",
+    "@base-ui/react": "catalog:",
     "@effect/platform-browser": "catalog:",
     "@effect/platform-bun": "catalog:",
     "@effect/sql-sqlite-bun": "4.0.0-rc.112",

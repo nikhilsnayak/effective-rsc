@@ -20,6 +20,13 @@ export default defineConfig({
   rules: {
     curly: 'error',
     'ersc/no-inline-yield': 'error',
+    'react/function-component-definition': [
+      'error',
+      {
+        namedComponents: 'function-declaration',
+        unnamedComponents: 'function-expression',
+      },
+    ],
   },
   options: {
     typeAware: true,

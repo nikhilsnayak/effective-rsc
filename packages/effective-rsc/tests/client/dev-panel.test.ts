@@ -26,9 +26,11 @@ describe('development panel state', () => {
         { _tag: 'RuntimeFailed', failure: runtimeFailure('another failure') },
       ),
     ).toEqual({
-      _tag: 'BuildFailed',
-      diagnostics: 'Compilation failed',
-      visibility: 'Visible',
+      _tag: 'Visible',
+      content: {
+        _tag: 'BuildFailed',
+        diagnostics: 'Compilation failed',
+      },
     });
   });
 
@@ -41,9 +43,11 @@ describe('development panel state', () => {
     );
 
     expect(state).toEqual({
-      _tag: 'RuntimeFailed',
-      failures: ['two', 'three', 'four', 'five', 'six'].map(runtimeFailure),
-      visibility: 'Visible',
+      _tag: 'Visible',
+      content: {
+        _tag: 'RuntimeFailed',
+        failures: ['two', 'three', 'four', 'five', 'six'].map(runtimeFailure),
+      },
     });
   });
 
@@ -54,9 +58,18 @@ describe('development panel state', () => {
     );
 
     expect(dismissed).toEqual({
-      _tag: 'BuildFailed',
-      diagnostics: 'Compilation failed',
-      visibility: 'Dismissed',
+      _tag: 'Dismissed',
+      content: {
+        _tag: 'BuildFailed',
+        diagnostics: 'Compilation failed',
+      },
+    });
+    expect(applyDevPanelEvent(dismissed, { _tag: 'Opened' })).toEqual({
+      _tag: 'Visible',
+      content: {
+        _tag: 'BuildFailed',
+        diagnostics: 'Compilation failed',
+      },
     });
     expect(
       applyDevPanelEvent(dismissed, {
@@ -64,9 +77,11 @@ describe('development panel state', () => {
         failure: runtimeFailure('render failed'),
       }),
     ).toEqual({
-      _tag: 'BuildFailed',
-      diagnostics: 'Compilation failed',
-      visibility: 'Visible',
+      _tag: 'Visible',
+      content: {
+        _tag: 'BuildFailed',
+        diagnostics: 'Compilation failed',
+      },
     });
   });
 
@@ -74,7 +89,7 @@ describe('development panel state', () => {
     const failed = apply({ _tag: 'RuntimeFailed', failure: runtimeFailure('render failed') });
 
     expect(applyDevPanelEvent(failed, { _tag: 'Reconciled' })).toEqual({
-      _tag: 'Clear',
+      _tag: 'Inactive',
     });
   });
 });

@@ -2,9 +2,11 @@
 
 ## Framework package
 
-Rslib emits bundleless ESM, declarations, and source maps under
-`packages/effective-rsc/dist/`. Published exports point to built JavaScript, preserve RSC directives,
-and expose deliberate subpaths. The package also ships its source guides and generated `LLMS.md`.
+Rslib emits framework modules as bundleless ESM with declarations and source maps under
+`packages/effective-rsc/dist/`. The development panel is a separate browser bundle whose private UI
+dependencies are embedded; React, React DOM, and Effect remain external peers. Published exports
+point to built JavaScript, preserve RSC directives, and expose deliberate subpaths. The package also
+ships its source guides and generated `LLMS.md`.
 
 ## Application build
 

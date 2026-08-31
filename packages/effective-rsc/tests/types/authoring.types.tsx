@@ -185,7 +185,9 @@ const CreateReport = ERSC.ServerFn.make({
 });
 const directFormInvocation: Promise<void> = CreateReport(new FormData());
 void directFormInvocation;
-const DirectServerFnForm = () => <form action={CreateReport} />;
+function DirectServerFnForm() {
+  return <form action={CreateReport} />;
+}
 void DirectServerFnForm;
 // @ts-expect-error A Server Function accepts the Schema's encoded input, not its decoded output.
 void CreateReport({ title: 'Incident report' });
@@ -312,9 +314,15 @@ const NarrowPage = NarrowERSC.Page.make({ render: () => Effect.succeed(null) });
 // @ts-expect-error An ERSC member belongs to one exact service universe.
 WideERSC.Routes.make().page('/', NarrowPage);
 
-const ArbitraryLayout = ({ children }: { readonly children: ReactNode }) => <main>{children}</main>;
-const ArbitraryLoading = () => <p>Loading...</p>;
-const ArbitraryPage = () => <h1>Home</h1>;
+function ArbitraryLayout({ children }: { readonly children: ReactNode }) {
+  return <main>{children}</main>;
+}
+function ArbitraryLoading() {
+  return <p>Loading...</p>;
+}
+function ArbitraryPage() {
+  return <h1>Home</h1>;
+}
 // @ts-expect-error Layout concerns must be created with ERSC.Layout.make.
 ERSC.Routes.make({ layout: ArbitraryLayout });
 // @ts-expect-error Loading concerns must be created with ERSC.Loading.make.

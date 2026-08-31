@@ -14,7 +14,7 @@ type ScheduleViewProps = {
   readonly schedule: ObservedQuery<Schedule>;
 };
 
-const ScheduleView = ({ attendeeName, schedule }: ScheduleViewProps) => {
+function ScheduleView({ attendeeName, schedule }: ScheduleViewProps) {
   const nextDay = schedule.data.day === 'saturday';
 
   return (
@@ -67,7 +67,7 @@ const ScheduleView = ({ attendeeName, schedule }: ScheduleViewProps) => {
       </footer>
     </main>
   );
-};
+}
 
 export const SchedulePage = AttendeeERSC.Page.make({
   params: Schema.Struct({

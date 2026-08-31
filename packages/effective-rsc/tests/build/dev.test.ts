@@ -153,7 +153,11 @@ it.effect('waits for the current compilation outcome before dispatching', () =>
       cause: new Error('application.tsx: syntax error'),
       reason: 'BuildFailed',
     });
-    yield* store.update({ _tag: 'Failed', error: compilationError });
+    yield* store.update({
+      _tag: 'Failed',
+      diagnostics: 'application.tsx: syntax error',
+      error: compilationError,
+    });
     const rebuildingError = yield* Fiber.join(rebuildingRequest).pipe(Effect.flip);
     const requestError = yield* request('/first').pipe(Effect.flip);
     expect(rebuildingError).toBe(compilationError);

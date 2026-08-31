@@ -46,9 +46,9 @@
     "build": "rslib build",
     "docs:check": "bun ../../scripts/generate-docs.ts --check",
     "prepack": "bun run build && bun run docs:check",
-    "test": "vitest run",
+    "test": "bun run --bun vitest run",
     "test:types": "tsc --noEmit -p tests/types/tsconfig.json",
-    "test:watch": "vitest"
+    "test:watch": "bun run --bun vitest"
   },
   "dependencies": {
     "@rspack/core": "2.2.0",

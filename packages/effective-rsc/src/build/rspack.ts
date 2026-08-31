@@ -42,6 +42,7 @@ export type RspackWatchEvent =
     }
   | {
       readonly _tag: 'Failed';
+      readonly diagnostics: string;
       readonly error: RspackError;
     };
 
@@ -134,11 +135,20 @@ const missingStatsError = () =>
     reason: 'CompileFailed',
   });
 
-const statsDiagnostics = (stats: RspackStats) =>
+const statsDiagnostics = (stats: RspackStats, colors = true) =>
   stats.toString({
-    colors: true,
+    colors,
     preset: 'errors-warnings',
   });
+
+const failedWatchEvent = (
+  error: RspackError,
+  diagnostics = Bun.stripANSI(error.message),
+): RspackWatchEvent => ({
+  _tag: 'Failed',
+  diagnostics,
+  error,
+});
 
 const failedStatsError = (diagnostics: string) =>
   new RspackError({
@@ -189,21 +199,24 @@ const clientCompilationHash = (stats: RspackStats) =>
 
 const watchEvent = (cause: Error | null, stats?: RspackStats): RspackWatchEvent => {
   if (cause) {
-    return { _tag: 'Failed', error: compilationError(cause) };
+    return failedWatchEvent(compilationError(cause), Bun.stripANSI(cause.stack ?? cause.message));
   }
   if (!stats) {
-    return { _tag: 'Failed', error: missingStatsError() };
+    return failedWatchEvent(missingStatsError());
   }
   if (stats.hasErrors()) {
-    return { _tag: 'Failed', error: failedStatsError(statsDiagnostics(stats)) };
+    return failedWatchEvent(
+      failedStatsError(statsDiagnostics(stats)),
+      statsDiagnostics(stats, false),
+    );
   }
   const serverBundle = emittedServerBundle(stats);
   if (!serverBundle) {
-    return { _tag: 'Failed', error: missingServerBundleError() };
+    return failedWatchEvent(missingServerBundleError());
   }
   const clientHash = clientCompilationHash(stats);
   if (typeof clientHash !== 'string') {
-    return { _tag: 'Failed', error: missingClientHashError() };
+    return failedWatchEvent(missingClientHashError());
   }
   const duration = buildDuration(stats);
 

@@ -128,9 +128,17 @@ it.effect('streams aggregate compilation outcomes and closes the complete watch 
 
     expect(Array.from(events)).toMatchObject([
       { _tag: 'Building', changedFiles: [] },
-      { _tag: 'Failed', error: { reason: 'BuildFailed' } },
+      {
+        _tag: 'Failed',
+        diagnostics: 'application.tsx: compile error',
+        error: { reason: 'BuildFailed' },
+      },
       { _tag: 'Building', changedFiles: [] },
-      { _tag: 'Failed', error: { reason: 'CompileFailed' } },
+      {
+        _tag: 'Failed',
+        diagnostics: expect.stringContaining('watch callback failed'),
+        error: { reason: 'CompileFailed' },
+      },
       { _tag: 'Building', changedFiles: [] },
       {
         _tag: 'Compiled',

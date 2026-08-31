@@ -5,12 +5,9 @@
 Use the React and Effect documentation for their underlying concepts. ERSC conventions:
 
 - Only `src/application.tsx` has framework filename semantics.
-- Create every authoring value in an application from one ERSC instance.
+- Create application values from one ERSC identity and its derived middleware views.
 - Provide application services and export the result at `ERSC.make`.
 - Import the package root only from the RSC graph.
-
-Start with Getting started, then use Guides for composition, Advanced for runtime behavior, and API
-reference for exact contracts.
 
 ## Getting started
 
@@ -18,21 +15,24 @@ Create an application with compatible dependencies and Tailwind support:
 
 ```sh
 bunx create-ersc-app my-application
+cd my-application
+bun run dev
 ```
 
-In `src/application.tsx`, create one ERSC instance, define a root Layout and Page, compose Routes,
+Open `http://localhost:18193`.
+
+In `src/application.tsx`, create one ERSC identity, define a root Layout and Page, compose Routes,
 and export `ERSC.make(...)`.
 
-Run `bun run check`, `bun run build`, and `bun run start`. The default URL is
-`http://localhost:18193`. Both `ersc dev` and `ersc start` accept `--hostname` and `--port`;
-command-line flags take precedence over `HOST` and `PORT`. See the package README for requirements
-and manual installation.
+For a production check, run `bun run check`, `bun run build`, and `bun run start`. Both
+`ersc dev` and `ersc start` accept `--hostname` and `--port`; flags take precedence over
+`HOST` and `PORT`. See the package README for requirements and manual installation.
 
 Files in `public/` are served from `/` with `Cache-Control: public, max-age=0`.
 
 ### A minimal application
 
-Create all values from one ERSC instance and close it with ERSC.make.
+Create values from one ERSC identity and close it with ERSC.make.
 
 ```tsx
 import { Effect } from 'effect';
@@ -64,8 +64,7 @@ export default ERSC.make({
 
 ## Guides
 
-Authoring examples for Server Functions, service composition, routing, middleware, and userland
-Effect HTTP. Familiarity with React Server Components and Effect is assumed.
+Familiarity with React Server Components and Effect is assumed.
 
 ## Server Functions
 
@@ -99,55 +98,73 @@ renderer's inferred service requirements.
 
 ## Routing, parameters, and loading
 
-- Routes are immutable and belong to one ERSC instance.
+- Routes are immutable and belong to one ERSC identity.
 - `page(path, page)` attaches a Page; `mount(prefix, routes)` nests a route scope.
-- Mounted scopes retain their Layout, Loading, and middleware ancestry.
-- `ERSC.withMiddleware(middleware)` returns a derived authoring view. Its Routes activate that scope
-  for Page GET/HEAD; its Server Functions activate it for their POST.
-- `ERSC.Middleware.make<{ provides: CurrentUser }>(handler)` makes `CurrentUser` available to every
-  factory on the derived view. The handler must provide it to the downstream Effect. Use a union
-  when one middleware provides multiple services.
-- A Page, Layout, or Component may render only where every middleware captured by its authoring view
-  is active. A Server Function activates its own captured scope.
-- Chain `withMiddleware` in request order. Responses unwind in reverse order.
-- Native Effect HTTP global middleware remains the server-wide policy mechanism.
+- Mounted scopes retain their Layout and Loading ancestry.
+- Page parameter Schemas decode Effect HTTP path captures before rendering.
+- Effect HTTP owns route matching; ERSC rejects duplicate shapes and invalid composition while
+  building the graph.
 
 - **[Creating one routing authoring module](./docs/02-guides/03-routing/10_ersc.ts)**
 - **[Layout and Loading concerns](./docs/02-guides/03-routing/10_layouts.tsx)**: Layout is Effectful; Loading is synchronous and service-free.
 - **[Static and parameterized Pages](./docs/02-guides/03-routing/20_pages.tsx)**: A Page Schema decodes captured path strings for render.
-- **[Defining a middleware scope](./docs/02-guides/03-routing/25_middleware.ts)**: The handler receives the downstream response Effect. It may short-circuit or transform the
-  response, but introduces no typed failures.
 - **[Composing and mounting Routes](./docs/02-guides/03-routing/30_routes.tsx)**: Mounting retains the child graph's Layout and Loading ancestry.
 - **[Closing the route graph](./docs/02-guides/03-routing/40_application.ts)**
+
+## Middleware
+
+Create middleware from the base ERSC view, then derive a view with
+`ERSC.withMiddleware(middleware)`. The derived view has the same ERSC identity and retains the
+middleware scope.
+
+Routes and Server Functions created from the derived view activate that scope. Pages, Layouts, and
+Components created from it may require the services declared by the middleware and consume them only
+while rendered inside an active scope.
+
+Use `ERSC.Middleware.make<{ provides: CurrentUser }>(handler)` when a middleware provides a
+request-scoped service. The handler must provide that service to the downstream Effect. Chain
+`withMiddleware` in request order; responses unwind in reverse.
+
+Scoped middleware does not wrap userland HTTP, assets, or unmatched requests. Put server-wide policy
+in native global Effect HTTP middleware supplied through the application Layer.
+
+- **[Defining an authenticated view](./docs/02-guides/04-middleware/10_auth.ts)**: Middleware can short-circuit a request and provide typed services downstream.
+- **[Consuming middleware data in a Page](./docs/02-guides/04-middleware/20_account-page.tsx)**
+- **[Consuming middleware data in a Server Function](./docs/02-guides/04-middleware/30_update-profile.ts)**
+- **[Activating middleware with Routes](./docs/02-guides/04-middleware/40_application.tsx)**
 
 ## Userland HTTP
 
 Register native Effect `HttpRouter`, `HttpApi`, or RPC layers in the Layer passed to
-`ERSC.make({ layer })`. They share the framework's HTTP server and Layer scope.
+`ERSC.make({ layer })`. They share the framework's HTTP server, application services, and shutdown
+scope.
 
-Register routes that use application services with `HttpRouter.use`, then provide and retain those
-services with `Layer.provideMerge`. The same service instances remain available to ERSC concerns.
+Register routes that require application services with `HttpRouter.use`, then retain those services
+with `Layer.provideMerge`.
 
 Native global middleware belongs in the same application Layer. It observes Page requests, Server
-Function requests, raw HTTP, assets, and unmatched requests.
+Function requests, userland HTTP, assets, and unmatched requests. ERSC-scoped middleware has narrower
+reach.
 
-- **[Composing application services and userland HTTP](./docs/02-guides/04-http/10_application-layer.ts)**: Native HTTP layers register on the same router when this Layer is passed to ERSC.make.
+- **[Composing ERSC and userland HTTP](./docs/02-guides/05-http/10_application-layer.tsx)**: ERSC concerns and native HTTP routes share one application Layer.
 
 ## Advanced
 
-Runtime guarantees for request lifetimes, client navigation, and Server Function refresh.
+Runtime guarantees:
+
+[Current limitations](https://github.com/nikhilsnayak/effective-rsc/blob/main/docs/ARCHITECTURE.md#known-limitations)
 
 ## Request runtime and lifetimes
 
 The server builds the Layer passed to `ERSC.make` once and releases it at shutdown. Its services have
 application lifetime.
 
-Each HTTP request has an independent Effect scope. Pages, Layouts, Components, and Server Functions
-run their Effects within that scope.
+Each HTTP request has an independent Effect scope. Server Function handlers run in the HTTP request
+fiber. Page, Layout, and Component render Effects run in a request-owned render scope.
 
-The Flight stream owns the request scope. Closing that stream interrupts its request Effects and
-runs their finalizers. Acquire request-local resources inside the request Effect so their lifetime
-follows the request automatically.
+Closing the response interrupts unfinished request work and runs its finalizers. Acquire
+request-local resources inside the request Effect so their lifetime follows the request
+automatically.
 
 Give work that must outlive a request an explicit application-owned scope.
 
@@ -185,8 +202,8 @@ handler. A hydrated response contains the imperative result and a refreshed rout
 progressively enhanced response contains a complete document with the refreshed tree and form state.
 
 For hydrated calls, the result Promise settles independently from the route refresh. ERSC commits
-the refreshed tree in a React transition and keeps its work active through React commit and Flight
-EOF. Canceling that work interrupts the handler Effect and response stream.
+the refreshed tree in a React transition and keeps the request active through React commit and
+Flight EOF. Disconnecting interrupts unfinished request work and the response stream.
 
 After a successful mutation, ERSC clears the Back/Forward traversal cache because any route may have
 changed.
@@ -194,13 +211,14 @@ changed.
 ## API reference
 
 Under the `react-server` condition, the package root exports `Application`.
-`Application.ersc<Services>()` returns `Component`, `Layout`, `Loading`, `Page`, `Routes`, `ServerFn`,
-and `make`. Values from different ERSC instances cannot be composed.
+`Application.ersc<Services>()` returns `Component`, `Layout`, `Loading`, `Page`, `Middleware`,
+`Routes`, `ServerFn`, `withMiddleware`, and `make`. Values from different ERSC identities cannot
+be composed.
 
 ## Application
 
-`Application.ersc<Services>()` creates one application-scoped authoring module. `Services` is the
-complete server-service union; omit it for a service-free application.
+`Application.ersc<Services>()` creates one application-scoped ERSC identity and its base authoring
+view. `Services` is the complete server-service union; omit it for a service-free application.
 
 `ERSC.make({ routes, layer })` closes the route graph and application runtime. Export its result from
 `src/application.tsx`. `layer` is required unless `Services` is `never`; it may provide the declared
@@ -215,8 +233,9 @@ services and register native Effect HTTP on the framework router.
 the Schema's encoded keys must exactly match the path parameters and accept strings. Compose the
 Page with `Routes.page`.
 
-Pages currently produce React output only. They do not expose status, not-found, or redirect
-outcomes. Only an unmatched route receives a native `404`.
+Pages produce React output. Only an unmatched route receives a native `404`. The mapping from a
+matched Page's parameter rejection to an expected HTTP outcome remains a
+[known limitation](https://github.com/nikhilsnayak/effective-rsc/blob/main/docs/ARCHITECTURE.md#known-limitations).
 
 ## Layout
 
@@ -233,42 +252,63 @@ require services. A scope accepts at most one Loading value.
 `ERSC.Component.make({ render })` creates a non-route Effectful Server Component. Props are inferred
 from `render`; requirements must fit the ERSC service union. Use it only in the RSC graph.
 
-- **[An Effectful Server Component](./docs/04-api-reference/05-component/10_component.tsx)**: Component runs its render Effect in the current ERSC request scope.
+- **[An Effectful Server Component](./docs/04-api-reference/05-component/10_component.tsx)**: Component runs its render Effect in the current ERSC render scope.
+
+## Middleware
+
+`ERSC.Middleware.make(handler)` adapts an Effect HTTP middleware to the current ERSC identity.
+`ERSC.withMiddleware(middleware)` returns a derived authoring view of that same identity.
+
+Use `ERSC.Middleware.make<{ provides: CurrentUser }>(handler)` when the handler provides a service to
+the downstream Effect. Multiple services use a union. The derived view adds those services to the
+requirements available to Page, Layout, Component, ServerFn, Routes, Middleware, and further derived
+views.
+
+Routes and ServerFn activate retained middleware. Page, Layout, and Component consume its services
+only while React renders them inside an active scope. Rendering one outside its required scope is a
+programmer error and throws `TypeError`.
+
+Chain `withMiddleware` in request order. Ancestors run before descendants; response transformations
+unwind in reverse. A middleware repeated in one resolved mounted route chain is rejected. Shared
+middleware across mounted scopes runs once.
+
+## Reach
+
+| Request                          | Route scope                          | Server Function scope | Native global middleware |
+| -------------------------------- | ------------------------------------ | --------------------- | ------------------------ |
+| Page GET/HEAD                    | Matched chain                        | No                    | Yes                      |
+| Hydrated Server Function POST    | Remaining route chain around refresh | Action chain          | Yes                      |
+| Progressive Server Function POST | No route refresh in the POST         | Action chain          | Yes                      |
+| Userland HTTP, assets, unmatched | No                                   | No                    | Yes                      |
+
+During a hydrated Server Function request, middleware already active for the action is not executed
+again for the refreshed route, even if it appears at another position in that route chain. Remaining
+route middleware wraps refreshed rendering.
+
+Native global Effect HTTP middleware is separate. Register it through the application Layer for
+server-wide policy.
 
 ## Routes
 
-`ERSC.Routes.make({ layout?, loading? })` creates an immutable scope.
+`ERSC.Routes.make({ layout?, loading? })` creates an immutable route scope.
 
-- Create middleware with `ERSC.Middleware.make(handler)`, then call
-  `ERSC.withMiddleware(middleware)`. Routes created from the returned view activate that scope for
-  matched Page GET and native HEAD fallback.
-- Pass `{ provides: Service }` as the type argument to `make` when the handler provides a request
-  service. Use `{ provides: FirstService | SecondService }` for multiple services. Page, Layout,
-  Component, ServerFn, Routes, Middleware, `withMiddleware`, and `make` remain available on the
-  derived view.
-- Chain `withMiddleware` in request order. Responses unwind in reverse order. Shared prefixes across
-  mounted scopes run once.
-- Scoped middleware does not wrap userland HTTP, assets, or unmatched paths. Use native global
-  Effect HTTP middleware for server-wide policy.
-- `routes.page(path, page)` adds a Page at an absolute Effect HTTP pattern. Parameter Schema keys must
-  exactly match the path parameters.
-- `routes.mount(prefix, childRoutes)` mounts a non-empty same-ERSC graph below an absolute,
-  parameter-free prefix.
+- `routes.page(path, page)` adds a Page at an absolute Effect HTTP pattern. Parameter Schema keys
+  must exactly match path parameters.
+- `routes.mount(prefix, childRoutes)` mounts a non-empty graph of the same ERSC identity below an
+  absolute, parameter-free prefix.
+- Mounted scopes retain their Layout, Loading, and middleware ancestry.
 
-Both operations return new Routes values. Conflicting shapes and `/_ersc/assets` are rejected.
-Root Routes require a Layout and at least one Page.
+Both operations return new Routes values. Conflicting matcher shapes and `/_ersc/assets` are
+rejected. Root Routes require a Layout and at least one Page.
+
+Routes created from a derived authoring view activate its middleware.
 
 ## ServerFn
 
-`ERSC.ServerFn.make({ input, handler })` creates a Server Function reference. `input` decodes the
-invocation payload and automatically infers the `handler` parameter. Do not annotate it. `handler`
-returns an Effect whose requirements fit the ERSC service union. The returned client reference
-accepts the Schema's encoded type and resolves `Promise<Output>`; the handler receives its decoded
-type.
-
-A Server Function created from `ERSC.withMiddleware(middleware)` activates that scope for its POST.
-The action scope surrounds execution and the route refresh. Middleware already active for the action
-does not run again; the remaining route middleware wraps the refresh.
+`ERSC.ServerFn.make({ input, handler })` creates a native React Server Function reference. `input`
+decodes the invocation payload and infers the handler parameter; do not annotate it. The handler
+returns an Effect whose requirements fit the ERSC service universe. The client reference accepts the
+Schema's encoded type and resolves `Promise<Output>`; the handler receives its decoded type.
 
 ```ts
 const followAuthor = ERSC.ServerFn.make({
@@ -277,10 +317,8 @@ const followAuthor = ERSC.ServerFn.make({
 });
 ```
 
-Its client reference accepts `{ authorId: string }`.
-
-Schema transformations may use a different encoded type. For a native form, decode `FormData` and
-return `void` so React accepts the function directly as `form.action`:
+Schema transformations may use a different encoded type. To pass a Server Function directly to
+`form.action`, decode `FormData` and return `void`:
 
 ```tsx
 const followAuthorForm = ERSC.ServerFn.make({
@@ -294,7 +332,11 @@ const followAuthorForm = ERSC.ServerFn.make({
 </form>;
 ```
 
-Direct server invocation throws. The handler's Effect error type is not part of the client Promise
-type. Encode an expected failure in a discriminated `Output` union; unexpected failures reject the
-Promise. Browser requests require an Origin matching the application host and may contain at most
-10 MiB.
+A ServerFn created from a derived view activates its middleware for the POST. The Middleware
+reference defines refresh reach and ordering.
+
+Direct server invocation throws. Encode expected failure in a discriminated output union; unexpected
+failures reject the Promise. Browser requests require an Origin matching the application host and
+may contain at most 10 MiB. See the
+[known limitations](https://github.com/nikhilsnayak/effective-rsc/blob/main/docs/ARCHITECTURE.md#known-limitations)
+for the typed failure channel and progressive bound arguments.

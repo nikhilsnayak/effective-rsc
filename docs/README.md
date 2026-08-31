@@ -13,9 +13,13 @@ Read this index before changing framework behavior.
 ## Owners
 
 - [VISION.md](VISION.md): purpose, principles, and non-goals.
-- [ARCHITECTURE.md](ARCHITECTURE.md): current runtime flows and module boundaries.
+- [ARCHITECTURE.md](ARCHITECTURE.md): authoritative architecture overview and limitations.
+  - [Build and runtime graphs](architecture/build.md)
+  - [Authoring and route model](architecture/authoring.md)
+  - [Request flows](architecture/request-flows.md)
+  - [Lifetimes, failures, and protocols](architecture/lifetimes-and-protocols.md)
 - [DECISIONS.md](DECISIONS.md): Accepted choices grouped by delivery state.
-- [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md): unresolved choices and their evidence.
+- [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md): open and explicitly deferred questions with their evidence.
 
 Only these files own framework behavior. Preserve historical investigation in Git history rather than
 as active agent context.

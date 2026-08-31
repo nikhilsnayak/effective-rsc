@@ -6,9 +6,8 @@
 import { ERSC } from './10_ersc';
 import { ArticleLayout, ArticleLoading, RootLayout } from './10_layouts';
 import { ArticlePage, HomePage } from './20_pages';
-import { ArticleERSC } from './25_middleware';
 
-const articleRoutes = ArticleERSC.Routes.make({
+const articleRoutes = ERSC.Routes.make({
   layout: ArticleLayout,
   loading: ArticleLoading,
 }).page('/:slug', ArticlePage);

@@ -7,5 +7,6 @@
 the Schema's encoded keys must exactly match the path parameters and accept strings. Compose the
 Page with `Routes.page`.
 
-Pages currently produce React output only. They do not expose status, not-found, or redirect
-outcomes. Only an unmatched route receives a native `404`.
+Pages produce React output. Only an unmatched route receives a native `404`. The mapping from a
+matched Page's parameter rejection to an expected HTTP outcome remains a
+[known limitation](https://github.com/nikhilsnayak/effective-rsc/blob/main/docs/ARCHITECTURE.md#known-limitations).

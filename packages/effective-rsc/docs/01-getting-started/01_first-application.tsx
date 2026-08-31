@@ -1,7 +1,7 @@
 /**
  * @title A minimal application
  *
- * Create all values from one ERSC instance and close it with ERSC.make.
+ * Create values from one ERSC identity and close it with ERSC.make.
  */
 import { Effect } from 'effect';
 import { Application } from 'effective-rsc';

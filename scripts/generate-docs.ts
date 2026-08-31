@@ -5,6 +5,8 @@ import { basename, dirname, extname, join, relative } from 'node:path';
 const repositoryRoot = Bun.fileURLToPath(new URL('../', import.meta.url));
 export const documentationRoot = join(repositoryRoot, 'packages/effective-rsc/docs');
 export const documentationOutput = join(repositoryRoot, 'packages/effective-rsc/LLMS.md');
+const documentationOutputDirectory = dirname(documentationOutput);
+const sourceNavigationMarker = '<!-- source-navigation -->';
 
 type Example = {
   readonly content: string;
@@ -46,7 +48,19 @@ const readExample = async (path: string): Promise<Example> => {
   return { content: content.trim(), description, fileName, title };
 };
 
+const linkFromDocumentationOutput = (path: string) =>
+  `./${relative(documentationOutputDirectory, path).replaceAll('\\', '/')}`;
+
 const directoryToMarkdown = async (directory: string): Promise<string> => {
+  const index = Bun.file(join(directory, 'index.md'));
+  const indexContent = (await index.exists()) ? (await index.text()).trim() : '';
+  const [sharedIndex = ''] = indexContent.split(`\n${sourceNavigationMarker}\n`, 1);
+  const sharedIndexContent = sharedIndex.trim();
+  if (sharedIndexContent.includes('](./') || sharedIndexContent.includes('](../')) {
+    throw new Error(
+      `Move source-relative links below ${sourceNavigationMarker} in ${relative(repositoryRoot, directory)}/index.md.`,
+    );
+  }
   const entries = (await readdir(directory, { withFileTypes: true }))
     .filter((entry) => entry.name !== 'index.md')
     .sort((left, right) => left.name.localeCompare(right.name));
@@ -85,8 +99,7 @@ const directoryToMarkdown = async (directory: string): Promise<string> => {
       continue;
     }
 
-    const linkPath = relative(dirname(documentationOutput), path).replaceAll('\\', '/');
-    const link = `- **[${example.title}](./${linkPath})**`;
+    const link = `- **[${example.title}](${linkFromDocumentationOutput(path)})**`;
     linkedExamples.push(
       example.description === undefined
         ? link
@@ -95,9 +108,8 @@ const directoryToMarkdown = async (directory: string): Promise<string> => {
   }
 
   const sections: Array<string> = [];
-  const index = Bun.file(join(directory, 'index.md'));
-  if (await index.exists()) {
-    sections.push((await index.text()).trim());
+  if (sharedIndexContent !== '') {
+    sections.push(sharedIndexContent);
   }
   sections.push(...inlineExamples);
   if (linkedExamples.length > 0) {

@@ -35,7 +35,7 @@ once against `ersc dev` on port 18194. Both servers are started by Playwright, s
 | Root Layout owning the document | `src/modules/conference/components/conference-shell.tsx`                                                |
 | Static and parameterized Pages  | `src/modules/conference/components/conference-home.tsx`, `src/modules/schedule/components/schedule.tsx` |
 | Nested Routes, Loading, mounts  | `src/modules/schedule/routes.tsx`                                                                       |
-| Routes middleware and redirect  | `src/modules/schedule/routes.tsx`                                                                       |
+| Scoped middleware and redirect  | `src/modules/schedule/routes.tsx`                                                                       |
 | Server Functions                | `src/modules/agenda/server-functions.ts`                                                                |
 | Client Components               | `src/modules/agenda/components/agenda-toggle.tsx`                                                       |
 | Userland Effect HTTP            | `src/modules/agenda/http.ts` (`GET /agenda/calendar.ics`)                                               |
@@ -43,5 +43,5 @@ once against `ersc dev` on port 18194. Both servers are started by Playwright, s
 | Bun SQLite persistence          | `src/persistence/`                                                                                      |
 | Tailwind v4 through Rspack      | `src/styles.css`                                                                                        |
 
-`src/ersc.ts` declares the service universe once; every authoring value in the application comes
-from that one instance.
+`src/ersc.ts` declares the service universe once; application values come from one ERSC identity
+and its derived middleware views.

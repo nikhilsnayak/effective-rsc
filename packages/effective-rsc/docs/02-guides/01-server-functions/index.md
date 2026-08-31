@@ -8,3 +8,12 @@ input; a function returning `void` can then be passed directly to `<form action>
 infer the handler parameter.
 
 A successful invocation refreshes the current route.
+
+<!-- source-navigation -->
+
+### Examples
+
+- [Create the ERSC identity](./10_ersc.ts)
+- [Define a Server Function](./20_follow-author.ts)
+- [Use a direct form action](./30_follow-author-button.tsx)
+- [Compose the application](./40_application.tsx)

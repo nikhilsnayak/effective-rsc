@@ -18,8 +18,8 @@
 An experimental, Effect-native React Server Components framework for Bun. Built on Rspack's
 native RSC support.
 
-> A research framework, not a production-safe default. It runs on React Canary, Effect v4 RC,
-> TypeScript 7, Rspack's RSC support, and browser APIs with no legacy fallbacks. Expect breakage.
+> Experimental. Uses React Canary, Effect v4 RC, TypeScript 7, Rspack's RSC support, and modern
+> browser APIs. [Current limitations](https://github.com/nikhilsnayak/effective-rsc/blob/main/docs/ARCHITECTURE.md#known-limitations).
 
 ## Requirements
 
@@ -143,18 +143,22 @@ Then create a stylesheet, such as `src/styles.css`:
 
 ## Authoring model
 
-`Application.ersc<Services>()` creates one application-scoped authoring module:
+`Application.ersc<Services>()` creates one application-scoped ERSC identity and its base authoring
+view:
 
 - `Page` is an Effectful route leaf and may decode typed path parameters with Schema.
 - `Layout` is an Effectful wrapper with one `children` outlet; the root Layout owns the document.
 - `Loading` is a synchronous, service-free Suspense fallback.
 - `Component` defines an Effectful Server Component that is not itself a route.
 - `ServerFn` adds Effect and Schema to React's native Server Function protocol.
-- `Routes` immutably composes Pages, inherited middleware, and nested Layout/Loading scopes.
+- `Middleware` adapts Effect HTTP middleware and may provide typed request services.
+- `Routes` immutably composes Pages and nested Layout/Loading scopes and activates middleware
+  retained by its authoring view.
 
-Create every Page, Layout, Loading, Component, ServerFn, and Routes value from that same ERSC
-instance. Declare the complete service universe through its `Services` type parameter and provide the
-application Layer at `ERSC.make({ layer })`.
+Create application values from one ERSC identity and its derived middleware views.
+`ERSC.withMiddleware(middleware)` derives a view whose values retain that middleware scope. Declare
+the complete service universe through `Services` and provide the application Layer at
+`ERSC.make({ layer })`.
 
 ## Runtime boundary
 

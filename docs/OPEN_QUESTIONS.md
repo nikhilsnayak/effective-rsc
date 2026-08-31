@@ -5,7 +5,56 @@ and add or revise its owning decision.
 
 IDs are append-only and never reused, including after a question is resolved.
 
-## OQ-002 — Suspensing Loading diagnostics
+## Open
+
+### OQ-003 — Route-parameter Schema rejection
+
+- **Question:** How should a matched Page's path-parameter Schema rejection map to NotFound or another expected failure?
+- **Why:** Effect HTTP has already selected the route, but the application-level Schema can still reject captured values.
+- **Affected:** Page rendering, HTTP status, error boundaries, and navigation Flight. Any non-200 answer widens `RequestOutcome['status']`, which is `200` today.
+- **Evidence:** Parameter Schemas currently fail in the Page render Effect after route selection.
+- **Related:** D-028, D-046.
+- **Resolution:** Unresolved.
+- **Status:** Open.
+
+### OQ-004 — Typed search parameters
+
+- **Question:** How should Pages declare and decode typed search parameters?
+- **Why:** Search parameters have multiplicity, defaults, and navigation semantics distinct from route parameters.
+- **Affected:** Page authoring, URLs, routing, and navigation refreshes.
+- **Evidence:** The current Page contract models only Effect HTTP path captures.
+- **Related:** D-028, D-046.
+- **Resolution:** Unresolved.
+- **Status:** Open.
+
+### OQ-006 — Server Function failure channel
+
+- **Question:** How should a Server Function handler's typed failure reach its caller?
+- **Why:** Effect owns the application runtime, but a handler's error type is the one part of its signature the client contract does not carry.
+- **Affected:** `ERSC.ServerFn.make` typing, Flight payloads, client call sites, and error boundaries.
+- **Evidence:** `ServerFnOperationError` stores the failure as `Schema.Defect` and `serverFnOutcome` squashes it, so `ServerFunction<Input, Output, Services>` resolves `Promise<Output>` and delivers failures as `unknown`. The kitchen-sink encodes its own `AgendaMutationState` result in `Output` to work around this.
+- **Related:** D-009, D-036, D-040.
+- **Resolution:** Unresolved.
+- **Status:** Open.
+
+### OQ-008 — Multi-argument Server Function input
+
+- **Question:** How should ERSC model React actions that receive both previous state and submitted
+  input?
+- **Why:** `ERSC.ServerFn.make` currently models one encoded input. Direct form actions fit that
+  contract, while `useActionState` payload actions receive `(previousState, payload)`.
+- **Affected:** Server Function Schema authoring, `useActionState`, progressive enhancement, and
+  client reference typing.
+- **Evidence:** `Schema.fromFormData(...)` provides a sound one-argument `FormData` contract but
+  cannot describe React's two-argument action signature without loosening inference or adding an
+  explicit API shape.
+- **Related:** D-009, D-036, D-040, OQ-006.
+- **Resolution:** Unresolved.
+- **Status:** Open.
+
+## Deferred
+
+### OQ-002 — Suspensing Loading diagnostics
 
 - **Question:** How should development diagnose an `ERSC.Loading.make` renderer that calls `use` or otherwise throws a thenable internally?
 - **Why:** Its declared renderer rejects Promise and Effect outputs, but TypeScript cannot detect suspension hidden inside synchronous code.
@@ -17,37 +66,7 @@ IDs are append-only and never reused, including after a question is resolved.
   presentation path; do not add that runtime machinery for `0.1.0`.
 - **Status:** Deferred until framework development error presentation exists.
 
-## OQ-003 — Route-parameter Schema rejection
-
-- **Question:** How should a matched Page's path-parameter Schema rejection map to NotFound or another expected failure?
-- **Why:** Effect HTTP has already selected the route, but the application-level Schema can still reject captured values.
-- **Affected:** Page rendering, HTTP status, error boundaries, and navigation Flight. Any non-200 answer widens `RequestOutcome['status']`, which is `200` today.
-- **Evidence:** Parameter Schemas currently fail in the Page request runtime after route selection.
-- **Related:** D-028, D-046.
-- **Resolution:** Unresolved.
-- **Status:** Open.
-
-## OQ-004 — Typed search parameters
-
-- **Question:** How should Pages declare and decode typed search parameters?
-- **Why:** Search parameters have multiplicity, defaults, and navigation semantics distinct from route parameters.
-- **Affected:** Page authoring, URLs, routing, and navigation refreshes.
-- **Evidence:** The current Page contract models only Effect HTTP path captures.
-- **Related:** D-028, D-046.
-- **Resolution:** Unresolved.
-- **Status:** Open.
-
-## OQ-006 — Server Function failure channel
-
-- **Question:** How should a Server Function handler's typed failure reach its caller?
-- **Why:** Effect owns the application runtime, but a handler's error type is the one part of its signature the client contract does not carry.
-- **Affected:** `ERSC.ServerFn.make` typing, Flight payloads, client call sites, and error boundaries.
-- **Evidence:** `ServerFnOperationError` stores the failure as `Schema.Defect` and `serverFnOutcome` squashes it, so `ServerFunction<Input, Output, Services>` resolves `Promise<Output>` and delivers failures as `unknown`. The kitchen-sink encodes its own `AgendaMutationState` result in `Output` to work around this.
-- **Related:** D-009, D-036, D-040.
-- **Resolution:** Unresolved.
-- **Status:** Open.
-
-## OQ-007 — Packaged framework agent evaluation
+### OQ-007 — Packaged framework agent evaluation
 
 - **Question:** How should effective-rsc evaluate whether a fresh agent can discover the public API,
   scaffold an application, and complete a realistic build using only published package artifacts?
@@ -68,18 +87,3 @@ IDs are append-only and never reused, including after a question is resolved.
 - **Resolution:** Future exploration; use the first run to define assertions and a result schema
   without embedding its solution.
 - **Status:** Deferred until the baseline framework feature set is ready.
-
-## OQ-008 — Multi-argument Server Function input
-
-- **Question:** How should ERSC model React actions that receive both previous state and submitted
-  input?
-- **Why:** `ERSC.ServerFn.make` currently models one encoded input. Direct form actions fit that
-  contract, while `useActionState` payload actions receive `(previousState, payload)`.
-- **Affected:** Server Function Schema authoring, `useActionState`, progressive enhancement, and
-  client reference typing.
-- **Evidence:** `Schema.fromFormData(...)` provides a sound one-argument `FormData` contract but
-  cannot describe React's two-argument action signature without loosening inference or adding an
-  explicit API shape.
-- **Related:** D-009, D-036, D-040, OQ-006.
-- **Resolution:** Unresolved.
-- **Status:** Open.

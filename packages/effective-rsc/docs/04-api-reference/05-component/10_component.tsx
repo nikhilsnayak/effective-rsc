@@ -1,7 +1,7 @@
 /**
  * @title An Effectful Server Component
  *
- * Component runs its render Effect in the current ERSC request scope.
+ * Component runs its render Effect in the current ERSC render scope.
  */
 import { Effect } from 'effect';
 import { Application } from 'effective-rsc';

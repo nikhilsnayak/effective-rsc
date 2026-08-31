@@ -8,3 +8,10 @@ Define services with Effect, then follow the ERSC composition convention:
 
 This keeps implementations at the application composition boundary while preserving each
 renderer's inferred service requirements.
+
+<!-- source-navigation -->
+
+### Examples
+
+- [Define a service](./10_catalog.ts)
+- [Provide services](./20_application.tsx)

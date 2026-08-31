@@ -6,6 +6,10 @@ returns an Effect whose requirements fit the ERSC service union. The returned cl
 accepts the Schema's encoded type and resolves `Promise<Output>`; the handler receives its decoded
 type.
 
+A Server Function created from `ERSC.withMiddleware(middleware)` activates that scope for its POST.
+The action scope surrounds execution and the route refresh. Middleware already active for the action
+does not run again; the remaining route middleware wraps the refresh.
+
 ```ts
 const followAuthor = ERSC.ServerFn.make({
   input: Schema.Struct({ authorId: Schema.NonEmptyString }),

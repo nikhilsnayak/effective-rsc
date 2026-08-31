@@ -1,15 +1,18 @@
 ## Routes
 
-`ERSC.Routes.make({ layout?, loading?, middleware? })` creates an immutable scope.
+`ERSC.Routes.make({ layout?, loading? })` creates an immutable scope.
 
-- `ERSC.Routes.middleware({ handler })` creates middleware for the current ERSC instance. `handler`
-  receives the downstream HTTP response Effect and must not introduce typed failures. Composition
-  follows native Effect `HttpRouter.Middleware` semantics.
-- `middleware` is a non-empty ordered list. Request handling is top to bottom; response transforms
-  unwind bottom to top. Ancestor middleware runs before descendant middleware. Duplicate middleware
-  in a resolved chain is rejected.
-- Routes middleware wraps matched Page GET and native HEAD fallback only. It does not wrap Server
-  Function POST, userland HTTP, assets, or unmatched paths.
+- Create middleware with `ERSC.Middleware.make(handler)`, then call
+  `ERSC.withMiddleware(middleware)`. Routes created from the returned view activate that scope for
+  matched Page GET and native HEAD fallback.
+- Pass `{ provides: Service }` as the type argument to `make` when the handler provides a request
+  service. Use `{ provides: FirstService | SecondService }` for multiple services. Page, Layout,
+  Component, ServerFn, Routes, Middleware, `withMiddleware`, and `make` remain available on the
+  derived view.
+- Chain `withMiddleware` in request order. Responses unwind in reverse order. Shared prefixes across
+  mounted scopes run once.
+- Scoped middleware does not wrap userland HTTP, assets, or unmatched paths. Use native global
+  Effect HTTP middleware for server-wide policy.
 - `routes.page(path, page)` adds a Page at an absolute Effect HTTP pattern. Parameter Schema keys must
   exactly match the path parameters.
 - `routes.mount(prefix, childRoutes)` mounts a non-empty same-ERSC graph below an absolute,

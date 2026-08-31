@@ -102,15 +102,20 @@ renderer's inferred service requirements.
 - Routes are immutable and belong to one ERSC instance.
 - `page(path, page)` attaches a Page; `mount(prefix, routes)` nests a route scope.
 - Mounted scopes retain their Layout, Loading, and middleware ancestry.
-- A scope's ordered `middleware` list applies to Page GET and native HEAD fallback for every
-  descendant. Ancestors run before descendants; responses unwind in reverse order.
-- Routes middleware does not apply to Server Function POST, userland HTTP, assets, or unmatched
-  paths. Use native Effect HTTP global middleware for server-wide policy.
+- `ERSC.withMiddleware(middleware)` returns a derived authoring view. Its Routes activate that scope
+  for Page GET/HEAD; its Server Functions activate it for their POST.
+- `ERSC.Middleware.make<{ provides: CurrentUser }>(handler)` makes `CurrentUser` available to every
+  factory on the derived view. The handler must provide it to the downstream Effect. Use a union
+  when one middleware provides multiple services.
+- A Page, Layout, or Component may render only where every middleware captured by its authoring view
+  is active. A Server Function activates its own captured scope.
+- Chain `withMiddleware` in request order. Responses unwind in reverse order.
+- Native Effect HTTP global middleware remains the server-wide policy mechanism.
 
 - **[Creating one routing authoring module](./docs/02-guides/03-routing/10_ersc.ts)**
 - **[Layout and Loading concerns](./docs/02-guides/03-routing/10_layouts.tsx)**: Layout is Effectful; Loading is synchronous and service-free.
 - **[Static and parameterized Pages](./docs/02-guides/03-routing/20_pages.tsx)**: A Page Schema decodes captured path strings for render.
-- **[Defining inherited Page middleware](./docs/02-guides/03-routing/25_middleware.ts)**: The handler receives the downstream response Effect. It may short-circuit or transform the
+- **[Defining a middleware scope](./docs/02-guides/03-routing/25_middleware.ts)**: The handler receives the downstream response Effect. It may short-circuit or transform the
   response, but introduces no typed failures.
 - **[Composing and mounting Routes](./docs/02-guides/03-routing/30_routes.tsx)**: Mounting retains the child graph's Layout and Loading ancestry.
 - **[Closing the route graph](./docs/02-guides/03-routing/40_application.ts)**
@@ -232,16 +237,19 @@ from `render`; requirements must fit the ERSC service union. Use it only in the 
 
 ## Routes
 
-`ERSC.Routes.make({ layout?, loading?, middleware? })` creates an immutable scope.
+`ERSC.Routes.make({ layout?, loading? })` creates an immutable scope.
 
-- `ERSC.Routes.middleware({ handler })` creates middleware for the current ERSC instance. `handler`
-  receives the downstream HTTP response Effect and must not introduce typed failures. Composition
-  follows native Effect `HttpRouter.Middleware` semantics.
-- `middleware` is a non-empty ordered list. Request handling is top to bottom; response transforms
-  unwind bottom to top. Ancestor middleware runs before descendant middleware. Duplicate middleware
-  in a resolved chain is rejected.
-- Routes middleware wraps matched Page GET and native HEAD fallback only. It does not wrap Server
-  Function POST, userland HTTP, assets, or unmatched paths.
+- Create middleware with `ERSC.Middleware.make(handler)`, then call
+  `ERSC.withMiddleware(middleware)`. Routes created from the returned view activate that scope for
+  matched Page GET and native HEAD fallback.
+- Pass `{ provides: Service }` as the type argument to `make` when the handler provides a request
+  service. Use `{ provides: FirstService | SecondService }` for multiple services. Page, Layout,
+  Component, ServerFn, Routes, Middleware, `withMiddleware`, and `make` remain available on the
+  derived view.
+- Chain `withMiddleware` in request order. Responses unwind in reverse order. Shared prefixes across
+  mounted scopes run once.
+- Scoped middleware does not wrap userland HTTP, assets, or unmatched paths. Use native global
+  Effect HTTP middleware for server-wide policy.
 - `routes.page(path, page)` adds a Page at an absolute Effect HTTP pattern. Parameter Schema keys must
   exactly match the path parameters.
 - `routes.mount(prefix, childRoutes)` mounts a non-empty same-ERSC graph below an absolute,
@@ -257,6 +265,10 @@ invocation payload and automatically infers the `handler` parameter. Do not anno
 returns an Effect whose requirements fit the ERSC service union. The returned client reference
 accepts the Schema's encoded type and resolves `Promise<Output>`; the handler receives its decoded
 type.
+
+A Server Function created from `ERSC.withMiddleware(middleware)` activates that scope for its POST.
+The action scope surrounds execution and the route refresh. Middleware already active for the action
+does not run again; the remaining route middleware wraps the refresh.
 
 ```ts
 const followAuthor = ERSC.ServerFn.make({

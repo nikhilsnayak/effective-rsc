@@ -103,14 +103,15 @@ universe, runtime identity, and request-runner context. Feature modules use its 
 `ERSC.make({ routes, layer })` closes the module into the executable application exported from
 `src/application.tsx`.
 
-| Value       | Role                                                                                  |
-| ----------- | ------------------------------------------------------------------------------------- |
-| `Page`      | Effectful route leaf.                                                                 |
-| `Layout`    | Effectful route wrapper with one `children` outlet; the root owns the document shell. |
-| `Loading`   | Synchronous, service-free fallback directly below its Layout.                         |
-| `Component` | Effectful Server Component that is not a route concern.                               |
-| `ServerFn`  | Promise-shaped native React reference backed by a lazy Effect on the server.          |
-| `Routes`    | Immutable route graph with inherited Page HTTP middleware.                            |
+| Value        | Role                                                                                  |
+| ------------ | ------------------------------------------------------------------------------------- |
+| `Page`       | Effectful route leaf.                                                                 |
+| `Layout`     | Effectful route wrapper with one `children` outlet; the root owns the document shell. |
+| `Loading`    | Synchronous, service-free fallback directly below its Layout.                         |
+| `Component`  | Effectful Server Component that is not a route concern.                               |
+| `ServerFn`   | Promise-shaped native React reference backed by a lazy Effect on the server.          |
+| `Middleware` | Effect HTTP middleware shared by route and Server Function scopes.                    |
+| `Routes`     | Immutable route graph with inherited middleware scope.                                |
 
 Each operation infers requirements within `Services`; declaring the universe once preserves them
 across JSX. `ERSC.make` receives its closed Layer, while service-free applications call
@@ -172,10 +173,13 @@ one complete route tree; there is no partial patch transport. Unknown patterns r
 native `404`. Mapping a matched Page's Schema rejection to NotFound or another expected failure
 remains open.
 
-Routes middleware is an opaque same-ERSC ownership adapter over Effect `HttpRouter.Middleware`.
-ERSC orders ancestors before descendants; Effect owns composition, reverse response unwinding, and
-short-circuiting. Application Layer middleware surrounds the whole router. The exact reach of each
-kind is recorded in [Middleware reach](#middleware-reach).
+`ERSC.Middleware.make` is an opaque same-ERSC adapter over Effect `HttpRouter.Middleware`.
+`ERSC.withMiddleware` returns a derived authoring view whose Routes and Server Functions retain the
+scope. Pages, Layouts, and Components created from that view may use the middleware-provided
+services, but the middleware runs only when a Route or Server Function activates the scope. ERSC
+orders ancestors before descendants; responses unwind in reverse order. Application Layer
+middleware still surrounds the whole router. The exact reach is recorded in
+[Middleware reach](#middleware-reach).
 
 ## Initial document
 
@@ -339,6 +343,10 @@ Its Schema decodes the encoded invocation value before the request-scoped handle
 `Schema.fromFormData(...)` function therefore accepts native `FormData` and, when it returns `void`,
 may be used directly as a form action.
 
+Origin, size, and React protocol validation identify the action before scoped middleware runs. The
+action scope surrounds execution and the response. Middleware already active for the action does not
+run again; the remaining route middleware wraps the refreshed render.
+
 Request or protocol failures return non-2xx responses. After an invocation executes, the server
 returns 200 Flight containing both the route refresh and an imperative `Success` or `Failure` result.
 Request interruption remains interruption. Direct server invocation of an ERSC Server Function is
@@ -451,13 +459,14 @@ The Flight root model is deliberately small:
 
 ### Middleware reach
 
-| Concern                                       | Routes middleware           | Native global Effect HTTP middleware                 |
-| --------------------------------------------- | --------------------------- | ---------------------------------------------------- |
-| Matched Page `GET` and native `HEAD` fallback | Yes, ancestor to descendant | Yes                                                  |
-| Server Function `POST`                        | No                          | Yes                                                  |
-| Userland `HttpRouter`, `HttpApi`, or RPC      | No                          | Yes                                                  |
-| Compiler and public assets                    | No                          | Yes                                                  |
-| Unmatched request                             | No                          | Yes, before Effect HTTP materializes the final `404` |
+| Concern                                       | ERSC middleware scope                          | Native global Effect HTTP middleware                 |
+| --------------------------------------------- | ---------------------------------------------- | ---------------------------------------------------- |
+| Matched Page `GET` and native `HEAD` fallback | Yes, ancestor to descendant                    | Yes                                                  |
+| Server Function `POST`                        | Yes, action-authored scope                     | Yes                                                  |
+| Server Function route refresh                 | Route middleware not already active for action | Yes                                                  |
+| Userland `HttpRouter`, `HttpApi`, or RPC      | No                                             | Yes                                                  |
+| Compiler and public assets                    | No                                             | Yes                                                  |
+| Unmatched request                             | No                                             | Yes, before Effect HTTP materializes the final `404` |
 
 ## Kitchen-sink integration application
 

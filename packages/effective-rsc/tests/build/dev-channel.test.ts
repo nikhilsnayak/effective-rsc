@@ -1,15 +1,15 @@
 import { expect, it } from '@effect/vitest';
 import { Deferred, Effect, Fiber, Schema, Stream } from 'effect';
 
-import { makeDevHmr } from '../../src/build/dev-hmr';
-import { DevHmrMessageJson, type DevHmrMessage } from '../../src/dev/hmr';
+import { makeDevChannel } from '../../src/build/dev-channel';
+import { DevChannelMessageJson, type DevChannelMessage } from '../../src/dev/channel';
 
-const ClientUpdate: DevHmrMessage = { _tag: 'ClientUpdate', clientHash: 'client-one' };
-const RscUpdate: DevHmrMessage = { _tag: 'RscUpdate', clientHash: 'client-two' };
+const ClientUpdate: DevChannelMessage = { _tag: 'ClientUpdate', clientHash: 'client-one' };
+const RscUpdate: DevChannelMessage = { _tag: 'RscUpdate', clientHash: 'client-two' };
 
 it('round-trips the development HMR wire protocol through Schema', () => {
-  const encode = Schema.encodeSync(DevHmrMessageJson);
-  const decode = Schema.decodeSync(DevHmrMessageJson);
+  const encode = Schema.encodeSync(DevChannelMessageJson);
+  const decode = Schema.decodeSync(DevChannelMessageJson);
 
   expect(decode(encode(ClientUpdate))).toEqual(ClientUpdate);
   expect(decode(encode(RscUpdate))).toEqual(RscUpdate);
@@ -17,11 +17,11 @@ it('round-trips the development HMR wire protocol through Schema', () => {
 
 it.effect('replays the latest update and streams later updates to each subscriber', () =>
   Effect.gen(function* () {
-    const hmr = yield* makeDevHmr;
-    yield* hmr.publishCompilation(ClientUpdate.clientHash);
+    const channel = yield* makeDevChannel;
+    yield* channel.publishCompilation(ClientUpdate.clientHash);
 
     const receivedFirst = yield* Deferred.make<void>();
-    const updates = yield* hmr.updates.pipe(
+    const updates = yield* channel.updates.pipe(
       Stream.tap(() => Deferred.succeed(receivedFirst, undefined)),
       Stream.take(2),
       Stream.runCollect,
@@ -29,9 +29,9 @@ it.effect('replays the latest update and streams later updates to each subscribe
     );
 
     yield* Deferred.await(receivedFirst);
-    hmr.onCompilationStart();
-    hmr.onServerComponentChanges();
-    yield* hmr.publishCompilation(RscUpdate.clientHash);
+    channel.onCompilationStart();
+    channel.onServerComponentChanges();
+    yield* channel.publishCompilation(RscUpdate.clientHash);
 
     const received = yield* Fiber.join(updates);
     expect(Array.from(received)).toEqual([ClientUpdate, RscUpdate]);

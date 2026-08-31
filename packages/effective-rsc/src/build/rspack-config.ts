@@ -132,7 +132,7 @@ const makeResolve = (root: string): NonNullable<Configuration['resolve']> => ({
 
 const makeCompilationStartPlugin = (onCompilationStart: () => void) => ({
   apply(compiler: Compiler) {
-    compiler.hooks.watchRun.tap('ersc:dev-hmr', onCompilationStart);
+    compiler.hooks.watchRun.tap('ersc:dev', onCompilationStart);
   },
 });
 

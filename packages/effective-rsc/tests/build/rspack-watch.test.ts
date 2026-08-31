@@ -6,7 +6,7 @@ import { vi } from 'vitest';
 import { BuildClientOutputDir, DevClientOutputDir, ErscOutputDir } from '../../src/build/contract';
 import { Rspack, type RspackWatchEvent } from '../../src/build/rspack';
 import { makeRspackBuildConfig, makeRspackDevConfig } from '../../src/build/rspack-config';
-import { DevHmrPath } from '../../src/dev/hmr';
+import { DevChannelPath } from '../../src/dev/channel';
 
 type Compiled = Extract<RspackWatchEvent, { readonly _tag: 'Compiled' }>;
 
@@ -46,7 +46,7 @@ const readJavaScriptOutput = Effect.fnUntraced(function* (directory: string) {
     fileSystem.readFileString(path.join(directory, file)),
   );
 
-  return { files, source: sources.join('\n') };
+  return sources.join('\n');
 });
 
 it.effect(
@@ -117,8 +117,7 @@ it.effect(
       expect(onCompilationStart).toHaveBeenCalledTimes(2);
       expect(onServerComponentChanges).toHaveBeenCalledTimes(1);
       const clientOutput = yield* readJavaScriptOutput(path.join(directory, DevClientOutputDir));
-      expect(clientOutput.files.some((file) => file.includes('hmr-client'))).toBe(true);
-      expect(clientOutput.source).toContain(DevHmrPath);
+      expect(clientOutput).toContain(DevChannelPath);
     }).pipe(Effect.provide(Layer.merge(BunServices.layer, Rspack.layer)), Effect.scoped),
   15_000,
 );
@@ -165,9 +164,8 @@ it.effect(
       );
 
       const clientOutput = yield* readJavaScriptOutput(path.join(directory, BuildClientOutputDir));
-      expect(clientOutput.files.some((file) => file.includes('hmr-client'))).toBe(false);
-      expect(clientOutput.source).not.toContain(DevHmrPath);
-      expect(clientOutput.source).not.toContain('ersc-dev-refresh');
+      expect(clientOutput).not.toContain(DevChannelPath);
+      expect(clientOutput).not.toContain('ersc-dev-refresh');
     }).pipe(Effect.provide(Layer.merge(BunServices.layer, Rspack.layer)), Effect.scoped),
   15_000,
 );

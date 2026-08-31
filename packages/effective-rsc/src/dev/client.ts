@@ -3,12 +3,12 @@ import { Effect, Ref, Schedule, Schema, Semaphore } from 'effect';
 import * as Socket from 'effect/unstable/socket/Socket';
 
 import { makeBrowserRefresh } from './browser-refresh';
-import { type DevHmrMessage, DevHmrMessageJson, DevHmrPath } from './hmr';
+import { DevChannelMessageJson, DevChannelPath, type DevChannelMessage } from './channel';
 import { decideHotUpdate, type HotUpdateCheck, type PendingDevUpdate } from './hmr-update';
 
 const reload = Effect.sync(() => location.reload());
 
-const recordUpdate = (pending: PendingDevUpdate, message: DevHmrMessage): PendingDevUpdate => ({
+const recordUpdate = (pending: PendingDevUpdate, message: DevChannelMessage): PendingDevUpdate => ({
   acknowledgedClientHash: pending.acknowledgedClientHash,
   clientHash: message.clientHash,
   rscRefresh:
@@ -58,7 +58,7 @@ const settlePendingUpdate = Effect.fnUntraced(function* (pendingUpdate: Ref.Ref<
   return yield* reconcile.pipe(Effect.repeat({ while: (action) => action === 'Retry' }));
 });
 
-const runDevHmr = Effect.gen(function* () {
+const runDevClient = Effect.gen(function* () {
   const pendingUpdate = yield* Ref.make<PendingDevUpdate>({
     acknowledgedClientHash: import.meta.rspackHash,
     clientHash: import.meta.rspackHash,
@@ -66,7 +66,7 @@ const runDevHmr = Effect.gen(function* () {
   });
   const updateLock = yield* Semaphore.make(1);
   const socket = yield* Socket.Socket;
-  const decode = Schema.decodeUnknownEffect(DevHmrMessageJson);
+  const decode = Schema.decodeUnknownEffect(DevChannelMessageJson);
   const refreshCurrentRoute = yield* makeBrowserRefresh;
 
   const handleMessage = Effect.fnUntraced(function* (data: string) {
@@ -81,9 +81,9 @@ const runDevHmr = Effect.gen(function* () {
   yield* socket.runString(handleMessage);
 });
 
-export const startDevHmr = Effect.gen(function* () {
+export const startDevClient = Effect.gen(function* () {
   const socketProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const socketUrl = `${socketProtocol}//${location.host}${DevHmrPath}`;
+  const socketUrl = `${socketProtocol}//${location.host}${DevChannelPath}`;
 
-  yield* runDevHmr.pipe(Effect.provide(BrowserSocket.layerWebSocket(socketUrl)));
+  yield* runDevClient.pipe(Effect.provide(BrowserSocket.layerWebSocket(socketUrl)));
 }).pipe(Effect.retry(Schedule.exponential('1 second')));

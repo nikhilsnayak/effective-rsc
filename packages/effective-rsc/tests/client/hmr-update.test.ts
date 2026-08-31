@@ -14,7 +14,7 @@ const pending = {
 
 const decide = (check: HotUpdateCheck): HotUpdateDecision => decideHotUpdate(pending, check);
 
-describe('development hot update reconciliation', () => {
+describe('development HMR update reconciliation', () => {
   it('reloads when checking for a client update fails', () => {
     expect(decide({ _tag: 'Failed' })).toEqual({ _tag: 'Reload' });
   });

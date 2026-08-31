@@ -34,7 +34,7 @@ production builds.
 React Server Components Performance Tracks remain native. Initial hydration uses the document
 timeline origin; navigation and Server Function decoding receive a timestamp captured before HTTP
 execution. Production compilation removes the timing metadata. React Debug Channel transport and a
-framework development error overlay remain deferred.
+framework development panel remain deferred.
 
 ## Owners
 

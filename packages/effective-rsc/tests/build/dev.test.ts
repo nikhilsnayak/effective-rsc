@@ -11,7 +11,7 @@ import {
 } from '../../src/build/dev';
 import { Rspack, RspackError } from '../../src/build/rspack';
 import { Terminal } from '../../src/build/terminal';
-import { DevHmrPath } from '../../src/dev/hmr';
+import { DevChannelPath } from '../../src/dev/channel';
 
 const EffectModuleUrl = import.meta.resolve('effect');
 const HttpModuleUrl = import.meta.resolve('effect/unstable/http');
@@ -245,7 +245,7 @@ it.effect('continues watching after a generation fails to start', () =>
     const hmrError = yield* application.httpEffect.pipe(
       Effect.provideService(
         HttpServerRequest.HttpServerRequest,
-        HttpServerRequest.fromWeb(new Request(`http://localhost${DevHmrPath}`)),
+        HttpServerRequest.fromWeb(new Request(`http://localhost${DevChannelPath}`)),
       ),
       Effect.flip,
     );

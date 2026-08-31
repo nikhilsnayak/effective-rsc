@@ -2,11 +2,11 @@ import { Deferred, Effect, Layer, Path, Ref, Schema, ScopedRef, Stream } from 'e
 import { HttpRouter, HttpServer } from 'effect/unstable/http';
 
 import PackageJson from '../../package.json' with { type: 'json' };
-import { DevHmrPath } from '../dev/hmr';
+import { DevChannelPath } from '../dev/channel';
 import { resolveApplicationBuild } from './build';
 import { loadServerBundle, makeRunnableHttpLayer } from './compiled-server';
 import { DevClientOutputDir } from './contract';
-import { makeDevHmr } from './dev-hmr';
+import { makeDevChannel } from './dev-channel';
 import { Rspack, type RspackError, type RspackWatchEvent } from './rspack';
 import { makeRspackDevConfig } from './rspack-config';
 import { formatDuration, Terminal } from './terminal';
@@ -132,7 +132,7 @@ export const makeDevApplication = Effect.fnUntraced(function* ({
   const { applicationRoot, entries } = yield* resolveApplicationBuild({ root });
   const path = yield* Path.Path;
   const rspack = yield* Rspack;
-  const hmr = yield* makeDevHmr;
+  const channel = yield* makeDevChannel;
   const generationStore = yield* makeDevGenerationStore({
     hostname,
     port,
@@ -164,7 +164,7 @@ export const makeDevApplication = Effect.fnUntraced(function* ({
           yield* Effect.logWarning(event.warnings);
         }
         yield* generationStore.update(event).pipe(
-          Effect.andThen(hmr.publishCompilation(event.clientHash)),
+          Effect.andThen(channel.publishCompilation(event.clientHash)),
           Effect.tap(() => {
             const duration =
               event.duration === undefined ? '' : ` in ${formatDuration(event.duration)}`;
@@ -185,14 +185,14 @@ export const makeDevApplication = Effect.fnUntraced(function* ({
   const watch = rspack
     .watch(
       makeRspackDevConfig(applicationRoot, entries, {
-        onCompilationStart: hmr.onCompilationStart,
-        onServerComponentChanges: hmr.onServerComponentChanges,
+        onCompilationStart: channel.onCompilationStart,
+        onServerComponentChanges: channel.onServerComponentChanges,
       }),
     )
     .pipe(Stream.runForEach(update));
   const httpEffect = yield* HttpRouter.toHttpEffect(
     HttpRouter.addAll([
-      HttpRouter.route('GET', DevHmrPath, hmr.httpEffect),
+      HttpRouter.route('GET', DevChannelPath, channel.httpEffect),
       HttpRouter.route('*', '/*', generationStore.httpEffect),
     ]),
   );

@@ -1,17 +1,17 @@
 import { Effect, MutableRef, Schema, Stream, SubscriptionRef } from 'effect';
 import { HttpServerRequest, HttpServerResponse } from 'effect/unstable/http';
 
-import { type DevHmrMessage, DevHmrMessageJson } from '../dev/hmr';
+import { type DevChannelMessage, DevChannelMessageJson } from '../dev/channel';
 
-type DevHmrState = { readonly _tag: 'Initial' } | DevHmrMessage;
-type PendingDevHmrUpdate = { readonly _tag: 'ClientUpdate' } | { readonly _tag: 'RscUpdate' };
+type DevChannelState = { readonly _tag: 'Initial' } | DevChannelMessage;
+type PendingDevUpdate = { readonly _tag: 'ClientUpdate' } | { readonly _tag: 'RscUpdate' };
 
-export const makeDevHmr = Effect.gen(function* () {
-  const pending = MutableRef.make<PendingDevHmrUpdate>({ _tag: 'ClientUpdate' });
-  const state = yield* SubscriptionRef.make<DevHmrState>({ _tag: 'Initial' });
-  const encode = Schema.encodeEffect(DevHmrMessageJson);
+export const makeDevChannel = Effect.gen(function* () {
+  const pending = MutableRef.make<PendingDevUpdate>({ _tag: 'ClientUpdate' });
+  const state = yield* SubscriptionRef.make<DevChannelState>({ _tag: 'Initial' });
+  const encode = Schema.encodeEffect(DevChannelMessageJson);
   const updates = SubscriptionRef.changes(state).pipe(
-    Stream.filter((update): update is DevHmrMessage => update._tag !== 'Initial'),
+    Stream.filter((update): update is DevChannelMessage => update._tag !== 'Initial'),
   );
   const onCompilationStart = () => {
     MutableRef.set(pending, { _tag: 'ClientUpdate' });

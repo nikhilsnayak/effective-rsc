@@ -1,4 +1,4 @@
-import { Deferred, Effect, Layer, Path, Ref, Schema, ScopedRef, Stream } from 'effect';
+import { Deferred, Effect, Fiber, Layer, Path, Ref, Schema, ScopedRef, Stream } from 'effect';
 import { HttpRouter, HttpServer } from 'effect/unstable/http';
 
 import PackageJson from '../../package.json' with { type: 'json' };
@@ -199,6 +199,7 @@ export const makeDevApplication = Effect.fnUntraced(function* ({
   );
 
   return {
+    closeDevChannel: channel.close,
     httpEffect,
     watch,
   };
@@ -213,9 +214,15 @@ export const launchDevApplication = Effect.fnUntraced(function* (application: De
     ),
   );
 
-  return yield* Effect.raceFirst(
-    application.watch,
-    Layer.launch(HttpServer.serve(application.httpEffect)),
+  return yield* Effect.scoped(
+    Effect.gen(function* () {
+      const server = yield* Layer.launch(HttpServer.serve(application.httpEffect)).pipe(
+        Effect.forkScoped({ startImmediately: true }),
+      );
+      yield* Effect.addFinalizer(() => application.closeDevChannel);
+
+      return yield* Effect.raceFirst(application.watch, Fiber.join(server));
+    }),
   );
 });
 

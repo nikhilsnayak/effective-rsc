@@ -1,7 +1,7 @@
 # Kitchen sink — effective-rsc Conf
 
 The primary effective-rsc example and the repository's end-to-end integration fixture. It is a
-two-day conference programme with a persisted personal agenda.
+two-day conference programme with a personal agenda.
 
 ## Run it
 
@@ -11,9 +11,8 @@ bun run dev
 
 Open `http://localhost:18193`. `bun run build` then `bun run start` runs the production build.
 
-Agenda membership is stored in `.data/conference.sqlite`, created by the SQL migration on first
-start. Set `CONFERENCE_DATABASE_PATH` to move it; the Playwright run sets `:memory:` so each run
-begins empty.
+Agenda membership uses an in-memory Bun SQLite database initialized by the SQL migration. It begins
+empty whenever the server starts.
 
 ## Test it
 
@@ -40,7 +39,7 @@ once against `ersc dev` on port 18194. Both servers are started by Playwright, s
 | Client Components               | `src/modules/agenda/components/agenda-toggle.tsx`                                                       |
 | Userland Effect HTTP            | `src/modules/agenda/http.ts` (`GET /agenda/calendar.ics`)                                               |
 | Services and layers             | `src/modules/conference/{service,repository}.ts`                                                        |
-| Bun SQLite persistence          | `src/persistence/`                                                                                      |
+| Effect SQL and Bun SQLite       | `src/persistence/`                                                                                      |
 | Tailwind v4 through Rspack      | `src/styles.css`                                                                                        |
 
 `src/ersc.ts` declares the service universe once; application values come from one ERSC identity

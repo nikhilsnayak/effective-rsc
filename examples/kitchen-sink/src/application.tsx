@@ -13,8 +13,7 @@ import { runMigrations } from '@/persistence/Migrations';
 
 import './styles.css';
 
-const databasePath = Bun.env['CONFERENCE_DATABASE_PATH'] ?? '.data/conference.sqlite';
-const SqliteLayer = SqliteClient.layer({ filename: databasePath });
+const SqliteLayer = SqliteClient.layer({ filename: ':memory:' });
 const PersistenceLayer = Layer.effectDiscard(runMigrations).pipe(Layer.provideMerge(SqliteLayer));
 const ConferenceInfrastructureLayer = ConferenceRepository.layer.pipe(
   Layer.provide(PersistenceLayer),

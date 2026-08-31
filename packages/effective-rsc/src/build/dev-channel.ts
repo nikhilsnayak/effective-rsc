@@ -1,4 +1,4 @@
-import { Effect, MutableRef, Schema, Stream, SubscriptionRef } from 'effect';
+import { Deferred, Effect, MutableRef, Schema, Stream, SubscriptionRef } from 'effect';
 import { HttpServerRequest, HttpServerResponse } from 'effect/unstable/http';
 
 import { type DevChannelMessage, DevChannelMessageJson } from '../dev/channel';
@@ -9,6 +9,7 @@ type PendingDevUpdate = { readonly _tag: 'ClientUpdate' } | { readonly _tag: 'Rs
 export const makeDevChannel = Effect.gen(function* () {
   const pending = MutableRef.make<PendingDevUpdate>({ _tag: 'ClientUpdate' });
   const state = yield* SubscriptionRef.make<DevChannelState>({ _tag: 'Initial' });
+  const shutdownSignal = yield* Deferred.make<void>();
   const encode = Schema.encodeEffect(DevChannelMessageJson);
   const updates = SubscriptionRef.changes(state).pipe(
     Stream.filter((update): update is DevChannelMessage => update._tag !== 'Initial'),
@@ -29,10 +30,13 @@ export const makeDevChannel = Effect.gen(function* () {
     const write = yield* socket.writer;
 
     yield* Effect.raceFirst(
-      socket.runRaw(() => undefined),
-      updates.pipe(
-        Stream.mapEffect((message) => encode(message)),
-        Stream.runForEach(write),
+      Deferred.await(shutdownSignal),
+      Effect.raceFirst(
+        socket.runRaw(() => undefined),
+        updates.pipe(
+          Stream.mapEffect((message) => encode(message)),
+          Stream.runForEach(write),
+        ),
       ),
     );
 
@@ -40,6 +44,7 @@ export const makeDevChannel = Effect.gen(function* () {
   });
 
   return {
+    close: Deferred.succeed(shutdownSignal, undefined).pipe(Effect.asVoid),
     httpEffect,
     onCompilationStart,
     onServerComponentChanges,

@@ -32,7 +32,6 @@ export default defineConfig({
   webServer: [
     {
       command: 'ersc start',
-      env: { CONFERENCE_DATABASE_PATH: ':memory:' },
       name: 'start',
       url: applicationReadyUrl,
       reuseExistingServer: false,
@@ -44,7 +43,7 @@ export default defineConfig({
     },
     {
       command: 'ersc dev',
-      env: { CONFERENCE_DATABASE_PATH: ':memory:', PORT: '18194' },
+      env: { PORT: '18194' },
       name: 'dev',
       url: developmentOrigin,
       reuseExistingServer: false,

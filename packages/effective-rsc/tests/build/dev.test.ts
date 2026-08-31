@@ -1,6 +1,19 @@
+import * as BunHttpServer from '@effect/platform-bun/BunHttpServer';
 import * as BunServices from '@effect/platform-bun/BunServices';
 import { expect, it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, FileSystem, Layer, Logger, Path, Ref, Stream } from 'effect';
+import {
+  Deferred,
+  Effect,
+  Fiber,
+  FileSystem,
+  Layer,
+  Logger,
+  Path,
+  Ref,
+  Schedule,
+  Stream,
+} from 'effect';
+import { TestClock } from 'effect/testing';
 import { HttpServer, HttpServerRequest } from 'effect/unstable/http';
 
 import {
@@ -9,6 +22,7 @@ import {
   makeDevApplication,
   makeDevGenerationStore,
 } from '../../src/build/dev';
+import { makeDevChannel } from '../../src/build/dev-channel';
 import { Rspack, RspackError } from '../../src/build/rspack';
 import { Terminal } from '../../src/build/terminal';
 import { DevChannelPath } from '../../src/dev/channel';
@@ -348,4 +362,44 @@ it.effect('keeps one HTTP server across successful generations', () =>
     expect(served).toBe(1);
     expect(stopped).toBe(true);
   }).pipe(Effect.provide(BunServices.layer), Effect.scoped),
+);
+
+it.effect('stops development while a dev channel WebSocket is active', () =>
+  Effect.gen(function* () {
+    const channel = yield* makeDevChannel;
+    const server = yield* HttpServer.HttpServer;
+    const socketUrl = `${HttpServer.formatAddress(server.address).replace(/^http/, 'ws')}${DevChannelPath}`;
+    const application = {
+      closeDevChannel: channel.close,
+      httpEffect: channel.httpEffect,
+      watch: Effect.never,
+    };
+    const launched = yield* launchDevApplication(application).pipe(
+      Effect.forkScoped({ startImmediately: true }),
+    );
+
+    yield* Effect.acquireRelease(
+      Effect.callback<WebSocket, 'ConnectionFailed'>((resume) => {
+        const socket = new WebSocket(socketUrl);
+        socket.addEventListener('open', () => resume(Effect.succeed(socket)), { once: true });
+        socket.addEventListener(
+          'error',
+          () => {
+            socket.close();
+            resume(Effect.fail('ConnectionFailed'));
+          },
+          { once: true },
+        );
+
+        return Effect.sync(() => socket.close());
+      }).pipe(
+        Effect.retry(Schedule.spaced('10 millis')),
+        Effect.timeout('1 second'),
+        TestClock.withLive,
+      ),
+      (socket) => Effect.sync(() => socket.close()),
+    );
+
+    yield* Fiber.interrupt(launched).pipe(Effect.timeout('1 second'), TestClock.withLive);
+  }).pipe(Effect.provide(BunHttpServer.layer({ hostname: '127.0.0.1', port: 0 })), Effect.scoped),
 );

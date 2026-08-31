@@ -9,6 +9,7 @@
       "outputs": [".ersc/**", "dist/**"]
     },
     "test": {
+      "dependsOn": ["build"],
       "inputs": [
         "src/**",
         "tests/**/*.test.ts",

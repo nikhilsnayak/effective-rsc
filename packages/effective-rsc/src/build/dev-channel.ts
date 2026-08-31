@@ -21,6 +21,8 @@ export const makeDevChannel = Effect.gen(function* () {
   };
   const publishCompilation = (clientHash: string) =>
     SubscriptionRef.set(state, { ...MutableRef.get(pending), clientHash });
+  const publishBuildFailure = (diagnostics: string) =>
+    SubscriptionRef.set(state, { _tag: 'BuildFailed', diagnostics });
   const httpEffect = Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest;
     const socket = yield* request.upgrade;
@@ -41,6 +43,7 @@ export const makeDevChannel = Effect.gen(function* () {
     httpEffect,
     onCompilationStart,
     onServerComponentChanges,
+    publishBuildFailure,
     publishCompilation,
     updates,
   };

@@ -5,10 +5,13 @@ import * as Socket from 'effect/unstable/socket/Socket';
 import { makeBrowserRefresh } from './browser-refresh';
 import { DevChannelMessageJson, DevChannelPath, type DevChannelMessage } from './channel';
 import { decideHotUpdate, type HotUpdateCheck, type PendingDevUpdate } from './hmr-update';
+import { makeDevPanel } from './panel';
 
 const reload = Effect.sync(() => location.reload());
 
-const recordUpdate = (pending: PendingDevUpdate, message: DevChannelMessage): PendingDevUpdate => ({
+type DevUpdate = Exclude<DevChannelMessage, { readonly _tag: 'BuildFailed' }>;
+
+const recordUpdate = (pending: PendingDevUpdate, message: DevUpdate): PendingDevUpdate => ({
   acknowledgedClientHash: pending.acknowledgedClientHash,
   clientHash: message.clientHash,
   rscRefresh:
@@ -58,7 +61,7 @@ const settlePendingUpdate = Effect.fnUntraced(function* (pendingUpdate: Ref.Ref<
   return yield* reconcile.pipe(Effect.repeat({ while: (action) => action === 'Retry' }));
 });
 
-const runDevClient = Effect.gen(function* () {
+const runDevClient = Effect.fnUntraced(function* (panel: Effect.Success<typeof makeDevPanel>) {
   const pendingUpdate = yield* Ref.make<PendingDevUpdate>({
     acknowledgedClientHash: import.meta.rspackHash,
     clientHash: import.meta.rspackHash,
@@ -68,22 +71,34 @@ const runDevClient = Effect.gen(function* () {
   const socket = yield* Socket.Socket;
   const decode = Schema.decodeUnknownEffect(DevChannelMessageJson);
   const refreshCurrentRoute = yield* makeBrowserRefresh;
-
   const handleMessage = Effect.fnUntraced(function* (data: string) {
     const message = yield* decode(data);
+    if (message._tag === 'BuildFailed') {
+      yield* panel.dispatch(message);
+      return;
+    }
+
     yield* Ref.update(pendingUpdate, (pending) => recordUpdate(pending, message));
     const action = yield* updateLock.withPermit(settlePendingUpdate(pendingUpdate));
+    if (action === 'Reloading') {
+      return;
+    }
     if (action === 'Refresh') {
       yield* refreshCurrentRoute;
     }
+    yield* panel.dispatch({ _tag: 'Reconciled' });
   });
 
   yield* socket.runString(handleMessage);
 });
 
 export const startDevClient = Effect.gen(function* () {
+  const panel = yield* makeDevPanel;
   const socketProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const socketUrl = `${socketProtocol}//${location.host}${DevChannelPath}`;
 
-  yield* runDevClient.pipe(Effect.provide(BrowserSocket.layerWebSocket(socketUrl)));
-}).pipe(Effect.retry(Schedule.exponential('1 second')));
+  yield* runDevClient(panel).pipe(
+    Effect.provide(BrowserSocket.layerWebSocket(socketUrl)),
+    Effect.retry(Schedule.exponential('1 second')),
+  );
+});

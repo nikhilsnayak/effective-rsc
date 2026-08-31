@@ -156,6 +156,7 @@ export const makeDevApplication = Effect.fnUntraced(function* ({
       }
       case 'Failed': {
         yield* generationStore.update(event);
+        yield* channel.publishBuildFailure(event.diagnostics);
         yield* Effect.logError(event.error);
         return;
       }

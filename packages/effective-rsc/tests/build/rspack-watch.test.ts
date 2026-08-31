@@ -56,7 +56,8 @@ it.effect(
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const frameworkRoot = path.resolve('.');
-      const applicationModule = path.join(frameworkRoot, 'src/application/ersc.ts');
+      const frameworkDist = path.join(frameworkRoot, 'dist');
+      const applicationModule = path.join(frameworkDist, 'index.js');
       const directory = yield* makeFixtureDirectory('ersc-rspack-dev-');
       const sourceDirectory = path.join(directory, 'src');
       const application = path.join(sourceDirectory, 'application.tsx');
@@ -86,9 +87,9 @@ it.effect(
             directory,
             {
               application,
-              client: path.join(frameworkRoot, 'src/client/entry.ts'),
-              rsc: path.join(frameworkRoot, 'src/build/rsc-entry.ts'),
-              ssr: path.join(frameworkRoot, 'src/server/html-renderer.tsx'),
+              client: path.join(frameworkDist, 'client/entry.js'),
+              rsc: path.join(frameworkDist, 'build/rsc-entry.js'),
+              ssr: path.join(frameworkDist, 'server/html-renderer.js'),
             },
             { onCompilationStart, onServerComponentChanges },
           ),
@@ -129,7 +130,8 @@ it.effect(
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const frameworkRoot = path.resolve('.');
-      const applicationModule = path.join(frameworkRoot, 'src/application/ersc.ts');
+      const frameworkDist = path.join(frameworkRoot, 'dist');
+      const applicationModule = path.join(frameworkDist, 'index.js');
       const directory = yield* makeFixtureDirectory('ersc-rspack-build-');
       const sourceDirectory = path.join(directory, 'src');
       const application = path.join(sourceDirectory, 'application.tsx');
@@ -157,15 +159,16 @@ it.effect(
       yield* rspack.build(
         makeRspackBuildConfig(directory, {
           application,
-          client: path.join(frameworkRoot, 'src/client/entry.ts'),
-          rsc: path.join(frameworkRoot, 'src/build/rsc-entry.ts'),
-          ssr: path.join(frameworkRoot, 'src/server/html-renderer.tsx'),
+          client: path.join(frameworkDist, 'client/entry.js'),
+          rsc: path.join(frameworkDist, 'build/rsc-entry.js'),
+          ssr: path.join(frameworkDist, 'server/html-renderer.js'),
         }),
       );
 
       const clientOutput = yield* readJavaScriptOutput(path.join(directory, BuildClientOutputDir));
       expect(clientOutput).not.toContain(DevChannelPath);
       expect(clientOutput).not.toContain('ersc-dev-refresh');
+      expect(clientOutput).not.toContain('ersc-dev-panel');
     }).pipe(Effect.provide(Layer.merge(BunServices.layer, Rspack.layer)), Effect.scoped),
   15_000,
 );

@@ -40,7 +40,7 @@ export default defineConfig({
           module: {
             rules: [
               {
-                resourceQuery: /raw/,
+                resourceQuery: /^\?raw$/,
                 type: 'asset/source',
               },
             ],

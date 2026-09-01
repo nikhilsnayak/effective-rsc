@@ -1,3 +1,4 @@
+import { Collapsible } from '@base-ui/react/collapsible';
 import { Dialog } from '@base-ui/react/dialog';
 import { Effect, Queue, Ref, Stream } from 'effect';
 import { createRoot, type Root } from 'react-dom/client';
@@ -95,12 +96,19 @@ function RuntimeFailure({ failure }: { readonly failure: DevRuntimeFailure }) {
       <p>
         {failure.name}: {failure.message}
       </p>
-      {failure.stack === undefined ? null : <pre>{failure.stack}</pre>}
       {failure.componentStack === undefined ? null : (
         <>
           <h3 className='component-stack-title'>React component stack</h3>
           <pre>{failure.componentStack}</pre>
         </>
+      )}
+      {failure.stack === undefined ? null : (
+        <Collapsible.Root className='stack'>
+          <Collapsible.Trigger className='stack-trigger'>Stack trace</Collapsible.Trigger>
+          <Collapsible.Panel className='stack-panel'>
+            <pre>{failure.stack}</pre>
+          </Collapsible.Panel>
+        </Collapsible.Root>
       )}
     </article>
   );

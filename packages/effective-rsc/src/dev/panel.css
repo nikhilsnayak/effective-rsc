@@ -104,6 +104,31 @@ p {
   color: rgb(148 163 184);
 }
 
+.stack {
+  margin-top: 12px;
+}
+
+.stack-trigger {
+  width: fit-content;
+  padding: 0;
+  color: rgb(148 163 184);
+  font:
+    600 12px/1.5 ui-monospace,
+    monospace;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+
+.stack-trigger:hover,
+.stack-trigger:focus-visible {
+  color: rgb(226 232 240);
+}
+
+.stack-panel pre {
+  margin-top: 8px;
+}
+
 p {
   margin-top: 8px;
   font:

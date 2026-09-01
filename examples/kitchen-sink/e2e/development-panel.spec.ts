@@ -14,6 +14,10 @@ test('reports browser exceptions and unhandled rejections', async ({ page }, tes
   const panel = page.locator('ersc-dev-panel');
   await expect(panel.getByRole('heading', { name: 'Runtime failures' })).toBeVisible();
   await expect(panel).toContainText('TypeError: Browser exception');
+  const stackTrigger = panel.getByRole('button', { name: 'Stack trace' }).first();
+  await expect(stackTrigger).toHaveAttribute('aria-expanded', 'false');
+  await stackTrigger.click();
+  await expect(stackTrigger).toHaveAttribute('aria-expanded', 'true');
   await panel.getByRole('button', { name: 'Close development panel' }).click();
 
   await page.evaluate(() => {

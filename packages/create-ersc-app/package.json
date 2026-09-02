@@ -24,6 +24,7 @@
     "bin/create-ersc-app.js",
     "dist",
     "template",
+    "!template/*.tsbuildinfo",
     "LICENSE",
     "README.md"
   ],

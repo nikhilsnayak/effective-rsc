@@ -3,6 +3,7 @@ import { expect, it } from '@effect/vitest';
 import { Effect, FileSystem, Layer, Path, Stream } from 'effect';
 import { vi } from 'vitest';
 
+import { loadCompiledServer } from '../../src/build/compiled-server';
 import { BuildClientOutputDir, DevClientOutputDir, ErscOutputDir } from '../../src/build/contract';
 import { Rspack, type RspackWatchEvent } from '../../src/build/rspack';
 import { makeRspackBuildConfig, makeRspackDevConfig } from '../../src/build/rspack-config';
@@ -165,7 +166,9 @@ it.effect(
         }),
       );
 
+      const bundle = yield* loadCompiledServer(directory);
       const clientOutput = yield* readJavaScriptOutput(path.join(directory, BuildClientOutputDir));
+      expect(bundle.default.entryCssFiles).toEqual([]);
       expect(clientOutput).not.toContain(DevChannelPath);
       expect(clientOutput).not.toContain('ersc-dev-refresh');
       expect(clientOutput).not.toContain('ersc-dev-panel');

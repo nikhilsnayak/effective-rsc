@@ -1,11 +1,22 @@
-import { Deferred, Effect, Fiber, Layer, Path, Ref, Schema, ScopedRef, Stream } from 'effect';
+import {
+  Deferred,
+  Effect,
+  Fiber,
+  FileSystem,
+  Layer,
+  Path,
+  Ref,
+  Schema,
+  ScopedRef,
+  Stream,
+} from 'effect';
 import { HttpRouter, HttpServer } from 'effect/unstable/http';
 
 import PackageJson from '../../package.json' with { type: 'json' };
 import { DevChannelPath } from '../dev/channel';
 import { resolveApplicationBuild } from './build';
 import { loadServerBundle, makeRunnableHttpLayer } from './compiled-server';
-import { DevClientOutputDir } from './contract';
+import { DevClientOutputDir, DevOutputDir } from './contract';
 import { makeDevChannel } from './dev-channel';
 import { Rspack, type RspackError, type RspackWatchEvent } from './rspack';
 import { makeRspackDevConfig } from './rspack-config';
@@ -130,9 +141,16 @@ export const makeDevApplication = Effect.fnUntraced(function* ({
   root,
 }: DevApplicationOptions) {
   const { applicationRoot, entries } = yield* resolveApplicationBuild({ root });
+  const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const rspack = yield* Rspack;
   const channel = yield* makeDevChannel;
+
+  yield* fileSystem.remove(path.join(applicationRoot, DevOutputDir), {
+    force: true,
+    recursive: true,
+  });
+
   const generationStore = yield* makeDevGenerationStore({
     hostname,
     port,

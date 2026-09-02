@@ -13,7 +13,7 @@ export class CompiledServerError extends Schema.TaggedError<CompiledServerError>
 ) {}
 
 const CompiledApplication = Schema.Struct({
-  entryCssFiles: Schema.NonEmptyArray(Schema.String),
+  entryCssFiles: Schema.Array(Schema.String),
   entryJsFiles: Schema.NonEmptyArray(Schema.String),
 });
 

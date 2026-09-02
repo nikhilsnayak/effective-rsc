@@ -7,6 +7,7 @@ import { HttpServer, HttpServerRequest } from 'effect/unstable/http';
 import { RpcClient, RpcSerialization } from 'effect/unstable/rpc';
 import * as Socket from 'effect/unstable/socket/Socket';
 
+import { DevOutputDir } from '../../src/build/contract';
 import {
   acquireDevGeneration,
   launchDevApplication,
@@ -259,6 +260,36 @@ it.effect('continues watching after a generation fails to start', () =>
     expect(messages[3]).toEqual([
       `${Terminal.green('✓')} Ready in 20 ms  ${Terminal.dim('client 10 ms · server 20 ms')}`,
     ]);
+  }).pipe(Effect.provide(BunServices.layer), Effect.scoped),
+);
+
+it.effect('removes output retained by an earlier development session', () =>
+  Effect.gen(function* () {
+    const fileSystem = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: 'ersc-dev-clean-' });
+    const outputDirectory = path.join(directory, DevOutputDir);
+    const staleAsset = path.join(outputDirectory, 'client', 'stale.js');
+
+    yield* fileSystem.makeDirectory(path.dirname(staleAsset), { recursive: true });
+    yield* fileSystem.writeFileString(staleAsset, 'stale');
+
+    const RspackLayer = Layer.succeed(
+      Rspack,
+      Rspack.of({
+        build: () => Effect.void,
+        watch: () => Stream.empty,
+      }),
+    );
+
+    yield* makeDevApplication({
+      hostname: 'localhost',
+      port: 18193,
+      root: directory,
+    }).pipe(Effect.provide(RspackLayer));
+
+    const outputExists = yield* fileSystem.exists(outputDirectory);
+    expect(outputExists).toBe(false);
   }).pipe(Effect.provide(BunServices.layer), Effect.scoped),
 );
 

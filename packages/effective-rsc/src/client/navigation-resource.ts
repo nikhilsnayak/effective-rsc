@@ -14,10 +14,6 @@ type CacheHistoryEntry = Pick<
   'addEventListener' | 'id' | 'index' | 'removeEventListener'
 >;
 
-type NavigationHistory = {
-  readonly currentEntry: CacheHistoryEntry | null;
-};
-
 type RouteCache = Map<string, CachedRoute>;
 
 export type NavigationResource =
@@ -48,13 +44,13 @@ export type NavigationResources = {
 };
 
 export const makeNavigationResources = Effect.fnUntraced(function* (
-  navigationHistory: NavigationHistory,
+  getCurrentEntry: () => CacheHistoryEntry | null,
   initialRouteTree: RouteTreeModel,
   initialFlightCompleted: Promise<void>,
 ) {
   const flightClient = yield* FlightClient;
   const cacheRef = MutableRef.make<RouteCache>(new Map());
-  const initialEntry = navigationHistory.currentEntry;
+  const initialEntry = getCurrentEntry();
 
   const remove = (cache: RouteCache, entry: CacheHistoryEntry) => {
     const cached = cache.get(entry.id);
@@ -91,7 +87,7 @@ export const makeNavigationResources = Effect.fnUntraced(function* (
     if (MutableRef.get(cacheRef) !== cache) {
       return;
     }
-    const entry = navigationHistory.currentEntry;
+    const entry = getCurrentEntry();
     if (entry !== null) {
       store(cache, entry, routeTree);
     }
@@ -100,7 +96,7 @@ export const makeNavigationResources = Effect.fnUntraced(function* (
   const prepareRefresh = (routeTree: RouteTreeModel) => {
     invalidate();
     const cache = MutableRef.get(cacheRef);
-    const entry = navigationHistory.currentEntry;
+    const entry = getCurrentEntry();
     return () => {
       if (MutableRef.get(cacheRef) === cache && entry !== null && entry.index !== -1) {
         store(cache, entry, routeTree);

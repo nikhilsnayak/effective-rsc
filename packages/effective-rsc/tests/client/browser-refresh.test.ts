@@ -8,8 +8,8 @@ vi.mock('react-server-dom-rspack/client.browser', () => ({
 }));
 
 import { BrowserEffectRunner } from '../../src/client/browser-effect-runner';
-import { BrowserNavigation } from '../../src/client/browser-navigation';
 import type { BrowserRenderer } from '../../src/client/browser-renderer';
+import { NavigationApi } from '../../src/client/navigation-api';
 import type { NavigationResources } from '../../src/client/navigation-resource';
 import { makeBrowserRefresh } from '../../src/dev/browser-refresh';
 import type { RouteTreeModel } from '../../src/rsc/route-tree';
@@ -28,7 +28,11 @@ const entry = Object.assign(new EventTarget(), {
 
 class TestNavigation extends EventTarget {
   currentEntry = entry;
-  navigate = vi.fn();
+  navigate = vi.fn(
+    (_url: string | URL, _options?: NavigationNavigateOptions): NavigationResult => ({
+      finished: Promise.resolve(entry),
+    }),
+  );
   transition: NavigationTransition | null = null;
 
   entries = () => [entry];
@@ -48,14 +52,22 @@ const routedNavigation = () =>
     navigationType: 'push' as const,
   });
 
-const makeBrowserNavigation = (navigation: TestNavigation) => ({
-  location: {
-    href: entry.url,
-    reload: vi.fn(),
-    replace: vi.fn(),
-  } as unknown as Location,
-  navigation: navigation as unknown as Navigation,
-});
+const makeNavigationApiLayer = (navigation: TestNavigation) =>
+  NavigationApi.layerTest({
+    getCurrentEntry: () => navigation.currentEntry,
+    getCurrentUrl: () => entry.url,
+    getTransition: () => navigation.transition,
+    navigate: (url, options) => navigation.navigate(url, options),
+    reloadDocument: vi.fn(),
+    replaceDocument: vi.fn(),
+    subscribe: (listener) => {
+      navigation.addEventListener('navigate', listener as EventListener);
+      return () => navigation.removeEventListener('navigate', listener as EventListener);
+    },
+    traverseTo: () => {
+      throw new TypeError('Unexpected history traversal.');
+    },
+  });
 
 const testHttpClient = HttpClient.make(() => Effect.die('Unexpected HTTP request.'));
 
@@ -72,7 +84,7 @@ const withBrowserRefresh = <A, E>(
         browserRenderer,
         navigationResources,
       ).pipe(
-        Effect.provideService(BrowserNavigation, makeBrowserNavigation(navigation)),
+        Effect.provide(makeNavigationApiLayer(navigation)),
         Effect.provideService(BrowserEffectRunner, run),
       );
       return yield* test(refreshCurrentRoute);

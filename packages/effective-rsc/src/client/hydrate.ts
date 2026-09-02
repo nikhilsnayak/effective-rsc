@@ -4,9 +4,9 @@ import { createFromReadableStream } from 'react-server-dom-rspack/client.browser
 import { rscStream } from 'rsc-html-stream/client';
 
 import type { FlightPayload } from '../rsc/flight';
-import { BrowserNavigation } from './browser-navigation';
 import { installCallServer } from './call-server';
-import { listenForNavigation } from './navigation-api';
+import { NavigationApi } from './navigation-api';
+import { listenForNavigation } from './navigation-listener';
 import { makeNavigationResources } from './navigation-resource';
 import { ReactDOMRenderer } from './react-dom-renderer';
 
@@ -34,9 +34,9 @@ export const hydrate = Effect.scoped(
     });
     const reactDOMRenderer = yield* ReactDOMRenderer;
     const browserRenderer = yield* reactDOMRenderer.hydrate(document, payload);
-    const { navigation } = yield* BrowserNavigation;
+    const navigationApi = yield* NavigationApi;
     const navigationResources = yield* makeNavigationResources(
-      navigation,
+      navigationApi.getCurrentEntry,
       payload.routeTree,
       initialFlightCompleted.promise,
     );

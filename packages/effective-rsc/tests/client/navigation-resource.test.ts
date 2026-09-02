@@ -75,7 +75,7 @@ it.effect('does not let initial Flight completion overwrite a refreshed cache ge
       );
       const navigationHistory = new TestNavigationHistory(initialEntry);
       const navigationResources = yield* makeNavigationResources(
-        navigationHistory,
+        () => navigationHistory.currentEntry,
         makeRouteTree('initial'),
         initialFlight.promise,
       );
@@ -111,7 +111,7 @@ it.effect('invalidates cached history entries before a development refresh', () 
       );
       const navigationHistory = new TestNavigationHistory(initialEntry);
       const navigationResources = yield* makeNavigationResources(
-        navigationHistory,
+        () => navigationHistory.currentEntry,
         makeRouteTree('initial'),
         Promise.resolve(),
       );
@@ -146,7 +146,7 @@ it.effect('fences an in-flight navigation cache write when a refresh invalidates
       );
       const navigationHistory = new TestNavigationHistory(initialEntry);
       const navigationResources = yield* makeNavigationResources(
-        navigationHistory,
+        () => navigationHistory.currentEntry,
         makeRouteTree('initial'),
         Promise.resolve(),
       );
@@ -193,7 +193,7 @@ it.effect('attributes a refresh to the history entry where it started', () => {
       );
       const navigationHistory = new TestNavigationHistory(firstEntry);
       const navigationResources = yield* makeNavigationResources(
-        navigationHistory,
+        () => navigationHistory.currentEntry,
         makeRouteTree('initial'),
         Promise.resolve(),
       );
@@ -229,7 +229,7 @@ it.effect('keys history cache entries by id and evicts them when the browser dis
       );
       const navigationHistory = new TestNavigationHistory(firstEntry);
       const navigationResources = yield* makeNavigationResources(
-        navigationHistory,
+        () => navigationHistory.currentEntry,
         makeRouteTree('first'),
         Promise.resolve(),
       );

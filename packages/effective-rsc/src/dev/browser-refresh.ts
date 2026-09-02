@@ -2,8 +2,8 @@ import { Effect, FiberMap, Schema } from 'effect';
 import { startTransition } from 'react';
 
 import { BrowserEffectRunner } from '../client/browser-effect-runner';
-import { BrowserNavigation } from '../client/browser-navigation';
 import type { BrowserRenderer } from '../client/browser-renderer';
+import { NavigationApi } from '../client/navigation-api';
 import type { NavigationResources } from '../client/navigation-resource';
 import { isRoutedNavigation, preserveRequestedHash } from '../client/navigation-routing';
 
@@ -13,9 +13,9 @@ class BrowserRefreshError extends Schema.TaggedError<BrowserRefreshError>()('Bro
   cause: Schema.Defect(),
 }) {}
 
-const waitForNavigationIdle = (navigation: Navigation) =>
+const waitForNavigationIdle = (navigationApi: NavigationApi['Service']) =>
   Effect.suspend(() => {
-    const transition = navigation.transition;
+    const transition = navigationApi.getTransition();
     return transition === null
       ? Effect.succeed('Idle' as const)
       : Effect.promise(() =>
@@ -26,31 +26,29 @@ const waitForNavigationIdle = (navigation: Navigation) =>
         ).pipe(Effect.as('Settled' as const));
   }).pipe(Effect.repeat({ while: (state) => state === 'Settled' }), Effect.asVoid);
 
-const waitForRoutedNavigation = (navigation: Navigation) =>
+const waitForRoutedNavigation = (navigationApi: NavigationApi['Service']) =>
   Effect.callback<void>((resume) => {
     const onNavigate = (event: NavigateEvent) => {
       if (isRoutedNavigation(event)) {
         resume(Effect.void);
       }
     };
-    navigation.addEventListener('navigate', onNavigate);
-    return Effect.sync(() => navigation.removeEventListener('navigate', onNavigate));
+    const unsubscribe = navigationApi.subscribe(onNavigate);
+    return Effect.sync(unsubscribe);
   });
 
 export const makeBrowserRefresh = Effect.fnUntraced(function* (
   browserRenderer: BrowserRenderer,
   navigationResources: NavigationResources,
 ) {
-  const { browserNavigation, refreshes, run } = yield* Effect.all({
-    browserNavigation: BrowserNavigation,
+  const { navigationApi, refreshes, run } = yield* Effect.all({
+    navigationApi: NavigationApi,
     refreshes: FiberMap.make<typeof CurrentRouteRefreshKey>(),
     run: BrowserEffectRunner,
   });
-  const navigation = browserNavigation.navigation;
-
   const refreshRoute = Effect.gen(function* () {
-    const currentEntry = navigation.currentEntry;
-    const destination = new URL(currentEntry?.url ?? browserNavigation.location.href);
+    const currentEntry = navigationApi.getCurrentEntry();
+    const destination = new URL(currentEntry?.url ?? navigationApi.getCurrentUrl());
     const resource = yield* navigationResources.load({
       destination: {
         id: currentEntry?.id ?? '',
@@ -61,14 +59,14 @@ export const makeBrowserRefresh = Effect.fnUntraced(function* (
 
     if (resource._tag === 'Document') {
       yield* resource.release;
-      yield* Effect.sync(() => browserNavigation.location.reload());
+      yield* Effect.sync(navigationApi.reloadDocument);
       return;
     }
 
     const resolvedDestination = preserveRequestedHash(destination, resource.resolvedUrl);
     if (resolvedDestination.href !== destination.href) {
       yield* resource.release;
-      yield* Effect.sync(() => browserNavigation.location.replace(resolvedDestination.href));
+      yield* Effect.sync(() => navigationApi.replaceDocument(resolvedDestination.href));
       return;
     }
 
@@ -90,8 +88,8 @@ export const makeBrowserRefresh = Effect.fnUntraced(function* (
 
   const refreshCurrentRoute = Effect.gen(function* () {
     navigationResources.invalidate();
-    yield* waitForNavigationIdle(navigation);
-    yield* Effect.raceFirst(refreshInReactTransition, waitForRoutedNavigation(navigation));
+    yield* waitForNavigationIdle(navigationApi);
+    yield* Effect.raceFirst(refreshInReactTransition, waitForRoutedNavigation(navigationApi));
   }).pipe(Effect.catch((cause) => Effect.logError('Failed to refresh the current route.', cause)));
 
   return {

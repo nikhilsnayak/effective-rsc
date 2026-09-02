@@ -1,8 +1,6 @@
-import { afterEach, expect, it } from '@effect/vitest';
+import { expect, it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { vi } from 'vitest';
 
-import { BrowserNavigation } from '../../src/client/browser-navigation';
 import { BrowserNavigationCoordinator } from '../../src/client/navigation-coordinator';
 
 const makeNavigationEntry = (key: string, url: string, state?: unknown) => ({
@@ -25,6 +23,10 @@ class TestNavigationHistory {
   }> = [];
   readonly traversals: Array<{ readonly info: unknown; readonly key: string }> = [];
 
+  getCurrentEntry = () => this.currentEntry;
+
+  getCurrentUrl = () => this.currentEntry.url;
+
   navigate(
     url: string,
     options: { readonly history: 'replace'; readonly info: unknown; readonly state: unknown },
@@ -39,24 +41,13 @@ class TestNavigationHistory {
   }
 }
 
-const makeCoordinator = Effect.fnUntraced(function* (navigation: TestNavigationHistory) {
-  vi.stubGlobal('window', {
-    NavigationPrecommitController: class {},
-    location: { href: 'https://effective-rsc.test/schedule/day-one' },
-    navigation,
-  });
-  const browserNavigation = yield* BrowserNavigation.make;
-  return new BrowserNavigationCoordinator(browserNavigation);
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
+const makeCoordinator = (navigation: TestNavigationHistory) =>
+  new BrowserNavigationCoordinator(navigation);
 
 it.effect('retires a superseded render when its successor arrives after abort microtasks', () =>
   Effect.gen(function* () {
     const navigation = new TestNavigationHistory();
-    const coordinator = yield* makeCoordinator(navigation);
+    const coordinator = makeCoordinator(navigation);
     const first = coordinator.begin('push');
     const retired: Array<string> = [];
 
@@ -83,7 +74,7 @@ it.effect('retires a superseded render when its successor arrives after abort mi
 it.effect('restores the original history entry when a successor chain fails', () =>
   Effect.gen(function* () {
     const navigation = new TestNavigationHistory();
-    const coordinator = yield* makeCoordinator(navigation);
+    const coordinator = makeCoordinator(navigation);
     const first = coordinator.begin('push');
     const retired: Array<string> = [];
 
@@ -111,7 +102,7 @@ it.effect('restores the original history entry when a successor chain fails', ()
 it.effect('starts a new rollback chain after a navigation completes', () =>
   Effect.gen(function* () {
     const navigation = new TestNavigationHistory();
-    const coordinator = yield* makeCoordinator(navigation);
+    const coordinator = makeCoordinator(navigation);
     const first = coordinator.begin('push');
 
     first.render(() => 'first');
@@ -136,7 +127,7 @@ it.effect('starts a new rollback chain after a navigation completes', () =>
 it.effect('restores replacement navigation with the original URL and state', () =>
   Effect.gen(function* () {
     const navigation = new TestNavigationHistory();
-    const coordinator = yield* makeCoordinator(navigation);
+    const coordinator = makeCoordinator(navigation);
     const attempt = coordinator.begin('replace');
 
     attempt.render(() => 'replacement');
@@ -160,9 +151,9 @@ it.effect('restores replacement navigation with the original URL and state', () 
 );
 
 it.effect('keeps an attempt pending when its render operation throws', () =>
-  Effect.gen(function* () {
+  Effect.sync(() => {
     const navigation = new TestNavigationHistory();
-    const coordinator = yield* makeCoordinator(navigation);
+    const coordinator = makeCoordinator(navigation);
     const attempt = coordinator.begin('push');
 
     expect(() =>

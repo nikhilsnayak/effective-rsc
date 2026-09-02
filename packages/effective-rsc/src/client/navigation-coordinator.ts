@@ -1,7 +1,19 @@
 import { MutableRef } from 'effect';
 
-import type { BrowserNavigation } from './browser-navigation';
 import { HistoryRollbackNavigationInfo } from './navigation-routing';
+
+type NavigationHistory = {
+  readonly getCurrentEntry: () => Pick<NavigationHistoryEntry, 'getState' | 'key' | 'url'> | null;
+  readonly getCurrentUrl: () => string;
+  readonly navigate: (
+    url: string,
+    options: { readonly history: 'replace'; readonly info: unknown; readonly state: unknown },
+  ) => { readonly finished?: Promise<unknown> };
+  readonly traverseTo: (
+    key: string,
+    options: { readonly info: unknown },
+  ) => { readonly finished?: Promise<unknown> };
+};
 
 type NavigationRollbackTarget =
   | { readonly _tag: 'Replace'; readonly state: unknown; readonly url: string }
@@ -45,7 +57,8 @@ export type NavigationAttempt = {
   ) => Promise<void>;
 };
 
-const navigationFinished = (result: NavigationResult) => result.finished ?? Promise.resolve();
+const navigationFinished = (result: { readonly finished?: Promise<unknown> }) =>
+  result.finished ?? Promise.resolve();
 
 const navigationDispatchCompleted = () =>
   // oxlint-disable-next-line effecttsgo/new-promise -- Browser task scheduling is a native Promise boundary.
@@ -72,10 +85,10 @@ const attemptOutcome = (attempt: NavigationAttemptData): Promise<NavigationAttem
 
 export class BrowserNavigationCoordinator {
   private readonly state = MutableRef.make<NavigationCoordinatorState>({ _tag: 'Idle' });
-  private readonly browserNavigation: BrowserNavigation['Service'];
+  private readonly navigationHistory: NavigationHistory;
 
-  constructor(browserNavigation: BrowserNavigation['Service']) {
-    this.browserNavigation = browserNavigation;
+  constructor(navigationHistory: NavigationHistory) {
+    this.navigationHistory = navigationHistory;
   }
 
   begin(navigationType: NavigationType): NavigationAttempt {
@@ -166,36 +179,36 @@ export class BrowserNavigationCoordinator {
   }
 
   private makeRollbackTarget(navigationType: NavigationType): NavigationRollbackTarget {
-    const currentEntry = this.browserNavigation.navigation.currentEntry;
+    const currentEntry = this.navigationHistory.getCurrentEntry();
     if (navigationType !== 'replace' && currentEntry !== null) {
       return { _tag: 'Traverse', key: currentEntry.key };
     }
     return {
       _tag: 'Replace',
       state: currentEntry?.getState(),
-      url: currentEntry?.url ?? this.browserNavigation.location.href,
+      url: currentEntry?.url ?? this.navigationHistory.getCurrentUrl(),
     };
   }
 
   private rollbackHistory(target: NavigationRollbackTarget): Promise<unknown> {
     switch (target._tag) {
       case 'Replace':
-        if (this.browserNavigation.navigation.currentEntry?.url === target.url) {
+        if (this.navigationHistory.getCurrentEntry()?.url === target.url) {
           return Promise.resolve();
         }
         return navigationFinished(
-          this.browserNavigation.navigation.navigate(target.url, {
+          this.navigationHistory.navigate(target.url, {
             history: 'replace',
             info: HistoryRollbackNavigationInfo,
             state: target.state,
           }),
         );
       case 'Traverse':
-        if (this.browserNavigation.navigation.currentEntry?.key === target.key) {
+        if (this.navigationHistory.getCurrentEntry()?.key === target.key) {
           return Promise.resolve();
         }
         return navigationFinished(
-          this.browserNavigation.navigation.traverseTo(target.key, {
+          this.navigationHistory.traverseTo(target.key, {
             info: HistoryRollbackNavigationInfo,
           }),
         );

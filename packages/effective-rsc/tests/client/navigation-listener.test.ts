@@ -22,14 +22,10 @@ vi.mock('react-server-dom-rspack/client.browser', () => ({
 }));
 
 import { BrowserEffectRunner } from '../../src/client/browser-effect-runner';
-import {
-  BrowserNavigation,
-  NavigationApiUnavailableError,
-  NavigationPrecommitUnavailableError,
-} from '../../src/client/browser-navigation';
 import type { BrowserRenderer } from '../../src/client/browser-renderer';
 import { FlightClient } from '../../src/client/flight-client';
-import { listenForNavigation } from '../../src/client/navigation-api';
+import { NavigationApi } from '../../src/client/navigation-api';
+import { listenForNavigation } from '../../src/client/navigation-listener';
 import { makeNavigationResources } from '../../src/client/navigation-resource';
 import type { RouteTreeModel } from '../../src/rsc/route-tree';
 
@@ -242,12 +238,12 @@ const listen = (
   return Effect.gen(function* () {
     const run = yield* BrowserEffectRunner.make;
     const navigationResources = yield* makeNavigationResources(
-      navigation,
+      () => navigation.currentEntry,
       initialRouteTree,
       Promise.resolve(),
     );
     return yield* listenForNavigation(browserRenderer, navigationResources).pipe(
-      Effect.provide(BrowserNavigation.layer),
+      Effect.provide(NavigationApi.layer),
       Effect.provideService(BrowserEffectRunner, run),
     );
   }).pipe(
@@ -770,25 +766,3 @@ it.effect('removes the listener when its Effect scope closes', () =>
     expect(navigation.isListening).toBe(false);
   }),
 );
-
-it.effect('fails explicitly when the browser does not provide the Navigation API', () => {
-  vi.stubGlobal('window', {});
-  return BrowserNavigation.pipe(
-    Effect.provide(BrowserNavigation.layer),
-    Effect.flip,
-    Effect.map((error) => {
-      expect(error).toBeInstanceOf(NavigationApiUnavailableError);
-    }),
-  );
-});
-
-it.effect('fails explicitly when the browser does not provide navigation precommit', () => {
-  vi.stubGlobal('window', { navigation: new TestNavigationApi() });
-  return BrowserNavigation.pipe(
-    Effect.provide(BrowserNavigation.layer),
-    Effect.flip,
-    Effect.map((error) => {
-      expect(error).toBeInstanceOf(NavigationPrecommitUnavailableError);
-    }),
-  );
-});

@@ -1,4 +1,4 @@
-import { Effect, Schema } from 'effect';
+import { Effect, MutableRef, Schema } from 'effect';
 import { startTransition } from 'react';
 import {
   createTemporaryReferenceSet,
@@ -11,11 +11,23 @@ import { BrowserRenderer } from './browser-renderer';
 import { FlightClient } from './flight-client';
 import { NavigationApi } from './navigation-api';
 import { RouteLoader } from './route-loader';
+import { RouteRefresher } from './route-refresh';
 
 class ServerFnCallError extends Schema.TaggedError<ServerFnCallError>()('ServerFnCallError', {
   cause: Schema.Defect(),
   message: Schema.String,
 }) {}
+
+type ServerFnInvocation =
+  | {
+      readonly _tag: 'HistoryEntry';
+      readonly id: string;
+      readonly order: number;
+      readonly url: string;
+    }
+  | { readonly _tag: 'CurrentUrl'; readonly order: number; readonly url: string };
+
+type ServerFnRefreshSource = 'Response' | 'CurrentRoute';
 
 export const installCallServer = Effect.gen(function* () {
   const browserRenderer = yield* BrowserRenderer;
@@ -23,11 +35,42 @@ export const installCallServer = Effect.gen(function* () {
   const run = yield* BrowserEffectRunner;
   const flightClient = yield* FlightClient;
   const routeLoader = yield* RouteLoader;
+  const routeRefresher = yield* RouteRefresher;
+  const latestInvocationOrder = MutableRef.make(0);
+  const selectRefreshSource = (invocation: ServerFnInvocation): ServerFnRefreshSource => {
+    if (
+      MutableRef.get(latestInvocationOrder) !== invocation.order ||
+      navigationApi.getTransition() !== null
+    ) {
+      return 'CurrentRoute';
+    }
+
+    const currentEntry = navigationApi.getCurrentEntry();
+    switch (invocation._tag) {
+      case 'HistoryEntry':
+        return currentEntry?.id === invocation.id ? 'Response' : 'CurrentRoute';
+      case 'CurrentUrl':
+        return currentEntry === null && navigationApi.getCurrentUrl() === invocation.url
+          ? 'Response'
+          : 'CurrentRoute';
+    }
+  };
   const callServer = Effect.fnUntraced(function* (
     id: string,
     args: ReadonlyArray<unknown>,
-    actionResult: PromiseWithResolvers<unknown>,
+    invocationResult: PromiseWithResolvers<unknown>,
   ) {
+    const currentEntry = navigationApi.getCurrentEntry();
+    const order = MutableRef.incrementAndGet(latestInvocationOrder);
+    const invocation: ServerFnInvocation =
+      currentEntry === null
+        ? { _tag: 'CurrentUrl', order, url: navigationApi.getCurrentUrl() }
+        : {
+            _tag: 'HistoryEntry',
+            id: currentEntry.id,
+            order,
+            url: currentEntry.url ?? navigationApi.getCurrentUrl(),
+          };
     const temporaryReferences = createTemporaryReferenceSet();
     const body = yield* Effect.tryPromise({
       try: () => encodeReply(args, { temporaryReferences }),
@@ -37,7 +80,7 @@ export const installCallServer = Effect.gen(function* () {
       .load({
         _tag: 'ServerFunction',
         body,
-        destination: new URL(navigationApi.getCurrentUrl()),
+        destination: new URL(invocation.url),
         id,
         temporaryReferences,
       })
@@ -61,7 +104,7 @@ export const installCallServer = Effect.gen(function* () {
     }
     switch (serverFnResult._tag) {
       case 'Failure':
-        actionResult.reject(
+        invocationResult.reject(
           new ServerFnCallError({
             cause: serverFnResult.error,
             message: 'Server Function execution failed.',
@@ -69,17 +112,23 @@ export const installCallServer = Effect.gen(function* () {
         );
         break;
       case 'Success':
-        actionResult.resolve(serverFnResult.value);
+        invocationResult.resolve(serverFnResult.value);
         break;
     }
     // React registered its Action reactions before the request completed. Registering ERSC's
     // continuation after settlement lets React close that Action before the refresh Transition.
     yield* Effect.promise(() =>
-      actionResult.promise.then(
+      invocationResult.promise.then(
         () => undefined,
         () => undefined,
       ),
     );
+    if (selectRefreshSource(invocation) === 'CurrentRoute') {
+      yield* resource.release;
+      yield* routeRefresher.refreshCurrentRoute;
+      return;
+    }
+
     const commitRefresh = routeLoader.prepareRefresh(resource.payload.routeTree);
     const committed = Promise.withResolvers<void>();
     startTransition(() => {
@@ -99,9 +148,9 @@ export const installCallServer = Effect.gen(function* () {
 
   yield* Effect.sync(() => {
     setServerCallback((id, args) => {
-      const actionResult = Promise.withResolvers<unknown>();
-      run(callServer(id, args, actionResult)).then(undefined, actionResult.reject);
-      return actionResult.promise;
+      const invocationResult = Promise.withResolvers<unknown>();
+      run(callServer(id, args, invocationResult)).then(undefined, invocationResult.reject);
+      return invocationResult.promise;
     });
   });
 });

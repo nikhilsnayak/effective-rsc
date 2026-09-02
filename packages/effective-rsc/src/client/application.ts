@@ -4,23 +4,28 @@ import { Effect, Layer } from 'effect';
 
 import { checkBrowserCapabilities } from './browser-capabilities';
 import { BrowserEffectRunner } from './browser-effect-runner';
+import { BrowserRenderer } from './browser-renderer';
 import { showBrowserFailure } from './browser-screen';
+import { installCallServer } from './call-server';
 import { FlightClient } from './flight-client';
 import { NavigationApi } from './navigation-api';
-import { startNavigationRuntime } from './navigation-runtime';
+import { listenForNavigation } from './navigation-listener';
 import { ReactDOMRenderer } from './react-dom-renderer';
 import { RouteLoader } from './route-loader';
-import { RouteRefresher } from './route-refresh';
+import { installRouteRefresh, RouteRefresher } from './route-refresh';
+
+const BrowserServicesLayer = Layer.mergeAll(
+  BrowserEffectRunner.layer,
+  BrowserRenderer.layer,
+  FlightClient.layer,
+  NavigationApi.layer,
+);
 
 const BrowserLayer = Layer.mergeAll(
-  ReactDOMRenderer.layer.pipe(Layer.provideMerge(BrowserEffectRunner.layer)),
+  ReactDOMRenderer.layer,
   RouteLoader.layer,
   RouteRefresher.layer,
-).pipe(
-  Layer.provideMerge(FlightClient.layer),
-  Layer.provideMerge(NavigationApi.layer),
-  Layer.provide(BrowserHttpClient.layerFetch),
-);
+).pipe(Layer.provideMerge(BrowserServicesLayer), Layer.provide(BrowserHttpClient.layerFetch));
 
 const renderBrowserFailure = Effect.sync(showBrowserFailure);
 
@@ -32,12 +37,14 @@ const skipHydration = (missingApi: string) =>
     : Effect.void;
 
 const activateClientNavigation = Effect.gen(function* () {
-  yield* checkBrowserCapabilities;
   const routeLoader = yield* RouteLoader;
-  const initialPayload = yield* routeLoader.loadInitial;
   const reactDOMRenderer = yield* ReactDOMRenderer;
-  const browserRenderer = yield* reactDOMRenderer.hydrate(document, initialPayload);
-  yield* startNavigationRuntime(browserRenderer);
+
+  const initialPayload = yield* routeLoader.loadInitial;
+  yield* reactDOMRenderer.hydrate(document, initialPayload);
+  yield* listenForNavigation;
+  yield* installCallServer;
+  yield* installRouteRefresh;
 });
 
 export const browserMain = Effect.scoped(
@@ -50,7 +57,8 @@ export const browserMain = Effect.scoped(
       );
     }
 
-    yield* activateClientNavigation.pipe(
+    yield* checkBrowserCapabilities.pipe(
+      Effect.andThen(activateClientNavigation),
       Effect.catchTags({
         FlightLoadError: () => renderBrowserFailure,
         ReactDOMHydrationError: () => renderBrowserFailure,

@@ -1,8 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const applicationOrigin = 'http://localhost:18193';
-const applicationReadyUrl = `${applicationOrigin}/_ersc/assets/main.js`;
-const developmentOrigin = 'http://localhost:18194';
+const startOrigin = 'http://localhost:18194';
+const startReadyUrl = `${startOrigin}/_ersc/assets/main.js`;
+const developmentOrigin = 'http://localhost:18195';
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
@@ -18,7 +18,7 @@ export default defineConfig({
       name: 'start',
       use: {
         ...devices['Desktop Chrome'],
-        baseURL: applicationOrigin,
+        baseURL: startOrigin,
       },
     },
     {
@@ -32,8 +32,9 @@ export default defineConfig({
   webServer: [
     {
       command: 'ersc start',
+      env: { PORT: '18194' },
       name: 'start',
-      url: applicationReadyUrl,
+      url: startReadyUrl,
       reuseExistingServer: false,
       timeout: 30_000,
       gracefulShutdown: {
@@ -43,7 +44,7 @@ export default defineConfig({
     },
     {
       command: 'ersc dev',
-      env: { PORT: '18194' },
+      env: { PORT: '18195' },
       name: 'dev',
       url: developmentOrigin,
       reuseExistingServer: false,

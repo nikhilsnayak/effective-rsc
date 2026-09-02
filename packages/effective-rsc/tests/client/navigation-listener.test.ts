@@ -22,7 +22,7 @@ vi.mock('react-server-dom-rspack/client.browser', () => ({
 }));
 
 import { BrowserEffectRunner } from '../../src/client/browser-effect-runner';
-import type { BrowserRenderer } from '../../src/client/browser-renderer';
+import { BrowserRenderer } from '../../src/client/browser-renderer';
 import { FlightClient } from '../../src/client/flight-client';
 import { NavigationApi } from '../../src/client/navigation-api';
 import { listenForNavigation } from '../../src/client/navigation-listener';
@@ -185,7 +185,9 @@ const makeBrowserRenderer = (
   renders: Array<BrowserRenderRequest> = [],
   navigationOutcomes: Array<'Complete' | 'Rollback'> = [],
 ) =>
-  ({
+  BrowserRenderer.of({
+    commit: () => undefined,
+    initialize: () => undefined,
     navigate: (routeTree) => {
       renders.push({ _tag: 'Navigation', routeTree });
       return {
@@ -201,7 +203,7 @@ const makeBrowserRenderer = (
       renders.push({ _tag: 'ServerFunction', routeTree });
       return Promise.resolve();
     },
-  }) satisfies BrowserRenderer;
+  });
 
 const makePrecommitController = (
   redirects: Array<{
@@ -223,7 +225,7 @@ const invokePrecommitHandler = (
 
 const listen = (
   navigation: TestNavigationApi,
-  browserRenderer: BrowserRenderer = makeBrowserRenderer(),
+  browserRenderer: BrowserRenderer['Service'] = makeBrowserRenderer(),
   httpClient = makeHttpClient(),
   documentReplacements: Array<string> = [],
 ) => {
@@ -257,8 +259,9 @@ const listen = (
       Effect.provideService(NavigationApi, navigationApi),
     );
     yield* routeLoader.loadInitial;
-    return yield* listenForNavigation(browserRenderer).pipe(
+    return yield* listenForNavigation.pipe(
       Effect.provideService(BrowserEffectRunner, run),
+      Effect.provideService(BrowserRenderer, browserRenderer),
       Effect.provideService(NavigationApi, navigationApi),
       Effect.provideService(RouteLoader, routeLoader),
     );
@@ -587,7 +590,9 @@ it.effect('cancels a streaming Flight response abandoned before React commits', 
       const rollbackCommitted = Promise.withResolvers<void>();
       const rollbackStarted = Promise.withResolvers<void>();
       let responseSignal: AbortSignal | undefined;
-      const browserRenderer = {
+      const browserRenderer = BrowserRenderer.of({
+        commit: () => undefined,
+        initialize: () => undefined,
         navigate: () => {
           renderStarted.resolve();
           return {
@@ -600,7 +605,7 @@ it.effect('cancels a streaming Flight response abandoned before React commits', 
           };
         },
         refresh: () => Promise.resolve(),
-      } satisfies BrowserRenderer;
+      });
       const httpClient = HttpClient.make((request, _url, signal) =>
         Effect.sync(() => {
           responseSignal = signal;
@@ -689,7 +694,9 @@ it.effect('cancels a committed streaming Flight response before its handler comp
           );
         }),
       );
-      const browserRenderer = {
+      const browserRenderer = BrowserRenderer.of({
+        commit: () => undefined,
+        initialize: () => undefined,
         navigate: () => ({
           committed: Promise.resolve(),
           complete: () => undefined,
@@ -699,7 +706,7 @@ it.effect('cancels a committed streaming Flight response before its handler comp
           },
         }),
         refresh: () => Promise.resolve(),
-      } satisfies BrowserRenderer;
+      });
       yield* listen(navigation, browserRenderer, httpClient);
       const pendingNavigation = makeNavigationEvent({ signal: navigationAbort.signal });
 

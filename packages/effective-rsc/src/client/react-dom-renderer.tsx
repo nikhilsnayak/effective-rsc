@@ -5,14 +5,13 @@ import {
   type ReactNode,
   StrictMode,
   useLayoutEffect,
-  useRef,
   useState,
 } from 'react';
 import { hydrateRoot } from 'react-dom/client';
 
 import type { FlightPayload } from '../rsc/flight';
 import { BrowserEffectRunner } from './browser-effect-runner';
-import { type BrowserRender, BrowserRenderer, makeBrowserRenderer } from './browser-renderer';
+import { type BrowserRender, BrowserRenderer } from './browser-renderer';
 import { BrowserFailureScreen } from './browser-screen';
 import { RouteTree } from './route-tree';
 
@@ -53,17 +52,18 @@ export class ReactDOMRenderer extends Context.Service<
     readonly hydrate: (
       container: Element | Document,
       initialPayload: FlightPayload,
-    ) => Effect.Effect<BrowserRenderer, ReactDOMHydrationError, Scope.Scope>;
+    ) => Effect.Effect<void, ReactDOMHydrationError, Scope.Scope>;
   }
 >()('ersc/client/ReactDOMRenderer') {
   static readonly make = Effect.gen(function* () {
+    const browserRenderer = yield* BrowserRenderer;
     const run = yield* BrowserEffectRunner;
 
     const hydrate = Effect.fnUntraced(function* (
       container: Element | Document,
       initialPayload: FlightPayload,
     ) {
-      const browserRendererReady = Promise.withResolvers<BrowserRenderer>();
+      const browserRendererReady = Promise.withResolvers<void>();
       const reportError = (error: unknown, info: ErrorInfo) => {
         void run(Effect.logError('Uncaught client render error.', error, info.componentStack));
       };
@@ -73,18 +73,14 @@ export class ReactDOMRenderer extends Context.Service<
           _tag: 'Initial',
           routeTree: initialPayload.routeTree,
         }));
-        const rendererRef = useRef<ReturnType<typeof makeBrowserRenderer> | null>(null);
-        if (rendererRef.current === null) {
-          // oxlint-disable-next-line react/refs -- guarded lazy initialization is stable after the first render
-          rendererRef.current = makeBrowserRenderer(initialPayload.routeTree, setRender);
-        }
 
         useLayoutEffect(() => {
-          browserRendererReady.resolve(rendererRef.current!.browserRenderer);
+          browserRenderer.initialize(initialPayload.routeTree, setRender);
+          browserRendererReady.resolve();
         }, []);
 
         useLayoutEffect(() => {
-          rendererRef.current!.commit(render);
+          browserRenderer.commit(render);
         }, [render]);
 
         return (
@@ -108,7 +104,7 @@ export class ReactDOMRenderer extends Context.Service<
         }),
         (root) => Effect.sync(() => root.unmount()),
       );
-      return yield* Effect.promise(() => browserRendererReady.promise);
+      yield* Effect.promise(() => browserRendererReady.promise);
     });
 
     return ReactDOMRenderer.of({ hydrate });

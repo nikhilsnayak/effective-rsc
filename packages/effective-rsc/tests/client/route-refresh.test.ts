@@ -8,10 +8,10 @@ vi.mock('react-server-dom-rspack/client.browser', () => ({
 }));
 
 import { BrowserEffectRunner } from '../../src/client/browser-effect-runner';
-import type { BrowserRenderer } from '../../src/client/browser-renderer';
+import { BrowserRenderer } from '../../src/client/browser-renderer';
 import { NavigationApi } from '../../src/client/navigation-api';
 import { RouteLoader } from '../../src/client/route-loader';
-import { makeNavigationRouteRefresh, RouteRefresher } from '../../src/client/route-refresh';
+import { installRouteRefresh, RouteRefresher } from '../../src/client/route-refresh';
 import type { RouteTreeModel } from '../../src/rsc/route-tree';
 
 const makeRouteTree = (id: string): RouteTreeModel => ({ child: null, content: null, id });
@@ -90,19 +90,24 @@ it.effect('reloads the document until navigation installs streamed route refresh
 
 const withBrowserRefresh = <A, E>(
   navigation: TestNavigation,
-  browserRenderer: BrowserRenderer,
+  browserRenderer: BrowserRenderer['Service'],
   routeLoader: RouteLoader['Service'],
   test: (refresh: Effect.Effect<void>) => Effect.Effect<A, E>,
 ) =>
   Effect.scoped(
     Effect.gen(function* () {
       const run = yield* BrowserEffectRunner.make;
-      const refreshCurrentRoute = yield* makeNavigationRouteRefresh(browserRenderer).pipe(
+      const routeRefresher = yield* RouteRefresher.make.pipe(
+        Effect.provide(makeNavigationApiLayer(navigation)),
+      );
+      yield* installRouteRefresh.pipe(
         Effect.provide(makeNavigationApiLayer(navigation)),
         Effect.provideService(BrowserEffectRunner, run),
+        Effect.provideService(BrowserRenderer, browserRenderer),
         Effect.provideService(RouteLoader, routeLoader),
+        Effect.provideService(RouteRefresher, routeRefresher),
       );
-      return yield* test(refreshCurrentRoute);
+      return yield* test(routeRefresher.refreshCurrentRoute);
     }).pipe(Effect.provideService(HttpClient.HttpClient, testHttpClient)),
   );
 
@@ -136,7 +141,9 @@ it.effect('waits for the active NavigationTransition before refreshing the curre
       loadInitial: Effect.die('Unexpected initial route load.'),
       prepareRefresh: () => cached,
     });
-    const browserRenderer: BrowserRenderer = {
+    const browserRenderer = BrowserRenderer.of({
+      commit: () => undefined,
+      initialize: () => undefined,
       navigate: () => {
         throw new TypeError('Unexpected navigation render.');
       },
@@ -144,7 +151,7 @@ it.effect('waits for the active NavigationTransition before refreshing the curre
         rendered.resolve(nextRouteTree);
         return Promise.resolve();
       },
-    };
+    });
 
     yield* withBrowserRefresh(navigation, browserRenderer, routeLoader, (refresh) =>
       Effect.gen(function* () {
@@ -183,12 +190,14 @@ it.effect('interrupts a current-route refresh when a routed navigation begins', 
       loadInitial: Effect.die('Unexpected initial route load.'),
       prepareRefresh: () => cached,
     });
-    const browserRenderer: BrowserRenderer = {
+    const browserRenderer = BrowserRenderer.of({
+      commit: () => undefined,
+      initialize: () => undefined,
       navigate: () => {
         throw new TypeError('Unexpected navigation render.');
       },
       refresh: rootRefresh,
-    };
+    });
 
     yield* withBrowserRefresh(navigation, browserRenderer, routeLoader, (refresh) =>
       Effect.gen(function* () {
@@ -232,7 +241,9 @@ it.effect('replaces an older refresh when a newer development update arrives', (
       loadInitial: Effect.die('Unexpected initial route load.'),
       prepareRefresh: () => () => undefined,
     });
-    const browserRenderer: BrowserRenderer = {
+    const browserRenderer = BrowserRenderer.of({
+      commit: () => undefined,
+      initialize: () => undefined,
       navigate: () => {
         throw new TypeError('Unexpected navigation render.');
       },
@@ -240,7 +251,7 @@ it.effect('replaces an older refresh when a newer development update arrives', (
         secondRendered.resolve(nextRouteTree);
         return Promise.resolve();
       },
-    };
+    });
 
     yield* withBrowserRefresh(navigation, browserRenderer, routeLoader, (refresh) =>
       Effect.gen(function* () {

@@ -21,9 +21,9 @@ bun run test      # Vitest: calendar formatting, repository, service
 bun run test:e2e  # Playwright: routing, Flight, navigation, Server Functions, assets, HTTP
 ```
 
-`test:e2e` builds first, then runs every spec twice: once against `ersc start` on port 18193 and
-once against `ersc dev` on port 18194. Both servers are started by Playwright, so stop your own
-`ersc dev` before running it. A spec that only makes sense in one mode skips on
+`test:e2e` builds first, then runs every spec twice: once against `ersc start` on port 18194 and
+once against `ersc dev` on port 18195. Playwright owns both E2E ports, so the normal development
+server can keep running on port 18193. A spec that only makes sense in one mode skips on
 `testInfo.project.name`.
 
 ## What it exercises

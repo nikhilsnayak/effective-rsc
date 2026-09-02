@@ -1,7 +1,7 @@
 import { expect, it } from '@effect/vitest';
 import { Effect } from 'effect';
 
-import { type BrowserRender, makeBrowserRenderer } from '../../src/client/browser-renderer';
+import { type BrowserRender, BrowserRenderer } from '../../src/client/browser-renderer';
 import type { RouteTreeModel } from '../../src/rsc/route-tree';
 
 const makeRouteTree = (id: string): RouteTreeModel => ({ child: null, content: null, id });
@@ -14,12 +14,32 @@ const nextRender = (renders: Array<BrowserRender>) => {
   return render;
 };
 
+it.effect('initializes once for a React root', () =>
+  Effect.gen(function* () {
+    const renderer = yield* BrowserRenderer.make;
+    const initialRouteTree = makeRouteTree('initial');
+    const publish = () => undefined;
+
+    expect(() => renderer.navigate(makeRouteTree('destination'))).toThrow(
+      'BrowserRenderer must be initialized by ReactDOMRenderer.',
+    );
+
+    renderer.initialize(initialRouteTree, publish);
+    renderer.initialize(initialRouteTree, publish);
+
+    expect(() => renderer.initialize(initialRouteTree, () => undefined)).toThrow(
+      'BrowserRenderer cannot be initialized by more than one React root.',
+    );
+  }),
+);
+
 it.effect('restores the stable route tree when a visible navigation is canceled', () =>
   Effect.gen(function* () {
     const initialRouteTree = makeRouteTree('initial');
     const renders: Array<BrowserRender> = [];
-    const renderer = makeBrowserRenderer(initialRouteTree, (render) => renders.push(render));
-    const navigation = renderer.browserRenderer.navigate(makeRouteTree('destination'));
+    const renderer = yield* BrowserRenderer.make;
+    renderer.initialize(initialRouteTree, (render) => renders.push(render));
+    const navigation = renderer.navigate(makeRouteTree('destination'));
     const navigationRender = nextRender(renders);
     if (navigationRender._tag !== 'Navigation') {
       return yield* Effect.die('Expected a navigation render.');
@@ -44,17 +64,16 @@ it.effect('restores the stable route tree when a visible navigation is canceled'
 it.effect('retires a superseded render only after its successor becomes visible', () =>
   Effect.gen(function* () {
     const renders: Array<BrowserRender> = [];
-    const renderer = makeBrowserRenderer(makeRouteTree('initial'), (render) =>
-      renders.push(render),
-    );
-    const first = renderer.browserRenderer.navigate(makeRouteTree('first'));
+    const renderer = yield* BrowserRenderer.make;
+    renderer.initialize(makeRouteTree('initial'), (render) => renders.push(render));
+    const first = renderer.navigate(makeRouteTree('first'));
     const firstRender = nextRender(renders);
     if (firstRender._tag !== 'Navigation') {
       return yield* Effect.die('Expected the first navigation render.');
     }
     renderer.commit(firstRender);
 
-    renderer.browserRenderer.navigate(makeRouteTree('second'));
+    renderer.navigate(makeRouteTree('second'));
     const secondRender = nextRender(renders);
     if (secondRender._tag !== 'Navigation') {
       return yield* Effect.die('Expected the second navigation render.');
@@ -81,10 +100,9 @@ it.effect('advances the stable route tree only after Flight completes', () =>
   Effect.gen(function* () {
     const firstRouteTree = makeRouteTree('first');
     const renders: Array<BrowserRender> = [];
-    const renderer = makeBrowserRenderer(makeRouteTree('initial'), (render) =>
-      renders.push(render),
-    );
-    const first = renderer.browserRenderer.navigate(firstRouteTree);
+    const renderer = yield* BrowserRenderer.make;
+    renderer.initialize(makeRouteTree('initial'), (render) => renders.push(render));
+    const first = renderer.navigate(firstRouteTree);
     const firstRender = nextRender(renders);
     if (firstRender._tag !== 'Navigation') {
       return yield* Effect.die('Expected the first navigation render.');
@@ -92,7 +110,7 @@ it.effect('advances the stable route tree only after Flight completes', () =>
     renderer.commit(firstRender);
     first.complete();
 
-    const second = renderer.browserRenderer.navigate(makeRouteTree('second'));
+    const second = renderer.navigate(makeRouteTree('second'));
     const secondRender = nextRender(renders);
     if (secondRender._tag !== 'Navigation') {
       return yield* Effect.die('Expected the second navigation render.');
@@ -114,10 +132,9 @@ it.effect('uses a committed Server Function refresh as the next rollback target'
   Effect.gen(function* () {
     const refreshedRouteTree = makeRouteTree('refreshed');
     const renders: Array<BrowserRender> = [];
-    const renderer = makeBrowserRenderer(makeRouteTree('initial'), (render) =>
-      renders.push(render),
-    );
-    const refreshed = renderer.browserRenderer.refresh(refreshedRouteTree);
+    const renderer = yield* BrowserRenderer.make;
+    renderer.initialize(makeRouteTree('initial'), (render) => renders.push(render));
+    const refreshed = renderer.refresh(refreshedRouteTree);
     const refreshRender = nextRender(renders);
     if (refreshRender._tag !== 'Refresh') {
       return yield* Effect.die('Expected a refresh render.');
@@ -125,7 +142,7 @@ it.effect('uses a committed Server Function refresh as the next rollback target'
     renderer.commit(refreshRender);
     yield* Effect.promise(() => refreshed);
 
-    const navigation = renderer.browserRenderer.navigate(makeRouteTree('destination'));
+    const navigation = renderer.navigate(makeRouteTree('destination'));
     const navigationRender = nextRender(renders);
     if (navigationRender._tag !== 'Navigation') {
       return yield* Effect.die('Expected a navigation render.');

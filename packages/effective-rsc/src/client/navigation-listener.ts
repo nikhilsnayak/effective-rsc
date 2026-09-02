@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 import { startTransition } from 'react';
 
 import { BrowserEffectRunner } from './browser-effect-runner';
-import type { BrowserRenderer } from './browser-renderer';
+import { BrowserRenderer } from './browser-renderer';
 import { NavigationApi } from './navigation-api';
 import {
   BrowserNavigationCoordinator,
@@ -45,7 +45,8 @@ const startNavigationTransition = (work: () => Promise<void>) => {
   return finished.promise;
 };
 
-export const listenForNavigation = Effect.fnUntraced(function* (browserRenderer: BrowserRenderer) {
+export const listenForNavigation = Effect.gen(function* () {
+  const browserRenderer = yield* BrowserRenderer;
   const navigationApi = yield* NavigationApi;
   const routeLoader = yield* RouteLoader;
   const run = yield* BrowserEffectRunner;

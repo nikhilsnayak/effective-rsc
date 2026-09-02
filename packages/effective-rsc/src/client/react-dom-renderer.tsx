@@ -11,9 +11,9 @@ import {
 import { hydrateRoot } from 'react-dom/client';
 
 import type { FlightPayload } from '../rsc/flight';
+import { BrowserEffectRunner } from './browser-effect-runner';
 import { type BrowserRender, BrowserRenderer, makeBrowserRenderer } from './browser-renderer';
 import { BrowserFailureScreen } from './browser-screen';
-import { ClientRuntime } from './client-runtime';
 import { RouteTree } from './route-tree';
 
 export class ReactDOMHydrationError extends Schema.TaggedError<ReactDOMHydrationError>()(
@@ -57,7 +57,7 @@ export class ReactDOMRenderer extends Context.Service<
   }
 >()('ersc/client/ReactDOMRenderer') {
   static readonly make = Effect.gen(function* () {
-    const run = yield* ClientRuntime;
+    const run = yield* BrowserEffectRunner;
 
     const hydrate = Effect.fnUntraced(function* (
       container: Element | Document,

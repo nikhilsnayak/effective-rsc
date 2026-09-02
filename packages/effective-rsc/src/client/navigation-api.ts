@@ -1,9 +1,9 @@
 import { Effect } from 'effect';
 import { startTransition } from 'react';
 
+import { BrowserEffectRunner } from './browser-effect-runner';
 import { BrowserNavigation } from './browser-navigation';
 import type { BrowserRenderer } from './browser-renderer';
-import { ClientRuntime } from './client-runtime';
 import {
   BrowserNavigationCoordinator,
   type NavigationAttempt,
@@ -51,7 +51,7 @@ export const listenForNavigation = Effect.fnUntraced(function* (
 ) {
   const browserNavigation = yield* BrowserNavigation;
   const navigation = browserNavigation.navigation;
-  const run = yield* ClientRuntime;
+  const run = yield* BrowserEffectRunner;
   const coordinator = new BrowserNavigationCoordinator(browserNavigation);
 
   const openDocument = (event: NavigateEvent, destination: URL) => {

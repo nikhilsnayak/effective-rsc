@@ -21,13 +21,13 @@ vi.mock('react-server-dom-rspack/client.browser', () => ({
   }),
 }));
 
+import { BrowserEffectRunner } from '../../src/client/browser-effect-runner';
 import {
   BrowserNavigation,
   NavigationApiUnavailableError,
   NavigationPrecommitUnavailableError,
 } from '../../src/client/browser-navigation';
 import type { BrowserRenderer } from '../../src/client/browser-renderer';
-import { ClientRuntime } from '../../src/client/client-runtime';
 import { FlightClient } from '../../src/client/flight-client';
 import { listenForNavigation } from '../../src/client/navigation-api';
 import { makeNavigationResources } from '../../src/client/navigation-resource';
@@ -240,7 +240,7 @@ const listen = (
     navigation,
   });
   return Effect.gen(function* () {
-    const run = yield* ClientRuntime.make;
+    const run = yield* BrowserEffectRunner.make;
     const navigationResources = yield* makeNavigationResources(
       navigation,
       initialRouteTree,
@@ -248,7 +248,7 @@ const listen = (
     );
     return yield* listenForNavigation(browserRenderer, navigationResources).pipe(
       Effect.provide(BrowserNavigation.layer),
-      Effect.provideService(ClientRuntime, run),
+      Effect.provideService(BrowserEffectRunner, run),
     );
   }).pipe(
     Effect.provide(FlightClient.layer),

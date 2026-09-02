@@ -7,9 +7,9 @@ vi.mock('react-server-dom-rspack/client.browser', () => ({
   createFromReadableStream: vi.fn(),
 }));
 
+import { BrowserEffectRunner } from '../../src/client/browser-effect-runner';
 import { BrowserNavigation } from '../../src/client/browser-navigation';
 import type { BrowserRenderer } from '../../src/client/browser-renderer';
-import { ClientRuntime } from '../../src/client/client-runtime';
 import type { NavigationResources } from '../../src/client/navigation-resource';
 import { makeBrowserRefresh } from '../../src/dev/browser-refresh';
 import type { RouteTreeModel } from '../../src/rsc/route-tree';
@@ -67,13 +67,13 @@ const withBrowserRefresh = <A, E>(
 ) =>
   Effect.scoped(
     Effect.gen(function* () {
-      const run = yield* ClientRuntime.make;
+      const run = yield* BrowserEffectRunner.make;
       const { refreshCurrentRoute } = yield* makeBrowserRefresh(
         browserRenderer,
         navigationResources,
       ).pipe(
         Effect.provideService(BrowserNavigation, makeBrowserNavigation(navigation)),
-        Effect.provideService(ClientRuntime, run),
+        Effect.provideService(BrowserEffectRunner, run),
       );
       return yield* test(refreshCurrentRoute);
     }).pipe(Effect.provideService(HttpClient.HttpClient, testHttpClient)),

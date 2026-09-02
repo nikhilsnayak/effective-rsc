@@ -6,9 +6,9 @@ import {
   setServerCallback,
 } from 'react-server-dom-rspack/client.browser';
 
+import { BrowserEffectRunner } from './browser-effect-runner';
 import { BrowserNavigation } from './browser-navigation';
 import type { BrowserRenderer } from './browser-renderer';
-import { ClientRuntime } from './client-runtime';
 import { FlightClient } from './flight-client';
 import type { NavigationResources } from './navigation-resource';
 
@@ -22,7 +22,7 @@ export const installCallServer = Effect.fnUntraced(function* (
   navigationResources: NavigationResources,
 ) {
   const { location } = yield* BrowserNavigation;
-  const run = yield* ClientRuntime;
+  const run = yield* BrowserEffectRunner;
   const flightClient = yield* FlightClient;
   const callServer = Effect.fnUntraced(function* (
     id: string,

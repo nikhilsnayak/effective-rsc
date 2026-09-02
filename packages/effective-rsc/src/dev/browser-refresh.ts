@@ -1,9 +1,9 @@
 import { Effect, FiberMap, Schema } from 'effect';
 import { startTransition } from 'react';
 
+import { BrowserEffectRunner } from '../client/browser-effect-runner';
 import { BrowserNavigation } from '../client/browser-navigation';
 import type { BrowserRenderer } from '../client/browser-renderer';
-import { ClientRuntime } from '../client/client-runtime';
 import type { NavigationResources } from '../client/navigation-resource';
 import { isRoutedNavigation, preserveRequestedHash } from '../client/navigation-routing';
 
@@ -44,7 +44,7 @@ export const makeBrowserRefresh = Effect.fnUntraced(function* (
   const { browserNavigation, refreshes, run } = yield* Effect.all({
     browserNavigation: BrowserNavigation,
     refreshes: FiberMap.make<typeof CurrentRouteRefreshKey>(),
-    run: ClientRuntime,
+    run: BrowserEffectRunner,
   });
   const navigation = browserNavigation.navigation;
 

@@ -2,9 +2,9 @@
 import * as BrowserHttpClient from '@effect/platform-browser/BrowserHttpClient';
 import { Effect, Layer } from 'effect';
 
+import { BrowserEffectRunner } from './browser-effect-runner';
 import { BrowserNavigation } from './browser-navigation';
 import { showBrowserFailure } from './browser-screen';
-import { ClientRuntime } from './client-runtime';
 import { FlightClient } from './flight-client';
 import { hydrate } from './hydrate';
 import { ReactDOMRenderer } from './react-dom-renderer';
@@ -12,7 +12,7 @@ import { ReactDOMRenderer } from './react-dom-renderer';
 const ClientLayer = Layer.mergeAll(
   BrowserNavigation.layer,
   FlightClient.layer,
-  ReactDOMRenderer.layer.pipe(Layer.provideMerge(ClientRuntime.layer)),
+  ReactDOMRenderer.layer.pipe(Layer.provideMerge(BrowserEffectRunner.layer)),
 ).pipe(Layer.provide(BrowserHttpClient.layerFetch));
 
 const renderBrowserFailure = Effect.sync(showBrowserFailure);

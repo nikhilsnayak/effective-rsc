@@ -1,8 +1,8 @@
 import { Context, FiberSet, Layer, Scope } from 'effect';
 import { HttpClient } from 'effect/unstable/http';
 
-export class ClientRuntime extends Context.Service<ClientRuntime>()(
-  'ersc/client/client-runtime/ClientRuntime',
+export class BrowserEffectRunner extends Context.Service<BrowserEffectRunner>()(
+  'ersc/client/BrowserEffectRunner',
   {
     make: FiberSet.makeRuntimePromise<HttpClient.HttpClient | Scope.Scope>(),
   },

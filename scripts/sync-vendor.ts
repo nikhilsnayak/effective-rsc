@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 type VendorBase = {
+  readonly licensePath?: string;
   readonly repository: string;
   readonly ref: string;
   readonly prefix: string;
@@ -36,15 +37,17 @@ const vendors = {
     repository: 'https://github.com/Effect-TS/effect.git',
     ref: 'main',
     prefix: 'repos/effect',
-    requiredPaths: ['LLMS.md', 'packages/effect/src/unstable/workflow/Workflow.ts'],
+    requiredPaths: ['LICENSE', 'LLMS.md', 'packages/effect/src/unstable/workflow/Workflow.ts'],
   },
   'react-server-dom-rspack': {
     kind: 'directory',
+    licensePath: 'LICENSE',
     repository: 'https://github.com/react/react.git',
     ref: 'f148045f80fb8841f3a9b098cda2aeaa7a20bb69',
     sourcePath: 'packages/react-server-dom-rspack',
     prefix: 'repos/react-server-dom-rspack',
     requiredPaths: [
+      'LICENSE',
       'package.json',
       'src/ReactFlightRspackReferences.js',
       'src/server/ReactFlightServerConfigRspackBundler.js',
@@ -52,11 +55,13 @@ const vendors = {
   },
   'rspack-rsc': {
     kind: 'directory',
+    licensePath: 'LICENSE',
     repository: 'https://github.com/rstackjs/rstack-examples.git',
     ref: 'main',
     sourcePath: 'rspack/rspack-rsc',
     prefix: 'repos/rspack-rsc',
     requiredPaths: [
+      'LICENSE',
       'README.md',
       'rspack.config.js',
       'src/framework/entry.client.tsx',
@@ -79,11 +84,13 @@ const vendors = {
   },
   'vite-plugin-rsc': {
     kind: 'directory',
+    licensePath: 'LICENSE',
     repository: 'https://github.com/vitejs/vite-plugin-react.git',
     ref: 'main',
     sourcePath: 'packages/plugin-rsc',
     prefix: 'repos/vite-plugin-rsc',
     requiredPaths: [
+      'LICENSE',
       'package.json',
       'src/index.ts',
       'src/plugin.ts',
@@ -96,7 +103,7 @@ const vendors = {
     ref: 'main',
     sourcePath: '.',
     prefix: 'repos/rsc-html-stream',
-    requiredPaths: ['package.json', 'client.js', 'server.js', 'test.js'],
+    requiredPaths: ['LICENSE', 'package.json', 'client.js', 'server.js', 'test.js'],
   },
   'cosmos-rsc': {
     kind: 'directory',
@@ -113,6 +120,7 @@ const vendors = {
   },
   'next.js': {
     kind: 'directories',
+    licensePath: 'license.md',
     repository: 'https://github.com/vercel/next.js.git',
     ref: 'canary',
     directories: [
@@ -131,6 +139,7 @@ const vendors = {
     ],
     prefix: 'repos/next.js',
     requiredPaths: [
+      'LICENSE',
       'server/app-render/app-render.tsx',
       'client/components/router-reducer/fetch-server-response.ts',
       'shared/lib/app-router-types.ts',
@@ -153,11 +162,13 @@ const vendors = {
   },
   waku: {
     kind: 'directory',
+    licensePath: 'LICENSE',
     repository: 'https://github.com/wakujs/waku.git',
     ref: 'main',
     sourcePath: 'packages/waku',
     prefix: 'repos/waku',
     requiredPaths: [
+      'LICENSE',
       'package.json',
       'src/adapters/bun.ts',
       'src/lib/vite-rsc/handler.ts',
@@ -515,6 +526,14 @@ const syncDirectory = async (
         await mkdir(dirname(stagedDirectory), { recursive: true });
         await cp(join(temporaryRoot, directory.sourcePath), stagedDirectory, { recursive: true });
       }
+    }
+
+    if (vendor.licensePath !== undefined) {
+      const license = join(temporaryRoot, vendor.licensePath);
+      if (!existsSync(license)) {
+        throw new Error(`${vendor.licensePath} does not exist at ${commit}.`);
+      }
+      await cp(license, join(stagedDestination, 'LICENSE'));
     }
 
     const missingPaths = vendor.requiredPaths.filter(

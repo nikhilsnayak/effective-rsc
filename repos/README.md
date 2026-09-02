@@ -22,6 +22,9 @@ used to publish version `0.1.0`; its checked-in manifest still carries React's `
 version, while the npm artifact carries `0.1.0` at that same `gitHead`. Other snapshots follow their
 upstream development branch and record the resolved commit on every sync.
 
+Snapshots retain the upstream `LICENSE` file when the upstream repository publishes one. Upstreams
+that declare only an SPDX license in package metadata retain that package metadata.
+
 Update one reference with `bun run vendor:sync <name>`, or update all of them with
 `bun run vendor:sync all`. The Effect repository remains a Git subtree. Other references are fetched
 through temporary partial clones; monorepos materialize only the source directories named in the

@@ -1,4 +1,4 @@
-// oxlint-disable effecttsgo/process-env -- Rspack replaces NODE_ENV at compile time.
+// oxlint-disable effecttsgo/process-env, effecttsgo/process-env-in-effect -- Rspack replaces NODE_ENV at compile time.
 import * as BrowserHttpClient from '@effect/platform-browser/BrowserHttpClient';
 import { Effect, Layer } from 'effect';
 
@@ -11,12 +11,13 @@ import { NavigationApi } from './navigation-api';
 import { makeNavigationResources } from './navigation-resource';
 import { startNavigationRuntime } from './navigation-runtime';
 import { ReactDOMRenderer } from './react-dom-renderer';
+import { RouteRefresher } from './route-refresh';
 
-const ClientLayer = Layer.mergeAll(
-  NavigationApi.layer,
+const BrowserLayer = Layer.mergeAll(
   FlightClient.layer,
   ReactDOMRenderer.layer.pipe(Layer.provideMerge(BrowserEffectRunner.layer)),
-).pipe(Layer.provide(BrowserHttpClient.layerFetch));
+  RouteRefresher.layer,
+).pipe(Layer.provideMerge(NavigationApi.layer), Layer.provide(BrowserHttpClient.layerFetch));
 
 const renderBrowserFailure = Effect.sync(showBrowserFailure);
 
@@ -27,7 +28,7 @@ const skipHydration = (missingApi: string) =>
       )
     : Effect.void;
 
-const startBrowser = Effect.gen(function* () {
+const activateClientNavigation = Effect.gen(function* () {
   yield* checkBrowserCapabilities;
   const { browserRenderer, initialFlightCompleted, payload } = yield* hydrateDocument;
   const navigationApi = yield* NavigationApi;
@@ -36,24 +37,27 @@ const startBrowser = Effect.gen(function* () {
     payload.routeTree,
     initialFlightCompleted,
   );
-  const navigationRuntime = yield* startNavigationRuntime(browserRenderer, navigationResources);
-
-  if (import.meta.webpackHot) {
-    yield* Effect.tryPromise(() => import('../dev/client')).pipe(
-      Effect.flatMap(({ startDevClient }) => startDevClient(navigationRuntime.refreshCurrentRoute)),
-      Effect.catch((cause) => Effect.logError('Development HMR failed.', cause)),
-      Effect.forkScoped,
-    );
-  }
-  return yield* Effect.never;
+  yield* startNavigationRuntime(browserRenderer, navigationResources);
 });
 
-export const browserMain = Effect.scoped(startBrowser).pipe(
-  Effect.provide(ClientLayer),
-  Effect.catchTags({
-    BrowserHydrationError: () => renderBrowserFailure,
-    ReactDOMHydrationError: () => renderBrowserFailure,
-    NavigationApiUnavailableError: () => skipHydration('the Navigation API'),
-    NavigationPrecommitUnavailableError: () => skipHydration('NavigationPrecommitController'),
+export const browserMain = Effect.scoped(
+  Effect.gen(function* () {
+    if (process.env.NODE_ENV === 'development') {
+      yield* Effect.tryPromise(() => import('../dev/client')).pipe(
+        Effect.flatMap(({ startDevClient }) => startDevClient),
+        Effect.catch((cause) => Effect.logError('Development client stopped.', cause)),
+        Effect.forkScoped,
+      );
+    }
+
+    yield* activateClientNavigation.pipe(
+      Effect.catchTags({
+        BrowserHydrationError: () => renderBrowserFailure,
+        ReactDOMHydrationError: () => renderBrowserFailure,
+        NavigationApiUnavailableError: () => skipHydration('the Navigation API'),
+        NavigationPrecommitUnavailableError: () => skipHydration('NavigationPrecommitController'),
+      }),
+    );
+    return yield* Effect.never;
   }),
-);
+).pipe(Effect.provide(BrowserLayer));

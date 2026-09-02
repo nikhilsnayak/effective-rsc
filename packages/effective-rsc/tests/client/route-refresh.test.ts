@@ -11,7 +11,7 @@ import { BrowserEffectRunner } from '../../src/client/browser-effect-runner';
 import type { BrowserRenderer } from '../../src/client/browser-renderer';
 import { NavigationApi } from '../../src/client/navigation-api';
 import type { NavigationResources } from '../../src/client/navigation-resource';
-import { makeRouteRefresh } from '../../src/client/route-refresh';
+import { makeNavigationRouteRefresh, RouteRefresher } from '../../src/client/route-refresh';
 import type { RouteTreeModel } from '../../src/rsc/route-tree';
 
 const makeRouteTree = (id: string): RouteTreeModel => ({ child: null, content: null, id });
@@ -33,6 +33,7 @@ class TestNavigation extends EventTarget {
       finished: Promise.resolve(entry),
     }),
   );
+  reloadDocument = vi.fn();
   transition: NavigationTransition | null = null;
 
   entries = () => [entry];
@@ -58,7 +59,7 @@ const makeNavigationApiLayer = (navigation: TestNavigation) =>
     getCurrentUrl: () => entry.url,
     getTransition: () => navigation.transition,
     navigate: (url, options) => navigation.navigate(url, options),
-    reloadDocument: vi.fn(),
+    reloadDocument: navigation.reloadDocument,
     replaceDocument: vi.fn(),
     subscribe: (listener) => {
       navigation.addEventListener('navigate', listener as EventListener);
@@ -71,6 +72,22 @@ const makeNavigationApiLayer = (navigation: TestNavigation) =>
 
 const testHttpClient = HttpClient.make(() => Effect.die('Unexpected HTTP request.'));
 
+it.effect('reloads the document until navigation installs streamed route refresh', () => {
+  const navigation = new TestNavigation();
+  const streamedRefresh = vi.fn();
+
+  return Effect.gen(function* () {
+    const routeRefresher = yield* RouteRefresher.make;
+    yield* routeRefresher.refreshCurrentRoute;
+    expect(navigation.reloadDocument).toHaveBeenCalledOnce();
+
+    yield* routeRefresher.replace(Effect.sync(streamedRefresh));
+    yield* routeRefresher.refreshCurrentRoute;
+    expect(streamedRefresh).toHaveBeenCalledOnce();
+    expect(navigation.reloadDocument).toHaveBeenCalledOnce();
+  }).pipe(Effect.provide(makeNavigationApiLayer(navigation)));
+});
+
 const withBrowserRefresh = <A, E>(
   navigation: TestNavigation,
   browserRenderer: BrowserRenderer,
@@ -80,7 +97,7 @@ const withBrowserRefresh = <A, E>(
   Effect.scoped(
     Effect.gen(function* () {
       const run = yield* BrowserEffectRunner.make;
-      const { refreshCurrentRoute } = yield* makeRouteRefresh(
+      const refreshCurrentRoute = yield* makeNavigationRouteRefresh(
         browserRenderer,
         navigationResources,
       ).pipe(

@@ -4,7 +4,7 @@ import type { BrowserRenderer } from './browser-renderer';
 import { installCallServer } from './call-server';
 import { listenForNavigation } from './navigation-listener';
 import type { NavigationResources } from './navigation-resource';
-import { makeRouteRefresh } from './route-refresh';
+import { makeNavigationRouteRefresh, RouteRefresher } from './route-refresh';
 
 export const startNavigationRuntime = Effect.fnUntraced(function* (
   browserRenderer: BrowserRenderer,
@@ -12,5 +12,10 @@ export const startNavigationRuntime = Effect.fnUntraced(function* (
 ) {
   yield* listenForNavigation(browserRenderer, navigationResources);
   yield* installCallServer(browserRenderer, navigationResources);
-  return yield* makeRouteRefresh(browserRenderer, navigationResources);
+  const routeRefresher = yield* RouteRefresher;
+  const refreshCurrentRoute = yield* makeNavigationRouteRefresh(
+    browserRenderer,
+    navigationResources,
+  );
+  yield* routeRefresher.replace(refreshCurrentRoute);
 });

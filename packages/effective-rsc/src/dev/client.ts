@@ -2,14 +2,22 @@ import * as BrowserSocket from '@effect/platform-browser/BrowserSocket';
 import { Effect, Layer, Ref, Semaphore, Stream } from 'effect';
 import { RpcClient, RpcSerialization } from 'effect/unstable/rpc';
 
+import { RouteRefresher } from '../client/route-refresh';
 import { DevChannelPath, DevRpcs, type DevUpdate } from './channel';
 import { decideHotUpdate, type HotUpdateCheck, type PendingDevUpdate } from './hmr-update';
 import { makeDevPanel } from './panel';
 import { reportBrowserFailures } from './runtime-failure';
 
-const reload = Effect.sync(() => location.reload());
+const socketProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+const socketUrl = `${socketProtocol}//${location.host}${DevChannelPath}`;
+
+const DevRpcProtocolLayer = RpcClient.layerProtocolSocket({ retryTransientErrors: true }).pipe(
+  Layer.provide(BrowserSocket.layerWebSocket(socketUrl)),
+  Layer.provide(RpcSerialization.layerJson),
+);
 
 type DevHotUpdate = Exclude<DevUpdate, { readonly _tag: 'BuildFailed' }>;
+type DevUpdatePhase = 'Snapshot' | 'Live';
 
 const recordUpdate = (pending: PendingDevUpdate, message: DevHotUpdate): PendingDevUpdate => ({
   acknowledgedClientHash: pending.acknowledgedClientHash,
@@ -36,7 +44,7 @@ const settlePendingUpdate = Effect.fnUntraced(function* (pendingUpdate: Ref.Ref<
       );
       const decision = decideHotUpdate(pending, check);
       if (decision._tag === 'Reload') {
-        yield* reload;
+        yield* Effect.sync(() => location.reload());
         return 'Reloading' as const;
       }
 
@@ -61,51 +69,47 @@ const settlePendingUpdate = Effect.fnUntraced(function* (pendingUpdate: Ref.Ref<
   return yield* reconcile.pipe(Effect.repeat({ while: (action) => action === 'Retry' }));
 });
 
-const runDevClient = Effect.fnUntraced(function* (
-  panel: Effect.Success<typeof makeDevPanel>,
-  refreshCurrentRoute: Effect.Effect<void>,
-) {
+export const startDevClient = Effect.gen(function* () {
+  const routeRefresher = yield* RouteRefresher;
+  const panel = yield* makeDevPanel;
   const pendingUpdate = yield* Ref.make<PendingDevUpdate>({
     acknowledgedClientHash: import.meta.rspackHash,
     clientHash: import.meta.rspackHash,
     rscRefresh: 'Current',
   });
   const updateLock = yield* Semaphore.make(1);
-  const client = yield* RpcClient.make(DevRpcs);
-  const handleUpdate = Effect.fnUntraced(function* (message: DevUpdate) {
-    if (message._tag === 'BuildFailed') {
-      yield* panel.dispatch(message);
-      return;
-    }
-
+  const handleHotUpdate = Effect.fnUntraced(function* (message: DevHotUpdate) {
     yield* Ref.update(pendingUpdate, (pending) => recordUpdate(pending, message));
     const action = yield* updateLock.withPermit(settlePendingUpdate(pendingUpdate));
     if (action === 'Reloading') {
       return;
     }
     if (action === 'Refresh') {
-      yield* refreshCurrentRoute;
+      yield* routeRefresher.refreshCurrentRoute;
     }
     yield* panel.dispatch({ _tag: 'Reconciled' });
   });
-
-  yield* client.ObserveDevUpdates().pipe(Stream.runForEach(handleUpdate));
-});
-
-export const startDevClient = Effect.fnUntraced(function* (
-  refreshCurrentRoute: Effect.Effect<void>,
-) {
-  const panel = yield* makeDevPanel;
   yield* reportBrowserFailures((failure) =>
     panel.dispatch({ _tag: 'RuntimeFailed', failure }),
   ).pipe(Effect.forkScoped);
-  const socketProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const socketUrl = `${socketProtocol}//${location.host}${DevChannelPath}`;
 
-  const ProtocolLayer = RpcClient.layerProtocolSocket({ retryTransientErrors: true }).pipe(
-    Layer.provide(BrowserSocket.layerWebSocket(socketUrl)),
-    Layer.provide(RpcSerialization.layerJson),
-  );
+  const observeUpdates = Effect.gen(function* () {
+    const client = yield* RpcClient.make(DevRpcs);
+    const handleUpdate = Effect.fnUntraced(function* (phase: DevUpdatePhase, message: DevUpdate) {
+      if (message._tag === 'BuildFailed') {
+        yield* panel.dispatch(message);
+      } else if (phase === 'Live') {
+        yield* handleHotUpdate(message);
+      }
 
-  yield* runDevClient(panel, refreshCurrentRoute).pipe(Effect.provide(ProtocolLayer));
+      return 'Live' as const;
+    });
+
+    yield* client.ObserveDevUpdates().pipe(
+      Stream.runFoldEffect((): DevUpdatePhase => 'Snapshot', handleUpdate),
+      Effect.asVoid,
+    );
+  });
+
+  yield* observeUpdates.pipe(Effect.provide(DevRpcProtocolLayer));
 });

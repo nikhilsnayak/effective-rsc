@@ -120,6 +120,7 @@ const staleResponseScenario = (changeNavigation: (state: TestNavigationState) =>
         prepareRefresh: () => () => undefined,
       });
       const routeRefresher = RouteRefresher.of({
+        interruptCurrentRouteRefresh: Effect.void,
         refreshCurrentRoute: Deferred.succeed(currentRouteRefresh, undefined),
         replace: () => Effect.void,
       });
@@ -181,6 +182,7 @@ it.effect('does not let an older invocation response overwrite a newer response'
       const currentRouteRefresh = yield* Deferred.make<void>();
       const directRefreshCommitted = Promise.withResolvers<void>();
       const firstReleased = vi.fn();
+      const interruptedCurrentRouteRefresh = vi.fn();
       const rendered: Array<string> = [];
       const navigationApi = NavigationApi.of({
         getCurrentEntry: () => firstEntry,
@@ -231,6 +233,7 @@ it.effect('does not let an older invocation response overwrite a newer response'
         },
       });
       const routeRefresher = RouteRefresher.of({
+        interruptCurrentRouteRefresh: Effect.sync(interruptedCurrentRouteRefresh),
         refreshCurrentRoute: Deferred.succeed(currentRouteRefresh, undefined),
         replace: () => Effect.void,
       });
@@ -258,6 +261,7 @@ it.effect('does not let an older invocation response overwrite a newer response'
       const secondValue = yield* Effect.promise(() => secondResult);
       expect(secondValue).toBe('second result');
       yield* Effect.promise(() => directRefreshCommitted.promise);
+      expect(interruptedCurrentRouteRefresh).toHaveBeenCalledOnce();
       yield* Deferred.succeed(
         firstResponse,
         makeFlight('older', 'first result', Effect.sync(firstReleased)),

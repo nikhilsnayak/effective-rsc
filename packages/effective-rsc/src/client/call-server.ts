@@ -129,6 +129,7 @@ export const installCallServer = Effect.gen(function* () {
       return;
     }
 
+    yield* routeRefresher.interruptCurrentRouteRefresh;
     const commitRefresh = routeLoader.prepareRefresh(resource.payload.routeTree);
     const committed = Promise.withResolvers<void>();
     startTransition(() => {

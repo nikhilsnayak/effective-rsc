@@ -13,20 +13,35 @@ class RouteRefreshError extends Schema.TaggedError<RouteRefreshError>()('RouteRe
   cause: Schema.Defect(),
 }) {}
 
+type RouteRefreshImplementation = {
+  readonly interruptCurrentRouteRefresh: Effect.Effect<void>;
+  readonly refreshCurrentRoute: Effect.Effect<void>;
+};
+
 export class RouteRefresher extends Context.Service<RouteRefresher>()(
   'ersc/client/RouteRefresher',
   {
     make: Effect.gen(function* () {
       const navigationApi = yield* NavigationApi;
-      const implementation = yield* Ref.make(Effect.sync(navigationApi.reloadDocument));
+      const implementation = yield* Ref.make<RouteRefreshImplementation>({
+        interruptCurrentRouteRefresh: Effect.void,
+        refreshCurrentRoute: Effect.sync(navigationApi.reloadDocument),
+      });
+
+      const interruptCurrentRouteRefresh = Effect.gen(function* () {
+        const current = yield* Ref.get(implementation);
+        yield* current.interruptCurrentRouteRefresh;
+      });
+
+      const refreshCurrentRoute = Effect.gen(function* () {
+        const current = yield* Ref.get(implementation);
+        yield* current.refreshCurrentRoute;
+      });
 
       return {
-        refreshCurrentRoute: Effect.gen(function* () {
-          const refreshCurrentRoute = yield* Ref.get(implementation);
-          return yield* refreshCurrentRoute;
-        }),
-        replace: (refreshCurrentRoute: Effect.Effect<void>) =>
-          Ref.set(implementation, refreshCurrentRoute),
+        interruptCurrentRouteRefresh,
+        refreshCurrentRoute,
+        replace: (replacement: RouteRefreshImplementation) => Ref.set(implementation, replacement),
       };
     }),
   },
@@ -114,7 +129,10 @@ export const installRouteRefresh = Effect.gen(function* () {
     yield* Effect.raceFirst(refreshInReactTransition, waitForRoutedNavigation(navigationApi));
   }).pipe(Effect.catch((cause) => Effect.logError('Failed to refresh the current route.', cause)));
 
-  yield* routeRefresher.replace(
-    FiberMap.run(refreshes, CurrentRouteRefreshKey, refreshCurrentRoute).pipe(Effect.asVoid),
-  );
+  yield* routeRefresher.replace({
+    interruptCurrentRouteRefresh: FiberMap.remove(refreshes, CurrentRouteRefreshKey),
+    refreshCurrentRoute: FiberMap.run(refreshes, CurrentRouteRefreshKey, refreshCurrentRoute).pipe(
+      Effect.asVoid,
+    ),
+  });
 });

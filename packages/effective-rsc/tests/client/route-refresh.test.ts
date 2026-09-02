@@ -81,7 +81,10 @@ it.effect('reloads the document until navigation installs streamed route refresh
     yield* routeRefresher.refreshCurrentRoute;
     expect(navigation.reloadDocument).toHaveBeenCalledOnce();
 
-    yield* routeRefresher.replace(Effect.sync(streamedRefresh));
+    yield* routeRefresher.replace({
+      interruptCurrentRouteRefresh: Effect.void,
+      refreshCurrentRoute: Effect.sync(streamedRefresh),
+    });
     yield* routeRefresher.refreshCurrentRoute;
     expect(streamedRefresh).toHaveBeenCalledOnce();
     expect(navigation.reloadDocument).toHaveBeenCalledOnce();
@@ -92,7 +95,7 @@ const withBrowserRefresh = <A, E>(
   navigation: TestNavigation,
   browserRenderer: BrowserRenderer['Service'],
   routeLoader: RouteLoader['Service'],
-  test: (refresh: Effect.Effect<void>) => Effect.Effect<A, E>,
+  test: (refresh: Effect.Effect<void>, interrupt: Effect.Effect<void>) => Effect.Effect<A, E>,
 ) =>
   Effect.scoped(
     Effect.gen(function* () {
@@ -107,7 +110,10 @@ const withBrowserRefresh = <A, E>(
         Effect.provideService(RouteLoader, routeLoader),
         Effect.provideService(RouteRefresher, routeRefresher),
       );
-      return yield* test(routeRefresher.refreshCurrentRoute);
+      return yield* test(
+        routeRefresher.refreshCurrentRoute,
+        routeRefresher.interruptCurrentRouteRefresh,
+      );
     }).pipe(Effect.provideService(HttpClient.HttpClient, testHttpClient)),
   );
 
@@ -208,6 +214,44 @@ it.effect('interrupts a current-route refresh when a routed navigation begins', 
 
         expect(rootRefresh).not.toHaveBeenCalled();
         expect(cached).not.toHaveBeenCalled();
+      }),
+    );
+  }),
+);
+
+it.effect('interrupts a current-route refresh when another refresh source supersedes it', () =>
+  Effect.gen(function* () {
+    const navigation = new TestNavigation();
+    const loadStarted = yield* Deferred.make<void>();
+    const loadInterrupted = yield* Deferred.make<void>();
+    const rootRefresh = vi.fn(() => Promise.resolve());
+    const routeLoader = RouteLoader.of({
+      invalidate: vi.fn(),
+      load: () =>
+        Deferred.succeed(loadStarted, undefined).pipe(
+          Effect.andThen(Effect.never),
+          Effect.onInterrupt(() => Deferred.succeed(loadInterrupted, undefined)),
+        ),
+      loadInitial: Effect.die('Unexpected initial route load.'),
+      prepareRefresh: () => () => undefined,
+    });
+    const browserRenderer = BrowserRenderer.of({
+      commit: () => undefined,
+      initialize: () => undefined,
+      navigate: () => {
+        throw new TypeError('Unexpected navigation render.');
+      },
+      refresh: rootRefresh,
+    });
+
+    yield* withBrowserRefresh(navigation, browserRenderer, routeLoader, (refresh, interrupt) =>
+      Effect.gen(function* () {
+        yield* refresh;
+        yield* Deferred.await(loadStarted);
+        yield* interrupt;
+        yield* Deferred.await(loadInterrupted);
+
+        expect(rootRefresh).not.toHaveBeenCalled();
       }),
     );
   }),

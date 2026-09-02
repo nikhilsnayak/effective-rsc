@@ -6,9 +6,9 @@ import { injectRSCPayload } from 'rsc-html-stream/server';
 
 import { RouteTree } from '../client/route-tree';
 import type { FlightPayload } from '../rsc/flight';
+import type { FlightRender } from './flight-renderer';
 import { ServerConfig } from './server-config';
 
-type FlightStream = ReadableStream<Uint8Array>;
 type HtmlStream = ReadableStream<Uint8Array>;
 
 export class HtmlRenderError extends Schema.TaggedError<HtmlRenderError>()('HtmlRenderError', {
@@ -23,15 +23,15 @@ export class HtmlRenderer extends Context.Service<HtmlRenderer>()(
 
       return {
         render: Effect.fn('HtmlRenderer.render')(function* ({
-          flightStream,
+          flight,
           formState,
         }: {
-          readonly flightStream: FlightStream;
+          readonly flight: FlightRender;
           readonly formState: FlightPayload['formState'];
         }): Effect.fn.Return<HtmlStream, HtmlRenderError, Scope.Scope> {
           const signal = yield* Effect.abortSignal;
           const runtime = yield* FiberSet.makeRuntimePromise<never>();
-          const [ssrFlightStream, browserFlightStream] = flightStream.tee();
+          const [ssrFlightStream, browserFlightStream] = flight.stream.tee();
           let payload: PromiseLike<FlightPayload> | null = null;
 
           function SsrRoot() {
@@ -54,7 +54,7 @@ export class HtmlRenderer extends Context.Service<HtmlRenderer>()(
                   bootstrapScripts: [...clientBootstrapScripts],
                   formState,
                   onError: (error, errorInfo) => {
-                    if (!signal.aborted) {
+                    if (!signal.aborted && !flight.signal.aborted) {
                       void runtime(
                         Effect.logError('HTML render failed.', error, errorInfo.componentStack),
                       );

@@ -208,20 +208,19 @@ export const makeDevApplication = Effect.fnUntraced(function* ({
 type DevApplication = Effect.Success<ReturnType<typeof makeDevApplication>>;
 
 export const launchDevApplication = Effect.fnUntraced(function* (application: DevApplication) {
-  yield* HttpServer.addressFormattedWith((address) =>
-    Effect.logInfo(
-      `${Terminal.magenta('▌')} effective-rsc ${Terminal.dim(PackageJson.version)}  ${address}`,
-    ),
-  );
-
   return yield* Effect.scoped(
     Effect.gen(function* () {
       const server = yield* Layer.launch(HttpServer.serve(application.httpEffect)).pipe(
         Effect.forkScoped({ startImmediately: true }),
       );
       yield* Effect.addFinalizer(() => application.closeDevChannel);
+      const watch = HttpServer.addressFormattedWith((address) =>
+        Effect.logInfo(
+          `${Terminal.magenta('▌')} effective-rsc ${Terminal.dim(PackageJson.version)}  ${address}`,
+        ),
+      ).pipe(Effect.andThen(application.watch));
 
-      return yield* Effect.raceFirst(application.watch, Fiber.join(server));
+      return yield* Effect.raceFirst(watch, Fiber.join(server));
     }),
   );
 });

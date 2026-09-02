@@ -57,6 +57,7 @@ it.effect('interrupts application work when its Flight render is released', () =
         () => 'interrupted' as const,
       );
       yield* Deferred.await(started);
+      expect(flight.signal).toBe(renderSignal);
       expect(renderSignal?.aborted).toBe(false);
 
       yield* flight.release;

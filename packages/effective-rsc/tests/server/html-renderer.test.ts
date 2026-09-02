@@ -5,6 +5,7 @@ import type { ReactFormState } from 'react-dom/client';
 import type { RenderToReadableStreamOptions } from 'react-dom/server';
 
 import type { FlightPayload } from '../../src/rsc/flight';
+import type { FlightRender } from '../../src/server/flight-renderer';
 import { ServerConfig } from '../../src/server/server-config';
 
 const formState = Symbol('formState') as unknown as ReactFormState;
@@ -19,6 +20,11 @@ const serverConfig = ServerConfig.of({
 });
 let renderOptions: RenderToReadableStreamOptions | undefined;
 let renderedRoot: ReactNode;
+
+const makeFlightRender = (
+  signal: AbortSignal,
+  stream = new ReadableStream<Uint8Array>(),
+): FlightRender => ({ release: Effect.void, signal, stream });
 
 const decodeFlight = vi.fn((_stream: ReadableStream<Uint8Array>) =>
   Promise.resolve({
@@ -69,13 +75,17 @@ describe('HtmlRenderer', () => {
 
     return Effect.gen(function* () {
       const renderer = yield* HtmlRenderer;
+      const flightSignal = yield* Effect.abortSignal;
       const flightStream = new ReadableStream<Uint8Array>({
         start(controller) {
           controller.close();
         },
       });
 
-      yield* renderer.render({ flightStream, formState });
+      yield* renderer.render({
+        flight: makeFlightRender(flightSignal, flightStream),
+        formState,
+      });
 
       expect(decodeFlight).not.toHaveBeenCalled();
       expect(renderDocument).toHaveBeenCalledTimes(1);
@@ -114,9 +124,10 @@ describe('HtmlRenderer', () => {
 
     return Effect.gen(function* () {
       const renderer = yield* HtmlRenderer;
+      const flightSignal = yield* Effect.abortSignal;
       const error = yield* renderer
         .render({
-          flightStream: new ReadableStream<Uint8Array>(),
+          flight: makeFlightRender(flightSignal),
           formState: null,
         })
         .pipe(Effect.flip);
@@ -135,10 +146,11 @@ describe('HtmlRenderer', () => {
 
     return Effect.gen(function* () {
       const renderer = yield* HtmlRenderer;
+      const flightSignal = yield* Effect.abortSignal;
       const scope = yield* Scope.make();
       yield* renderer
         .render({
-          flightStream: new ReadableStream<Uint8Array>(),
+          flight: makeFlightRender(flightSignal),
           formState: null,
         })
         .pipe(Scope.provide(scope));
@@ -146,6 +158,34 @@ describe('HtmlRenderer', () => {
 
       yield* Scope.close(scope, Exit.void);
       onError?.(new Error('request aborted'), { componentStack: '\n    at Page' });
+
+      expect(logs).toEqual([]);
+    }).pipe(
+      Effect.withLogger(logger),
+      Effect.provide(HtmlRenderer.layer),
+      Effect.provideService(ServerConfig, serverConfig),
+    );
+  });
+
+  it.effect('does not log an expected error from an aborted Flight render', () => {
+    const logs: Array<unknown> = [];
+    const logger = Logger.make<unknown, void>(({ message }) => {
+      logs.push(message);
+    });
+
+    return Effect.gen(function* () {
+      const renderer = yield* HtmlRenderer;
+      const flightScope = yield* Scope.make();
+      const flightSignal = yield* Effect.abortSignal.pipe(Scope.provide(flightScope));
+      yield* renderer.render({
+        flight: makeFlightRender(flightSignal),
+        formState: null,
+      });
+
+      yield* Scope.close(flightScope, Exit.void);
+      renderOptions?.onError?.(flightSignal.reason, {
+        componentStack: '\n    at SuspendedPage',
+      });
 
       expect(logs).toEqual([]);
     }).pipe(

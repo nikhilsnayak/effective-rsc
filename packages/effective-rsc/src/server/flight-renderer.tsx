@@ -9,8 +9,9 @@ import type { RouteTreeModel } from '../rsc/route-tree';
 
 type FlightStream = ReadableStream<Uint8Array>;
 
-type FlightRender = {
+export type FlightRender = {
   readonly release: Effect.Effect<void>;
+  readonly signal: AbortSignal;
   readonly stream: FlightStream;
 };
 
@@ -59,7 +60,7 @@ export class FlightRenderer extends Context.Service<FlightRenderer>()(
               temporaryReferences,
             });
           });
-          return { release, stream } satisfies FlightRender;
+          return { release, signal, stream } satisfies FlightRender;
         }).pipe(Effect.onError(() => release));
       }),
     }),

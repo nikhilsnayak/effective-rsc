@@ -338,12 +338,28 @@ it.effect('keeps one HTTP server across successful generations', () =>
       root: directory,
     }).pipe(Effect.provide(RspackLayer));
 
-    yield* launchDevApplication(application).pipe(Effect.provide(HttpServerLayer));
+    const logFiberIds: Array<number> = [];
+    const TestLoggerLayer = Logger.layer([
+      Logger.make(({ fiber, message }) => {
+        const text = Array.isArray(message) ? message[0] : message;
+        if (
+          typeof text === 'string' &&
+          (text.includes('effective-rsc') || text.includes('Compiling'))
+        ) {
+          logFiberIds.push(fiber.id);
+        }
+      }),
+    ]);
+
+    yield* launchDevApplication(application).pipe(
+      Effect.provide(Layer.merge(HttpServerLayer, TestLoggerLayer)),
+    );
 
     const served = yield* Ref.get(serveCount);
     const stopped = yield* Deferred.isDone(serverStopped);
     expect(served).toBe(1);
     expect(stopped).toBe(true);
+    expect(new Set(logFiberIds)).toHaveLength(1);
   }).pipe(Effect.provide(BunServices.layer), Effect.scoped),
 );
 

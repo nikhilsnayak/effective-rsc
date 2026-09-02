@@ -181,7 +181,7 @@ const httpLayer = <Services, ApplicationError>(
 
     const htmlRenderer = yield* HtmlRenderer;
     const htmlStream = yield* htmlRenderer
-      .render({ flightStream: flight.stream, formState })
+      .render({ flight, formState })
       .pipe(Effect.onError(() => flight.release));
 
     return HttpServerResponse.stream(

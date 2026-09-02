@@ -9,7 +9,7 @@ import { isRoutedNavigation, preserveRequestedHash } from './navigation-routing'
 
 const CurrentRouteRefreshKey = 'CurrentRouteRefresh';
 
-class BrowserRefreshError extends Schema.TaggedError<BrowserRefreshError>()('BrowserRefreshError', {
+class RouteRefreshError extends Schema.TaggedError<RouteRefreshError>()('RouteRefreshError', {
   cause: Schema.Defect(),
 }) {}
 
@@ -77,11 +77,11 @@ export const makeRouteRefresh = Effect.fnUntraced(function* (
     ).pipe(Effect.andThen(Effect.sync(commitRefresh)), Effect.ensuring(resource.release));
   });
 
-  const refreshInReactTransition = Effect.callback<void, BrowserRefreshError>((resume, signal) => {
+  const refreshInReactTransition = Effect.callback<void, RouteRefreshError>((resume, signal) => {
     startTransition(() =>
       run(refreshRoute, { signal }).then(
         () => resume(Effect.void),
-        (cause) => resume(Effect.fail(new BrowserRefreshError({ cause }))),
+        (cause) => resume(Effect.fail(new RouteRefreshError({ cause }))),
       ),
     );
   });

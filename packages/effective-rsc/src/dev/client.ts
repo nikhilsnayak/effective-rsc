@@ -2,9 +2,6 @@ import * as BrowserSocket from '@effect/platform-browser/BrowserSocket';
 import { Effect, Layer, Ref, Semaphore, Stream } from 'effect';
 import { RpcClient, RpcSerialization } from 'effect/unstable/rpc';
 
-import type { BrowserRenderer } from '../client/browser-renderer';
-import type { NavigationResources } from '../client/navigation-resource';
-import { makeRouteRefresh } from '../client/route-refresh';
 import { DevChannelPath, DevRpcs, type DevUpdate } from './channel';
 import { decideHotUpdate, type HotUpdateCheck, type PendingDevUpdate } from './hmr-update';
 import { makeDevPanel } from './panel';
@@ -96,11 +93,9 @@ const runDevClient = Effect.fnUntraced(function* (
 });
 
 export const startDevClient = Effect.fnUntraced(function* (
-  browserRenderer: BrowserRenderer,
-  navigationResources: NavigationResources,
+  refreshCurrentRoute: Effect.Effect<void>,
 ) {
   const panel = yield* makeDevPanel;
-  const { refreshCurrentRoute } = yield* makeRouteRefresh(browserRenderer, navigationResources);
   yield* reportBrowserFailures((failure) =>
     panel.dispatch({ _tag: 'RuntimeFailed', failure }),
   ).pipe(Effect.forkScoped);

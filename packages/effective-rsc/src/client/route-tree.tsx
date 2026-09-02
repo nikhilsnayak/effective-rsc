@@ -57,7 +57,7 @@ export function RouteTree({ root }: RouteTreeProps) {
 export function RouteOutlet() {
   const node = use(RouteNodeContext);
   if (node === null) {
-    throw new Error('RouteOutlet rendered outside its route node.');
+    throw new TypeError('RouteOutlet rendered outside its route node.');
   }
   return node.child === null ? null : <RouteNodeRenderer key={node.child.id} node={node.child} />;
 }

@@ -242,6 +242,7 @@ it('externalizes Bun and Effect modules for the server graph', () => {
 });
 
 it('rejects Bun-only modules reaching the browser graph and points at the boundary', () => {
+  expect(() => guardBrowserModule({ request: 'bun:sqlite' })).toThrowError(TypeError);
   expect(() => guardBrowserModule({ request: 'bun:sqlite' })).toThrow(
     '"bun:sqlite" runs only on Bun and cannot enter the browser module graph.',
   );

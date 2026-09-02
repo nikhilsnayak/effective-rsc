@@ -61,7 +61,7 @@ export const externalizeServerModule = ({ request }: ExternalsRequest): string |
 
 export const guardBrowserModule = ({ request }: ExternalsRequest): false => {
   if (isBunModule(request) || isBunPlatformModule(request)) {
-    throw new Error(
+    throw new TypeError(
       `"${request}" runs only on Bun and cannot enter the browser module graph. Move the import behind a Server Component, Layout, Page, or ServerFn boundary so it stays in the server graph.`,
     );
   }

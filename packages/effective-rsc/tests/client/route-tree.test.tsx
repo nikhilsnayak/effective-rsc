@@ -58,8 +58,8 @@ describe('RouteTree', () => {
   });
 
   it('rejects an outlet rendered outside a route node', () => {
-    expect(() => renderToStaticMarkup(<RouteOutlet />)).toThrow(
-      'RouteOutlet rendered outside its route node.',
+    expect(() => renderToStaticMarkup(<RouteOutlet />)).toThrowError(
+      new TypeError('RouteOutlet rendered outside its route node.'),
     );
   });
 });

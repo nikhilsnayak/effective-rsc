@@ -35,10 +35,13 @@ updates over `/_ersc/dev`. Development-only branches are removed from production
 shutdown, the development channel closes active WebSockets before stopping the Bun HTTP server, so
 connected browser tabs cannot retain the process.
 
+Development diagnostics start independently of hydration. Current-route refresh initially reloads
+the document; successful client-navigation activation replaces it with streamed RSC refresh.
+
 React Server Components Performance Tracks remain native. Initial hydration uses the document
 timeline origin; navigation and Server Function decoding receive a timestamp captured before HTTP
-execution. Production compilation removes the timing metadata. React Debug Channel transport and a
-framework development panel remain deferred.
+execution. Production compilation removes the timing metadata. React Debug Channel transport and
+Loading-specific suspension diagnostics remain deferred.
 
 ## Owners
 

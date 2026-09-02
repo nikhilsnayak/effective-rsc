@@ -18,7 +18,7 @@ import {
 } from './navigation-routing';
 
 // oxlint-disable-next-line effecttsgo/async-function -- Navigation handlers are native Promise boundaries.
-const ignoreNavigationAbort = async (work: Promise<void>, signal: AbortSignal) => {
+const settleOnNavigationAbort = async (work: Promise<void>, signal: AbortSignal) => {
   try {
     await work;
   } catch (cause) {
@@ -123,7 +123,7 @@ export const listenForNavigation = Effect.fnUntraced(function* (
       ),
     );
     const completePostcommitFlight = () =>
-      ignoreNavigationAbort(
+      settleOnNavigationAbort(
         run(
           flightCompletion.pipe(
             Effect.onError(() => rollbackAndRelease(event.signal.aborted ? 'Aborted' : 'Failed')),
@@ -166,7 +166,7 @@ export const listenForNavigation = Effect.fnUntraced(function* (
     const attempt = coordinator.begin(event.navigationType);
     const handler = (precommitController?: NavigationPrecommitController) =>
       startNavigationTransition(() =>
-        ignoreNavigationAbort(
+        settleOnNavigationAbort(
           performNavigation(attempt, event, destination, precommitController),
           event.signal,
         ),

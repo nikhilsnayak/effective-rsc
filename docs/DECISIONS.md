@@ -69,6 +69,7 @@ entry; read Git history for what it said.
 | D-061 | Preserve React's native Server Components development Performance Tracks with full document and Flight request timing; eliminate that instrumentation from production and defer a Debug Channel transport.                                                        |
 | D-062 | Identify every ERSC value by a `Symbol.for` brand rather than by constructor identity, so a duplicated framework module still composes.                                                                                                                           |
 | D-063 | Skip hydration entirely when the Navigation API or `NavigationPrecommitController` is missing, leaving the streamed document as a plain multi-page application.                                                                                                   |
+| D-064 | Start development diagnostics independently of hydration; refresh by reloading the document until client navigation installs streamed current-route refresh.                                                                                                      |
 
 ## Deferred
 

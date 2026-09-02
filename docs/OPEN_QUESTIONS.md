@@ -59,12 +59,12 @@ IDs are append-only and never reused, including after a question is resolved.
 - **Question:** How should development diagnose an `ERSC.Loading.make` renderer that calls `use` or otherwise throws a thenable internally?
 - **Why:** Its declared renderer rejects Promise and Effect outputs, but TypeScript cannot detect suspension hidden inside synchronous code.
 - **Affected:** Loading authoring, development diagnostics, and HMR error presentation.
-- **Evidence:** The static contract catches direct async outputs but not hidden suspension.
+- **Evidence:** The development panel reports build and browser runtime failures. The static Loading
+  contract catches direct async outputs but not suspension hidden inside synchronous code.
 - **Related:** D-016, D-039, D-041–D-043.
-- **Resolution:** The static contract rejects direct Promise and Effect outputs. Detecting suspension
-  hidden inside a renderer requires development-only React instrumentation and a deliberate error
-  presentation path; do not add that runtime machinery for `0.1.0`.
-- **Status:** Deferred until framework development error presentation exists.
+- **Resolution:** Detecting suspension hidden inside a renderer requires Loading-specific React
+  instrumentation; do not add that machinery for `0.1.0`.
+- **Status:** Deferred until the instrumentation approach is settled.
 
 ### OQ-007 — Packaged framework agent evaluation
 

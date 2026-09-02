@@ -21,13 +21,13 @@ middleware across mounted scopes runs once.
 | Request                          | Route scope                          | Server Function scope | Native global middleware |
 | -------------------------------- | ------------------------------------ | --------------------- | ------------------------ |
 | Page GET/HEAD                    | Matched chain                        | No                    | Yes                      |
-| Hydrated Server Function POST    | Remaining route chain around refresh | Action chain          | Yes                      |
-| Progressive Server Function POST | No route refresh in the POST         | Action chain          | Yes                      |
+| Hydrated Server Function POST    | Remaining route chain around refresh | Server Function chain | Yes                      |
+| Progressive Server Function POST | No route refresh in the POST         | Server Function chain | Yes                      |
 | Userland HTTP, assets, unmatched | No                                   | No                    | Yes                      |
 
-During a hydrated Server Function request, middleware already active for the action is not executed
-again for the refreshed route, even if it appears at another position in that route chain. Remaining
-route middleware wraps refreshed rendering.
+During a hydrated Server Function request, middleware already active for the Server Function is not
+executed again for the refreshed route, even if it appears at another position in that route chain.
+Remaining route middleware wraps refreshed rendering.
 
 Native global Effect HTTP middleware is separate. Register it through the application Layer for
 server-wide policy.

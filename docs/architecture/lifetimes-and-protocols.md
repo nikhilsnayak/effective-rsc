@@ -57,12 +57,12 @@ middleware share the same router and Layer.
 | Request                          | Scoped route middleware              | Scoped Server Function middleware | Native global middleware |
 | -------------------------------- | ------------------------------------ | --------------------------------- | ------------------------ |
 | Page GET/HEAD                    | Matched route scope                  | No                                | Yes                      |
-| Hydrated Server Function POST    | Remaining route scope around refresh | Action scope                      | Yes                      |
-| Progressive Server Function POST | No route refresh in the POST         | Action scope                      | Yes                      |
+| Hydrated Server Function POST    | Remaining route scope around refresh | Server Function scope             | Yes                      |
+| Progressive Server Function POST | No route refresh in the POST         | Server Function scope             | Yes                      |
 | Userland HTTP, assets, unmatched | No                                   | No                                | Yes                      |
 
-Within one Server Function request, a middleware already active in the action scope is not executed
-again for the route refresh, even if it appears at a different position in the route chain.
+Within one Server Function request, middleware already active in the Server Function scope is not
+executed again for the route refresh, even if it appears at a different position in the route chain.
 
 ## Owners
 

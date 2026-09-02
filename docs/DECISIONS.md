@@ -70,6 +70,7 @@ entry; read Git history for what it said.
 | D-062 | Identify every ERSC value by a `Symbol.for` brand rather than by constructor identity, so a duplicated framework module still composes.                                                                                                                           |
 | D-063 | Skip hydration entirely when the Navigation API or `NavigationPrecommitController` is missing, leaving the streamed document as a plain multi-page application.                                                                                                   |
 | D-064 | Start development diagnostics independently of hydration; refresh by reloading the document until client navigation installs streamed current-route refresh.                                                                                                      |
+| D-065 | Let hydrated Server Functions execute concurrently; only the latest applicable response may render its embedded tree, while other completions refresh the current route and newer response trees interrupt older refreshes.                                       |
 
 ## Deferred
 

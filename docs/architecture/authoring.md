@@ -34,8 +34,8 @@ Each ERSC identity owns an AsyncLocalStorage context for its render runtime. Nat
 binds one request-owned FiberSet runner before React enters authored code. Page, Layout, and
 Component Effects remain attached to the HTTP request.
 
-Server Function handlers execute directly in the HTTP request fiber. If an action refreshes the
-current route, the refreshed Page, Layout, and Component Effects use the render runtime.
+Server Function handlers execute directly in the HTTP request fiber. If a Server Function refreshes
+the current route, the refreshed Page, Layout, and Component Effects use the render runtime.
 
 ## Routes
 

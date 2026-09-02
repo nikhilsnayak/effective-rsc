@@ -198,12 +198,17 @@ a full-document navigation. Native focus and scroll behavior remain enabled.
 ## Server Function execution and refresh
 
 Hydrated invocations and progressively enhanced forms execute the same request-scoped Effect
-handler. A hydrated response contains the imperative result and a refreshed route tree; a
+handler. A hydrated response contains the Server Function result and a refreshed route tree; a
 progressively enhanced response contains a complete document with the refreshed tree and form state.
 
 For hydrated calls, the result Promise settles independently from the route refresh. ERSC commits
 the refreshed tree in a React transition and keeps the request active through React commit and
 Flight EOF. Disconnecting interrupts unfinished request work and the response stream.
+
+Hydrated invocations may execute concurrently. Only the latest invocation may apply its response's
+route tree while its original history entry remains current and no navigation is active. Other
+responses trigger a fresh current-route refresh. A response tree interrupts any older current-route
+refresh before rendering.
 
 After a successful mutation, ERSC clears the Back/Forward traversal cache because any route may have
 changed.
@@ -277,13 +282,13 @@ middleware across mounted scopes runs once.
 | Request                          | Route scope                          | Server Function scope | Native global middleware |
 | -------------------------------- | ------------------------------------ | --------------------- | ------------------------ |
 | Page GET/HEAD                    | Matched chain                        | No                    | Yes                      |
-| Hydrated Server Function POST    | Remaining route chain around refresh | Action chain          | Yes                      |
-| Progressive Server Function POST | No route refresh in the POST         | Action chain          | Yes                      |
+| Hydrated Server Function POST    | Remaining route chain around refresh | Server Function chain | Yes                      |
+| Progressive Server Function POST | No route refresh in the POST         | Server Function chain | Yes                      |
 | Userland HTTP, assets, unmatched | No                                   | No                    | Yes                      |
 
-During a hydrated Server Function request, middleware already active for the action is not executed
-again for the refreshed route, even if it appears at another position in that route chain. Remaining
-route middleware wraps refreshed rendering.
+During a hydrated Server Function request, middleware already active for the Server Function is not
+executed again for the refreshed route, even if it appears at another position in that route chain.
+Remaining route middleware wraps refreshed rendering.
 
 Native global Effect HTTP middleware is separate. Register it through the application Layer for
 server-wide policy.

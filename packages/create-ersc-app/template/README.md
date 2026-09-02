@@ -5,7 +5,10 @@ A new effective-rsc application.
 ## Requirements
 
 - Bun 1.4 or newer
-- A browser with the Navigation API and `NavigationPrecommitController`
+
+Hydration and client navigation require the Navigation API and `NavigationPrecommitController`.
+Other browsers use the server-rendered application as a multi-page application, with working links
+and native form submissions.
 
 ## Develop
 

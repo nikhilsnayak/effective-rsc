@@ -49,10 +49,11 @@ until the replacement commits.
 
 ## Server Function
 
-Hydrated calls use React's native Server Function POST. ERSC validates the same-site Origin and body
-limit, decodes the reference and Schema input, runs the handler Effect, and starts the route refresh
-independently. The response carries the Server Function result and refreshed Flight through React's
-native protocol, allowing the result to settle without waiting for suspended route content.
+Hydrated calls use React's native Server Function POST. ERSC requires an Origin whose host matches
+the application host, enforces the body limit, decodes the reference and Schema input, runs the
+handler Effect, and starts the route refresh independently. The response carries the Server Function
+result and refreshed Flight through React's native protocol, allowing the result to settle without
+waiting for suspended route content.
 
 Hydrated invocations may execute concurrently. Only the latest invocation may apply its embedded
 route tree while its original history entry remains current and no navigation is active. Other

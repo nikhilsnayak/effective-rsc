@@ -87,6 +87,34 @@ Add the framework commands to `package.json`:
 }
 ```
 
+Create `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "strict": true,
+    "erasableSyntaxOnly": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "noUncheckedSideEffectImports": true,
+    "types": ["bun", "react", "react-dom"],
+    "lib": ["ESNext", "DOM", "DOM.Iterable"]
+  },
+  "include": ["src"]
+}
+```
+
+Create `src/environment.d.ts` so TypeScript accepts stylesheet imports:
+
+```ts
+declare module '*.css' {}
+```
+
 ## Quick start
 
 Create `src/application.tsx`:

@@ -9,7 +9,7 @@ import {
 import { BrowserNavigation } from './browser-navigation';
 import { BrowserRenderer } from './browser-renderer';
 import { ClientRuntime } from './client-runtime';
-import { loadFlight } from './flight-loader';
+import { FlightClient } from './flight-client';
 import { NavigationResources } from './navigation-resource';
 
 class ServerFnCallError extends Schema.TaggedError<ServerFnCallError>()('ServerFnCallError', {
@@ -21,6 +21,7 @@ export const installCallServer = Effect.gen(function* () {
   const { location } = yield* BrowserNavigation;
   const browserRenderer = yield* BrowserRenderer;
   const run = yield* ClientRuntime;
+  const flightClient = yield* FlightClient;
   const navigationResources = yield* NavigationResources;
   const callServer = Effect.fnUntraced(function* (
     id: string,
@@ -32,17 +33,19 @@ export const installCallServer = Effect.gen(function* () {
       try: () => encodeReply(args, { temporaryReferences }),
       catch: (cause) => new ServerFnCallError({ cause, message: 'Failed to encode arguments.' }),
     });
-    const resource = yield* loadFlight({
-      _tag: 'ServerFunction',
-      body,
-      destination: new URL(location.href),
-      id,
-      temporaryReferences,
-    }).pipe(
-      Effect.mapError(
-        (cause) => new ServerFnCallError({ cause, message: 'Server Function request failed.' }),
-      ),
-    );
+    const resource = yield* flightClient
+      .load({
+        _tag: 'ServerFunction',
+        body,
+        destination: new URL(location.href),
+        id,
+        temporaryReferences,
+      })
+      .pipe(
+        Effect.mapError(
+          (cause) => new ServerFnCallError({ cause, message: 'Server Function request failed.' }),
+        ),
+      );
     if (resource._tag === 'Document') {
       return yield* new ServerFnCallError({
         cause: new Error('A Server Function response cannot request document navigation.'),

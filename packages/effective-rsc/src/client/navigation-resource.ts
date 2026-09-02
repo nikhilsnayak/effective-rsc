@@ -1,8 +1,7 @@
 import { Context, Effect, MutableRef, Scope } from 'effect';
-import { HttpClient } from 'effect/unstable/http';
 
 import type { RouteTreeModel } from '../rsc/route-tree';
-import { type FlightLoadError, loadFlight } from './flight-loader';
+import { FlightClient, type FlightLoadError } from './flight-client';
 
 type CachedRoute = {
   readonly entry: CacheHistoryEntry;
@@ -46,7 +45,7 @@ export class NavigationResources extends Context.Service<
     readonly invalidate: () => void;
     readonly load: (
       request: NavigationResourceRequest,
-    ) => Effect.Effect<NavigationResource, FlightLoadError, HttpClient.HttpClient | Scope.Scope>;
+    ) => Effect.Effect<NavigationResource, FlightLoadError, Scope.Scope>;
     readonly prepareRefresh: (routeTree: RouteTreeModel) => () => void;
   }
 >()('ersc/client/navigation-resource/NavigationResources') {
@@ -55,6 +54,7 @@ export class NavigationResources extends Context.Service<
     initialRouteTree: RouteTreeModel,
     initialFlightCompleted: Promise<void>,
   ) {
+    const flightClient = yield* FlightClient;
     const cacheRef = MutableRef.make<RouteCache>(new Map());
     const initialEntry = navigationHistory.currentEntry;
 
@@ -126,7 +126,7 @@ export class NavigationResources extends Context.Service<
         }
       }
 
-      const resource = yield* loadFlight({
+      const resource = yield* flightClient.load({
         _tag: 'Navigation',
         destination: new URL(request.destination.url),
       });

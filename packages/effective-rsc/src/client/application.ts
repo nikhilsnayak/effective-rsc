@@ -5,11 +5,13 @@ import { Effect, Layer } from 'effect';
 import { BrowserNavigation } from './browser-navigation';
 import { showBrowserFailure } from './browser-screen';
 import { ClientRuntime } from './client-runtime';
+import { FlightClient } from './flight-client';
 import { hydrate } from './hydrate';
 import { ReactDOMRenderer } from './react-dom-renderer';
 
 const ClientLayer = Layer.mergeAll(
   BrowserNavigation.layer,
+  FlightClient.layer,
   ReactDOMRenderer.layer.pipe(Layer.provideMerge(ClientRuntime.layer)),
 ).pipe(Layer.provide(BrowserHttpClient.layerFetch));
 

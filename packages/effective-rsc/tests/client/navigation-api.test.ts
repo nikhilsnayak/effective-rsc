@@ -28,6 +28,7 @@ import {
 } from '../../src/client/browser-navigation';
 import { BrowserRenderer } from '../../src/client/browser-renderer';
 import { ClientRuntime } from '../../src/client/client-runtime';
+import { FlightClient } from '../../src/client/flight-client';
 import { listenForNavigation } from '../../src/client/navigation-api';
 import { NavigationResources } from '../../src/client/navigation-resource';
 import type { RouteTreeModel } from '../../src/rsc/route-tree';
@@ -251,7 +252,10 @@ const listen = (
       Effect.provideService(ClientRuntime, run),
       Effect.provideService(NavigationResources, navigationResources),
     );
-  }).pipe(Effect.provideService(HttpClient.HttpClient, httpClient));
+  }).pipe(
+    Effect.provide(FlightClient.layer),
+    Effect.provideService(HttpClient.HttpClient, httpClient),
+  );
 };
 
 afterEach(() => {

@@ -17,6 +17,7 @@ vi.mock('react-server-dom-rspack/client.browser', () => ({
   createFromReadableStream: vi.fn(() => Promise.resolve(decodedFlights.shift())),
 }));
 
+import { FlightClient } from '../../src/client/flight-client';
 import { NavigationResources } from '../../src/client/navigation-resource';
 
 const makeRouteTree = (id: string): RouteTreeModel => ({
@@ -88,7 +89,10 @@ it.effect('does not let initial Flight completion overwrite a refreshed cache ge
         expect(resource.routeTree.id).toBe('refreshed');
       }
       expect(requestedUrls).toEqual([]);
-    }).pipe(Effect.provideService(HttpClient.HttpClient, makeHttpClient(requestedUrls))),
+    }).pipe(
+      Effect.provide(FlightClient.layer),
+      Effect.provideService(HttpClient.HttpClient, makeHttpClient(requestedUrls)),
+    ),
   );
 });
 
@@ -120,7 +124,10 @@ it.effect('invalidates cached history entries before a development refresh', () 
 
       expect(resource._tag === 'Route' && resource.routeTree.id).toBe('reloaded');
       expect(requestedUrls).toEqual([initialEntry.url]);
-    }).pipe(Effect.provideService(HttpClient.HttpClient, makeHttpClient(requestedUrls))),
+    }).pipe(
+      Effect.provide(FlightClient.layer),
+      Effect.provideService(HttpClient.HttpClient, makeHttpClient(requestedUrls)),
+    ),
   );
 });
 
@@ -159,7 +166,10 @@ it.effect('fences an in-flight navigation cache write when a refresh invalidates
         expect(cached.routeTree.id).toBe('refreshed');
       }
       expect(requestedUrls).toEqual([initialEntry.url]);
-    }).pipe(Effect.provideService(HttpClient.HttpClient, makeHttpClient(requestedUrls))),
+    }).pipe(
+      Effect.provide(FlightClient.layer),
+      Effect.provideService(HttpClient.HttpClient, makeHttpClient(requestedUrls)),
+    ),
   );
 });
 
@@ -192,7 +202,10 @@ it.effect('attributes a refresh to the history entry where it started', () => {
 
       expect(firstCached._tag === 'Route' && firstCached.routeTree.id).toBe('refreshed');
       expect(requestedUrls).toEqual([]);
-    }).pipe(Effect.provideService(HttpClient.HttpClient, makeHttpClient(requestedUrls))),
+    }).pipe(
+      Effect.provide(FlightClient.layer),
+      Effect.provideService(HttpClient.HttpClient, makeHttpClient(requestedUrls)),
+    ),
   );
 });
 
@@ -245,6 +258,9 @@ it.effect('keys history cache entries by id and evicts them when the browser dis
 
       expect(reloaded._tag === 'Route' && reloaded.routeTree.id).toBe('second-reloaded');
       expect(requestedUrls).toEqual([secondEntry.url, secondEntry.url]);
-    }).pipe(Effect.provideService(HttpClient.HttpClient, makeHttpClient(requestedUrls))),
+    }).pipe(
+      Effect.provide(FlightClient.layer),
+      Effect.provideService(HttpClient.HttpClient, makeHttpClient(requestedUrls)),
+    ),
   );
 });

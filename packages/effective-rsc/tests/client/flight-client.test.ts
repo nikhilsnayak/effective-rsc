@@ -24,7 +24,13 @@ vi.doMock('react-server-dom-rspack/client.browser', () => ({
   createFromReadableStream: decodeFlight,
 }));
 
-const { FlightLoadError, loadFlight } = await import('../../src/client/flight-loader');
+const { FlightClient, FlightLoadError } = await import('../../src/client/flight-client');
+type FlightRequest = import('../../src/client/flight-client').FlightRequest;
+
+const loadFlight = Effect.fnUntraced(function* (request: FlightRequest) {
+  const client = yield* FlightClient.make;
+  return yield* client.load(request);
+});
 
 beforeEach(() => {
   decodeFlight.mockReset();
@@ -104,6 +110,9 @@ it.effect('keeps streamed chunks cancellable after the root payload resolves', (
       _tag: 'Navigation',
       destination: new URL('https://effective-rsc.test/schedule/day-two'),
     }).pipe(Effect.provideService(HttpClient.HttpClient, client));
+    if (response._tag === 'Document') {
+      return yield* Effect.die('Expected a Flight response.');
+    }
 
     yield* response.release;
     yield* Effect.promise(() => responseConsumptionStopped.promise);
@@ -134,6 +143,9 @@ it.effect('closes the response scope when the Flight stream reaches EOF', () =>
       _tag: 'Navigation',
       destination: new URL('https://effective-rsc.test/schedule/day-two'),
     }).pipe(Effect.provideService(HttpClient.HttpClient, client));
+    if (response._tag === 'Document') {
+      return yield* Effect.die('Expected a Flight response.');
+    }
 
     expect(response.payload).toBe(decodedPayload);
     expect(requestSignal?.aborted).toBe(true);

@@ -6,8 +6,10 @@ import { checkBrowserCapabilities } from './browser-capabilities';
 import { BrowserEffectRunner } from './browser-effect-runner';
 import { showBrowserFailure } from './browser-screen';
 import { FlightClient } from './flight-client';
-import { hydrate } from './hydrate';
+import { hydrateDocument } from './hydrate';
 import { NavigationApi } from './navigation-api';
+import { makeNavigationResources } from './navigation-resource';
+import { startNavigationRuntime } from './navigation-runtime';
 import { ReactDOMRenderer } from './react-dom-renderer';
 
 const ClientLayer = Layer.mergeAll(
@@ -25,8 +27,28 @@ const skipHydration = (missingApi: string) =>
       )
     : Effect.void;
 
-export const browserApplication = checkBrowserCapabilities.pipe(
-  Effect.andThen(hydrate),
+const startBrowser = Effect.gen(function* () {
+  yield* checkBrowserCapabilities;
+  const { browserRenderer, initialFlightCompleted, payload } = yield* hydrateDocument;
+  const navigationApi = yield* NavigationApi;
+  const navigationResources = yield* makeNavigationResources(
+    navigationApi.getCurrentEntry,
+    payload.routeTree,
+    initialFlightCompleted,
+  );
+  const navigationRuntime = yield* startNavigationRuntime(browserRenderer, navigationResources);
+
+  if (import.meta.webpackHot) {
+    yield* Effect.tryPromise(() => import('../dev/client')).pipe(
+      Effect.flatMap(({ startDevClient }) => startDevClient(navigationRuntime.refreshCurrentRoute)),
+      Effect.catch((cause) => Effect.logError('Development HMR failed.', cause)),
+      Effect.forkScoped,
+    );
+  }
+  return yield* Effect.never;
+});
+
+export const browserMain = Effect.scoped(startBrowser).pipe(
   Effect.provide(ClientLayer),
   Effect.catchTags({
     BrowserHydrationError: () => renderBrowserFailure,

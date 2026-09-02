@@ -29,3 +29,23 @@ test('reports browser exceptions and unhandled rejections', async ({ page }, tes
   await expect(panel.getByRole('heading', { name: 'Runtime failures' })).toBeVisible();
   await expect(panel).toContainText('Unhandled rejection');
 });
+
+test('reports browser failures when client navigation is unavailable', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'dev', 'The development panel is dev-only.');
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'navigation', { configurable: true, value: undefined });
+  });
+  await page.goto('/');
+
+  await page.evaluate(() => {
+    setTimeout(() => {
+      throw new TypeError('Browser exception without client navigation');
+    }, 0);
+  });
+
+  const panel = page.locator('ersc-dev-panel');
+  await expect(panel.getByRole('heading', { name: 'Runtime failures' })).toBeVisible();
+  await expect(panel).toContainText('Browser exception without client navigation');
+});

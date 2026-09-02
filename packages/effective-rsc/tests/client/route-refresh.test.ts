@@ -11,7 +11,7 @@ import { BrowserEffectRunner } from '../../src/client/browser-effect-runner';
 import type { BrowserRenderer } from '../../src/client/browser-renderer';
 import { NavigationApi } from '../../src/client/navigation-api';
 import type { NavigationResources } from '../../src/client/navigation-resource';
-import { makeBrowserRefresh } from '../../src/dev/browser-refresh';
+import { makeRouteRefresh } from '../../src/client/route-refresh';
 import type { RouteTreeModel } from '../../src/rsc/route-tree';
 
 const makeRouteTree = (id: string): RouteTreeModel => ({ child: null, content: null, id });
@@ -80,7 +80,7 @@ const withBrowserRefresh = <A, E>(
   Effect.scoped(
     Effect.gen(function* () {
       const run = yield* BrowserEffectRunner.make;
-      const { refreshCurrentRoute } = yield* makeBrowserRefresh(
+      const { refreshCurrentRoute } = yield* makeRouteRefresh(
         browserRenderer,
         navigationResources,
       ).pipe(

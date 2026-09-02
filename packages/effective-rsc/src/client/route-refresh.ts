@@ -1,11 +1,11 @@
 import { Effect, FiberMap, Schema } from 'effect';
 import { startTransition } from 'react';
 
-import { BrowserEffectRunner } from '../client/browser-effect-runner';
-import type { BrowserRenderer } from '../client/browser-renderer';
-import { NavigationApi } from '../client/navigation-api';
-import type { NavigationResources } from '../client/navigation-resource';
-import { isRoutedNavigation, preserveRequestedHash } from '../client/navigation-routing';
+import { BrowserEffectRunner } from './browser-effect-runner';
+import type { BrowserRenderer } from './browser-renderer';
+import { NavigationApi } from './navigation-api';
+import type { NavigationResources } from './navigation-resource';
+import { isRoutedNavigation, preserveRequestedHash } from './navigation-routing';
 
 const CurrentRouteRefreshKey = 'CurrentRouteRefresh';
 
@@ -37,7 +37,7 @@ const waitForRoutedNavigation = (navigationApi: NavigationApi['Service']) =>
     return Effect.sync(unsubscribe);
   });
 
-export const makeBrowserRefresh = Effect.fnUntraced(function* (
+export const makeRouteRefresh = Effect.fnUntraced(function* (
   browserRenderer: BrowserRenderer,
   navigationResources: NavigationResources,
 ) {

@@ -4,7 +4,7 @@ import { RpcClient, RpcSerialization } from 'effect/unstable/rpc';
 
 import type { BrowserRenderer } from '../client/browser-renderer';
 import type { NavigationResources } from '../client/navigation-resource';
-import { makeBrowserRefresh } from './browser-refresh';
+import { makeRouteRefresh } from '../client/route-refresh';
 import { DevChannelPath, DevRpcs, type DevUpdate } from './channel';
 import { decideHotUpdate, type HotUpdateCheck, type PendingDevUpdate } from './hmr-update';
 import { makeDevPanel } from './panel';
@@ -100,7 +100,7 @@ export const startDevClient = Effect.fnUntraced(function* (
   navigationResources: NavigationResources,
 ) {
   const panel = yield* makeDevPanel;
-  const { refreshCurrentRoute } = yield* makeBrowserRefresh(browserRenderer, navigationResources);
+  const { refreshCurrentRoute } = yield* makeRouteRefresh(browserRenderer, navigationResources);
   yield* reportBrowserFailures((failure) =>
     panel.dispatch({ _tag: 'RuntimeFailed', failure }),
   ).pipe(Effect.forkScoped);

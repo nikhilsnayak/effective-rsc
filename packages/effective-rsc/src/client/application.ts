@@ -6,10 +6,12 @@ import { BrowserNavigation } from './browser-navigation';
 import { showBrowserFailure } from './browser-screen';
 import { ClientRuntime } from './client-runtime';
 import { hydrate } from './hydrate';
+import { ReactDOMRenderer } from './react-dom-renderer';
 
-const ClientLayer = Layer.mergeAll(BrowserNavigation.layer, ClientRuntime.layer).pipe(
-  Layer.provide(BrowserHttpClient.layerFetch),
-);
+const ClientLayer = Layer.mergeAll(
+  BrowserNavigation.layer,
+  ReactDOMRenderer.layer.pipe(Layer.provideMerge(ClientRuntime.layer)),
+).pipe(Layer.provide(BrowserHttpClient.layerFetch));
 
 const renderBrowserFailure = Effect.sync(showBrowserFailure);
 
@@ -24,7 +26,7 @@ export const browserApplication = hydrate.pipe(
   Effect.provide(ClientLayer),
   Effect.catchTags({
     BrowserHydrationError: () => renderBrowserFailure,
-    BrowserRootHydrationError: () => renderBrowserFailure,
+    ReactDOMHydrationError: () => renderBrowserFailure,
     NavigationApiUnavailableError: () => skipHydration('the Navigation API'),
     NavigationPrecommitUnavailableError: () => skipHydration('NavigationPrecommitController'),
   }),

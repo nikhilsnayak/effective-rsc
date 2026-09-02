@@ -6,10 +6,10 @@ import { rscStream } from 'rsc-html-stream/client';
 import type { FlightPayload } from '../rsc/flight';
 import { BrowserNavigation } from './browser-navigation';
 import { BrowserRenderer } from './browser-renderer';
-import { hydrateBrowserRoot } from './browser-root';
 import { installCallServer } from './call-server';
 import { listenForNavigation } from './navigation-api';
 import { NavigationResources } from './navigation-resource';
+import { ReactDOMRenderer } from './react-dom-renderer';
 
 export class BrowserHydrationError extends Schema.TaggedError<BrowserHydrationError>()(
   'BrowserHydrationError',
@@ -33,7 +33,8 @@ export const hydrate = Effect.scoped(
         ),
       catch: (cause) => new BrowserHydrationError({ cause }),
     });
-    const browserRenderer = yield* hydrateBrowserRoot(document, payload);
+    const reactDOMRenderer = yield* ReactDOMRenderer;
+    const browserRenderer = yield* reactDOMRenderer.hydrate(document, payload);
     const { navigation } = yield* BrowserNavigation;
     const navigationResources = yield* NavigationResources.make(
       navigation,

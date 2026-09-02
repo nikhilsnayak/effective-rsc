@@ -8,9 +8,9 @@ vi.mock('react-server-dom-rspack/client.browser', () => ({
 }));
 
 import { BrowserNavigation } from '../../src/client/browser-navigation';
-import { BrowserRenderer } from '../../src/client/browser-renderer';
+import type { BrowserRenderer } from '../../src/client/browser-renderer';
 import { ClientRuntime } from '../../src/client/client-runtime';
-import { NavigationResources } from '../../src/client/navigation-resource';
+import type { NavigationResources } from '../../src/client/navigation-resource';
 import { makeBrowserRefresh } from '../../src/dev/browser-refresh';
 import type { RouteTreeModel } from '../../src/rsc/route-tree';
 
@@ -61,20 +61,21 @@ const testHttpClient = HttpClient.make(() => Effect.die('Unexpected HTTP request
 
 const withBrowserRefresh = <A, E>(
   navigation: TestNavigation,
-  browserRenderer: BrowserRenderer['Service'],
-  navigationResources: NavigationResources['Service'],
+  browserRenderer: BrowserRenderer,
+  navigationResources: NavigationResources,
   test: (refresh: Effect.Effect<void>) => Effect.Effect<A, E>,
 ) =>
   Effect.scoped(
     Effect.gen(function* () {
       const run = yield* ClientRuntime.make;
-      const refresh = yield* makeBrowserRefresh.pipe(
+      const { refreshCurrentRoute } = yield* makeBrowserRefresh(
+        browserRenderer,
+        navigationResources,
+      ).pipe(
         Effect.provideService(BrowserNavigation, makeBrowserNavigation(navigation)),
-        Effect.provideService(BrowserRenderer, browserRenderer),
         Effect.provideService(ClientRuntime, run),
-        Effect.provideService(NavigationResources, navigationResources),
       );
-      return yield* test(refresh);
+      return yield* test(refreshCurrentRoute);
     }).pipe(Effect.provideService(HttpClient.HttpClient, testHttpClient)),
   );
 
@@ -92,7 +93,7 @@ it.effect('waits for the active NavigationTransition before refreshing the curre
     const rendered = Promise.withResolvers<RouteTreeModel>();
     const invalidated = vi.fn();
     const cached = vi.fn();
-    const navigationResources: NavigationResources['Service'] = {
+    const navigationResources: NavigationResources = {
       invalidate: invalidated,
       load: () =>
         Deferred.succeed(loaded, undefined).pipe(
@@ -107,7 +108,7 @@ it.effect('waits for the active NavigationTransition before refreshing the curre
         ),
       prepareRefresh: () => cached,
     };
-    const browserRenderer: BrowserRenderer['Service'] = {
+    const browserRenderer: BrowserRenderer = {
       navigate: () => {
         throw new TypeError('Unexpected navigation render.');
       },
@@ -144,7 +145,7 @@ it.effect('interrupts a current-route refresh when a routed navigation begins', 
     const loadInterrupted = yield* Deferred.make<void>();
     const rootRefresh = vi.fn(() => Promise.resolve());
     const cached = vi.fn();
-    const navigationResources: NavigationResources['Service'] = {
+    const navigationResources: NavigationResources = {
       invalidate: vi.fn(),
       load: () =>
         Deferred.succeed(loadStarted, undefined).pipe(
@@ -153,7 +154,7 @@ it.effect('interrupts a current-route refresh when a routed navigation begins', 
         ),
       prepareRefresh: () => cached,
     };
-    const browserRenderer: BrowserRenderer['Service'] = {
+    const browserRenderer: BrowserRenderer = {
       navigate: () => {
         throw new TypeError('Unexpected navigation render.');
       },
@@ -181,7 +182,7 @@ it.effect('replaces an older refresh when a newer development update arrives', (
     const firstInterrupted = yield* Deferred.make<void>();
     const secondRendered = Promise.withResolvers<RouteTreeModel>();
     let loadCount = 0;
-    const navigationResources: NavigationResources['Service'] = {
+    const navigationResources: NavigationResources = {
       invalidate: vi.fn(),
       load: () => {
         loadCount += 1;
@@ -201,7 +202,7 @@ it.effect('replaces an older refresh when a newer development update arrives', (
       },
       prepareRefresh: () => () => undefined,
     };
-    const browserRenderer: BrowserRenderer['Service'] = {
+    const browserRenderer: BrowserRenderer = {
       navigate: () => {
         throw new TypeError('Unexpected navigation render.');
       },

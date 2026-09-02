@@ -7,22 +7,23 @@ import {
 } from 'react-server-dom-rspack/client.browser';
 
 import { BrowserNavigation } from './browser-navigation';
-import { BrowserRenderer } from './browser-renderer';
+import type { BrowserRenderer } from './browser-renderer';
 import { ClientRuntime } from './client-runtime';
 import { FlightClient } from './flight-client';
-import { NavigationResources } from './navigation-resource';
+import type { NavigationResources } from './navigation-resource';
 
 class ServerFnCallError extends Schema.TaggedError<ServerFnCallError>()('ServerFnCallError', {
   cause: Schema.Defect(),
   message: Schema.String,
 }) {}
 
-export const installCallServer = Effect.gen(function* () {
+export const installCallServer = Effect.fnUntraced(function* (
+  browserRenderer: BrowserRenderer,
+  navigationResources: NavigationResources,
+) {
   const { location } = yield* BrowserNavigation;
-  const browserRenderer = yield* BrowserRenderer;
   const run = yield* ClientRuntime;
   const flightClient = yield* FlightClient;
-  const navigationResources = yield* NavigationResources;
   const callServer = Effect.fnUntraced(function* (
     id: string,
     args: ReadonlyArray<unknown>,

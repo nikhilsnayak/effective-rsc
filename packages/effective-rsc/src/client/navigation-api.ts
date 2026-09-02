@@ -2,14 +2,14 @@ import { Effect } from 'effect';
 import { startTransition } from 'react';
 
 import { BrowserNavigation } from './browser-navigation';
-import { BrowserRenderer } from './browser-renderer';
+import type { BrowserRenderer } from './browser-renderer';
 import { ClientRuntime } from './client-runtime';
 import {
   BrowserNavigationCoordinator,
   type NavigationAttempt,
   type NavigationRollbackReason,
 } from './navigation-coordinator';
-import { NavigationResources } from './navigation-resource';
+import type { NavigationResources } from './navigation-resource';
 import {
   isHistoryRollback,
   isRoutedNavigation,
@@ -45,10 +45,11 @@ const startNavigationTransition = (work: () => Promise<void>) => {
   return finished.promise;
 };
 
-export const listenForNavigation = Effect.gen(function* () {
+export const listenForNavigation = Effect.fnUntraced(function* (
+  browserRenderer: BrowserRenderer,
+  navigationResources: NavigationResources,
+) {
   const browserNavigation = yield* BrowserNavigation;
-  const browserRenderer = yield* BrowserRenderer;
-  const navigationResources = yield* NavigationResources;
   const navigation = browserNavigation.navigation;
   const run = yield* ClientRuntime;
   const coordinator = new BrowserNavigationCoordinator(browserNavigation);

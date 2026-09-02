@@ -2,6 +2,8 @@ import * as BrowserSocket from '@effect/platform-browser/BrowserSocket';
 import { Effect, Layer, Ref, Semaphore, Stream } from 'effect';
 import { RpcClient, RpcSerialization } from 'effect/unstable/rpc';
 
+import type { BrowserRenderer } from '../client/browser-renderer';
+import type { NavigationResources } from '../client/navigation-resource';
 import { makeBrowserRefresh } from './browser-refresh';
 import { DevChannelPath, DevRpcs, type DevUpdate } from './channel';
 import { decideHotUpdate, type HotUpdateCheck, type PendingDevUpdate } from './hmr-update';
@@ -62,7 +64,10 @@ const settlePendingUpdate = Effect.fnUntraced(function* (pendingUpdate: Ref.Ref<
   return yield* reconcile.pipe(Effect.repeat({ while: (action) => action === 'Retry' }));
 });
 
-const runDevClient = Effect.fnUntraced(function* (panel: Effect.Success<typeof makeDevPanel>) {
+const runDevClient = Effect.fnUntraced(function* (
+  panel: Effect.Success<typeof makeDevPanel>,
+  refreshCurrentRoute: Effect.Effect<void>,
+) {
   const pendingUpdate = yield* Ref.make<PendingDevUpdate>({
     acknowledgedClientHash: import.meta.rspackHash,
     clientHash: import.meta.rspackHash,
@@ -70,7 +75,6 @@ const runDevClient = Effect.fnUntraced(function* (panel: Effect.Success<typeof m
   });
   const updateLock = yield* Semaphore.make(1);
   const client = yield* RpcClient.make(DevRpcs);
-  const refreshCurrentRoute = yield* makeBrowserRefresh;
   const handleUpdate = Effect.fnUntraced(function* (message: DevUpdate) {
     if (message._tag === 'BuildFailed') {
       yield* panel.dispatch(message);
@@ -91,8 +95,12 @@ const runDevClient = Effect.fnUntraced(function* (panel: Effect.Success<typeof m
   yield* client.ObserveDevUpdates().pipe(Stream.runForEach(handleUpdate));
 });
 
-export const startDevClient = Effect.gen(function* () {
+export const startDevClient = Effect.fnUntraced(function* (
+  browserRenderer: BrowserRenderer,
+  navigationResources: NavigationResources,
+) {
   const panel = yield* makeDevPanel;
+  const { refreshCurrentRoute } = yield* makeBrowserRefresh(browserRenderer, navigationResources);
   yield* reportBrowserFailures((failure) =>
     panel.dispatch({ _tag: 'RuntimeFailed', failure }),
   ).pipe(Effect.forkScoped);
@@ -104,5 +112,5 @@ export const startDevClient = Effect.gen(function* () {
     Layer.provide(RpcSerialization.layerJson),
   );
 
-  yield* runDevClient(panel).pipe(Effect.provide(ProtocolLayer));
+  yield* runDevClient(panel, refreshCurrentRoute).pipe(Effect.provide(ProtocolLayer));
 });

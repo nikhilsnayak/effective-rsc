@@ -53,7 +53,7 @@ export class ReactDOMRenderer extends Context.Service<
     readonly hydrate: (
       container: Element | Document,
       initialPayload: FlightPayload,
-    ) => Effect.Effect<BrowserRenderer['Service'], ReactDOMHydrationError, Scope.Scope>;
+    ) => Effect.Effect<BrowserRenderer, ReactDOMHydrationError, Scope.Scope>;
   }
 >()('ersc/client/ReactDOMRenderer') {
   static readonly make = Effect.gen(function* () {
@@ -63,7 +63,7 @@ export class ReactDOMRenderer extends Context.Service<
       container: Element | Document,
       initialPayload: FlightPayload,
     ) {
-      const browserRendererReady = Promise.withResolvers<BrowserRenderer['Service']>();
+      const browserRendererReady = Promise.withResolvers<BrowserRenderer>();
       const reportError = (error: unknown, info: ErrorInfo) => {
         void run(Effect.logError('Uncaught client render error.', error, info.componentStack));
       };

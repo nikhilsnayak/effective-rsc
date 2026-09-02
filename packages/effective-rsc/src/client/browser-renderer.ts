@@ -1,5 +1,3 @@
-import { Context } from 'effect';
-
 import type { RouteTreeModel } from '../rsc/route-tree';
 import { retainSharedLayoutContent } from './route-tree';
 
@@ -9,13 +7,10 @@ export type BrowserRendererNavigation = {
   readonly rollback: () => Promise<void>;
 };
 
-export class BrowserRenderer extends Context.Service<
-  BrowserRenderer,
-  {
-    readonly navigate: (routeTree: RouteTreeModel) => BrowserRendererNavigation;
-    readonly refresh: (routeTree: RouteTreeModel) => Promise<void>;
-  }
->()('ersc/client/browser-renderer/BrowserRenderer') {}
+export type BrowserRenderer = {
+  readonly navigate: (routeTree: RouteTreeModel) => BrowserRendererNavigation;
+  readonly refresh: (routeTree: RouteTreeModel) => Promise<void>;
+};
 
 type BrowserRenderNavigationState = {
   readonly committed: PromiseWithResolvers<void>;
@@ -94,7 +89,7 @@ export const makeBrowserRenderer = (
     visible: { _tag: 'Stable' },
   };
 
-  const browserRenderer = BrowserRenderer.of({
+  const browserRenderer: BrowserRenderer = {
     navigate: (routeTree) => {
       const navigation: BrowserRenderNavigationState = {
         committed: Promise.withResolvers<void>(),
@@ -157,7 +152,7 @@ export const makeBrowserRenderer = (
       publish({ _tag: 'Refresh', committed, routeTree });
       return committed.promise;
     },
-  });
+  };
 
   const commit = (render: BrowserRender) => {
     const visible: BrowserRenderOwner =

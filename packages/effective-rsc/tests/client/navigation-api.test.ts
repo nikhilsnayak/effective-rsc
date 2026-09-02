@@ -26,11 +26,11 @@ import {
   NavigationApiUnavailableError,
   NavigationPrecommitUnavailableError,
 } from '../../src/client/browser-navigation';
-import { BrowserRenderer } from '../../src/client/browser-renderer';
+import type { BrowserRenderer } from '../../src/client/browser-renderer';
 import { ClientRuntime } from '../../src/client/client-runtime';
 import { FlightClient } from '../../src/client/flight-client';
 import { listenForNavigation } from '../../src/client/navigation-api';
-import { NavigationResources } from '../../src/client/navigation-resource';
+import { makeNavigationResources } from '../../src/client/navigation-resource';
 import type { RouteTreeModel } from '../../src/rsc/route-tree';
 
 type TestNavigateEvent = Event &
@@ -205,7 +205,7 @@ const makeBrowserRenderer = (
       renders.push({ _tag: 'ServerFunction', routeTree });
       return Promise.resolve();
     },
-  }) satisfies BrowserRenderer['Service'];
+  }) satisfies BrowserRenderer;
 
 const makePrecommitController = (
   redirects: Array<{
@@ -227,7 +227,7 @@ const invokePrecommitHandler = (
 
 const listen = (
   navigation: TestNavigationApi,
-  browserRenderer: BrowserRenderer['Service'] = makeBrowserRenderer(),
+  browserRenderer: BrowserRenderer = makeBrowserRenderer(),
   httpClient = makeHttpClient(),
   documentReplacements: Array<string> = [],
 ) => {
@@ -241,16 +241,14 @@ const listen = (
   });
   return Effect.gen(function* () {
     const run = yield* ClientRuntime.make;
-    const navigationResources = yield* NavigationResources.make(
+    const navigationResources = yield* makeNavigationResources(
       navigation,
       initialRouteTree,
       Promise.resolve(),
     );
-    return yield* listenForNavigation.pipe(
+    return yield* listenForNavigation(browserRenderer, navigationResources).pipe(
       Effect.provide(BrowserNavigation.layer),
-      Effect.provideService(BrowserRenderer, browserRenderer),
       Effect.provideService(ClientRuntime, run),
-      Effect.provideService(NavigationResources, navigationResources),
     );
   }).pipe(
     Effect.provide(FlightClient.layer),
@@ -593,7 +591,7 @@ it.effect('cancels a streaming Flight response abandoned before React commits', 
           };
         },
         refresh: () => Promise.resolve(),
-      } satisfies BrowserRenderer['Service'];
+      } satisfies BrowserRenderer;
       const httpClient = HttpClient.make((request, _url, signal) =>
         Effect.sync(() => {
           responseSignal = signal;
@@ -692,7 +690,7 @@ it.effect('cancels a committed streaming Flight response before its handler comp
           },
         }),
         refresh: () => Promise.resolve(),
-      } satisfies BrowserRenderer['Service'];
+      } satisfies BrowserRenderer;
       yield* listen(navigation, browserRenderer, httpClient);
       const pendingNavigation = makeNavigationEvent({ signal: navigationAbort.signal });
 

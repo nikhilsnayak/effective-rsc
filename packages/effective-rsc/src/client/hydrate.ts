@@ -5,10 +5,9 @@ import { rscStream } from 'rsc-html-stream/client';
 
 import type { FlightPayload } from '../rsc/flight';
 import { BrowserNavigation } from './browser-navigation';
-import { BrowserRenderer } from './browser-renderer';
 import { installCallServer } from './call-server';
 import { listenForNavigation } from './navigation-api';
-import { NavigationResources } from './navigation-resource';
+import { makeNavigationResources } from './navigation-resource';
 import { ReactDOMRenderer } from './react-dom-renderer';
 
 export class BrowserHydrationError extends Schema.TaggedError<BrowserHydrationError>()(
@@ -36,27 +35,25 @@ export const hydrate = Effect.scoped(
     const reactDOMRenderer = yield* ReactDOMRenderer;
     const browserRenderer = yield* reactDOMRenderer.hydrate(document, payload);
     const { navigation } = yield* BrowserNavigation;
-    const navigationResources = yield* NavigationResources.make(
+    const navigationResources = yield* makeNavigationResources(
       navigation,
       payload.routeTree,
       initialFlightCompleted.promise,
     );
 
     return yield* Effect.gen(function* () {
-      yield* listenForNavigation;
-      yield* installCallServer;
+      yield* listenForNavigation(browserRenderer, navigationResources);
+      yield* installCallServer(browserRenderer, navigationResources);
       if (import.meta.webpackHot) {
         yield* Effect.tryPromise(() => import('../dev/client')).pipe(
-          Effect.flatMap(({ startDevClient }) => startDevClient),
+          Effect.flatMap(({ startDevClient }) =>
+            startDevClient(browserRenderer, navigationResources),
+          ),
           Effect.catch((cause) => Effect.logError('Development HMR failed.', cause)),
           Effect.forkScoped,
         );
       }
-
       return yield* Effect.never;
-    }).pipe(
-      Effect.provideService(BrowserRenderer, browserRenderer),
-      Effect.provideService(NavigationResources, navigationResources),
-    );
+    });
   }),
 );

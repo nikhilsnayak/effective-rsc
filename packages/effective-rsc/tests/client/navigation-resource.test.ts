@@ -18,7 +18,10 @@ vi.mock('react-server-dom-rspack/client.browser', () => ({
 }));
 
 import { FlightClient } from '../../src/client/flight-client';
-import { NavigationResources } from '../../src/client/navigation-resource';
+import {
+  makeNavigationResources,
+  type NavigationResources,
+} from '../../src/client/navigation-resource';
 
 const makeRouteTree = (id: string): RouteTreeModel => ({
   child: null,
@@ -54,7 +57,7 @@ const makeHttpClient = (requestedUrls: Array<string>) =>
   );
 
 const load = (
-  navigationResources: NavigationResources['Service'],
+  navigationResources: NavigationResources,
   entry: ReturnType<typeof makeNavigationEntry>,
   navigationType: NavigationType,
 ) => navigationResources.load({ destination: entry, navigationType });
@@ -71,7 +74,7 @@ it.effect('does not let initial Flight completion overwrite a refreshed cache ge
         'https://effective-rsc.test/schedule/day-one',
       );
       const navigationHistory = new TestNavigationHistory(initialEntry);
-      const navigationResources = yield* NavigationResources.make(
+      const navigationResources = yield* makeNavigationResources(
         navigationHistory,
         makeRouteTree('initial'),
         initialFlight.promise,
@@ -107,7 +110,7 @@ it.effect('invalidates cached history entries before a development refresh', () 
         'https://effective-rsc.test/schedule/day-one',
       );
       const navigationHistory = new TestNavigationHistory(initialEntry);
-      const navigationResources = yield* NavigationResources.make(
+      const navigationResources = yield* makeNavigationResources(
         navigationHistory,
         makeRouteTree('initial'),
         Promise.resolve(),
@@ -142,7 +145,7 @@ it.effect('fences an in-flight navigation cache write when a refresh invalidates
         'https://effective-rsc.test/schedule/day-one',
       );
       const navigationHistory = new TestNavigationHistory(initialEntry);
-      const navigationResources = yield* NavigationResources.make(
+      const navigationResources = yield* makeNavigationResources(
         navigationHistory,
         makeRouteTree('initial'),
         Promise.resolve(),
@@ -189,7 +192,7 @@ it.effect('attributes a refresh to the history entry where it started', () => {
         'https://effective-rsc.test/schedule/day-two',
       );
       const navigationHistory = new TestNavigationHistory(firstEntry);
-      const navigationResources = yield* NavigationResources.make(
+      const navigationResources = yield* makeNavigationResources(
         navigationHistory,
         makeRouteTree('initial'),
         Promise.resolve(),
@@ -225,7 +228,7 @@ it.effect('keys history cache entries by id and evicts them when the browser dis
         'https://effective-rsc.test/schedule/day-two',
       );
       const navigationHistory = new TestNavigationHistory(firstEntry);
-      const navigationResources = yield* NavigationResources.make(
+      const navigationResources = yield* makeNavigationResources(
         navigationHistory,
         makeRouteTree('first'),
         Promise.resolve(),

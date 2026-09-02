@@ -5,6 +5,7 @@ import {
   createFromReadableStream,
   type TemporaryReferenceSet,
 } from 'react-server-dom-rspack/client.browser';
+import { rscStream } from 'rsc-html-stream/client';
 
 import { FlightMediaType, ServerFnIdHeader, type FlightPayload } from '../rsc/flight';
 
@@ -26,10 +27,13 @@ export type FlightRequest =
       readonly temporaryReferences: TemporaryReferenceSet;
     };
 
-type FlightResource = {
-  readonly _tag: 'Flight';
+type DecodedFlight = {
   readonly completed: Effect.Effect<void, FlightLoadError>;
   readonly payload: FlightPayload;
+};
+
+type FlightResource = DecodedFlight & {
+  readonly _tag: 'Flight';
   readonly release: Effect.Effect<void>;
   readonly resolvedUrl: URL;
 };
@@ -42,6 +46,7 @@ type DocumentResource = {
 export class FlightClient extends Context.Service<
   FlightClient,
   {
+    readonly loadInitial: Effect.Effect<DecodedFlight, FlightLoadError>;
     readonly load: (
       request: FlightRequest,
     ) => Effect.Effect<FlightResource | DocumentResource, FlightLoadError, Scope.Scope>;
@@ -49,6 +54,29 @@ export class FlightClient extends Context.Service<
 >()('ersc/client/FlightClient') {
   static readonly make = Effect.gen(function* () {
     const httpClient = yield* HttpClient.HttpClient;
+
+    const loadInitial = Effect.gen(function* () {
+      const completed = Promise.withResolvers<void>();
+      const stream = rscStream.pipeThrough(
+        new TransformStream({
+          flush: () => completed.resolve(),
+          transform: (chunk, controller) => controller.enqueue(chunk),
+        }),
+      );
+      const payload = yield* Effect.tryPromise({
+        try: () =>
+          createFromReadableStream<FlightPayload>(
+            stream,
+            process.env.NODE_ENV === 'development' ? { startTime: 0 } : undefined,
+          ),
+        catch: (cause) => new FlightLoadError({ cause, reason: 'DecodeFailed' }),
+      });
+
+      return {
+        completed: Effect.promise(() => completed.promise),
+        payload,
+      } satisfies DecodedFlight;
+    });
 
     const load = Effect.fnUntraced(function* (flightRequest: FlightRequest) {
       const parentScope = yield* Effect.scope;
@@ -174,8 +202,10 @@ export class FlightClient extends Context.Service<
       }).pipe(Effect.onError(() => release));
     });
 
-    return FlightClient.of({ load });
+    return FlightClient.of({ load, loadInitial });
   });
 
   static readonly layer = Layer.effect(this, this.make);
+
+  static readonly layerTest = Layer.mock(this);
 }

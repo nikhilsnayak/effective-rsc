@@ -19,7 +19,7 @@ Bun server scope
 | HTTP and Server Function Effect | Request fiber                   | Response completion, disconnect, or interruption |
 | Authored render Effects         | Request render-runtime FiberSet | Flight completion or request interruption        |
 | Browser Flight decode           | Navigation handler              | Flight EOF, cancellation, or supersession        |
-| Retained navigation entry       | Browser navigation resources    | Replacement or disposal                          |
+| Retained navigation entry       | Browser route loader            | Replacement or disposal                          |
 
 Effect interruption and Web Stream cancellation propagate across these boundaries. Work is not
 detached unless another explicit owner retains it.
@@ -69,4 +69,4 @@ again for the route refresh, even if it appears at a different position in the r
 - [`server/application.ts`](../../packages/effective-rsc/src/server/application.ts)
 - [`server/html-renderer.tsx`](../../packages/effective-rsc/src/server/html-renderer.tsx)
 - [`server/flight-renderer.tsx`](../../packages/effective-rsc/src/server/flight-renderer.tsx)
-- [`client/navigation-resource.ts`](../../packages/effective-rsc/src/client/navigation-resource.ts)
+- [`client/route-loader.ts`](../../packages/effective-rsc/src/client/route-loader.ts)

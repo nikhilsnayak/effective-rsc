@@ -10,20 +10,18 @@ import { BrowserEffectRunner } from './browser-effect-runner';
 import type { BrowserRenderer } from './browser-renderer';
 import { FlightClient } from './flight-client';
 import { NavigationApi } from './navigation-api';
-import type { NavigationResources } from './navigation-resource';
+import { RouteLoader } from './route-loader';
 
 class ServerFnCallError extends Schema.TaggedError<ServerFnCallError>()('ServerFnCallError', {
   cause: Schema.Defect(),
   message: Schema.String,
 }) {}
 
-export const installCallServer = Effect.fnUntraced(function* (
-  browserRenderer: BrowserRenderer,
-  navigationResources: NavigationResources,
-) {
+export const installCallServer = Effect.fnUntraced(function* (browserRenderer: BrowserRenderer) {
   const navigationApi = yield* NavigationApi;
   const run = yield* BrowserEffectRunner;
   const flightClient = yield* FlightClient;
+  const routeLoader = yield* RouteLoader;
   const callServer = Effect.fnUntraced(function* (
     id: string,
     args: ReadonlyArray<unknown>,
@@ -81,7 +79,7 @@ export const installCallServer = Effect.fnUntraced(function* (
         () => undefined,
       ),
     );
-    const commitRefresh = navigationResources.prepareRefresh(resource.payload.routeTree);
+    const commitRefresh = routeLoader.prepareRefresh(resource.payload.routeTree);
     const committed = Promise.withResolvers<void>();
     startTransition(() => {
       // Keep the commit Promise outside React's Transition Action. Returning it would make React

@@ -4,8 +4,8 @@ import { startTransition } from 'react';
 import { BrowserEffectRunner } from './browser-effect-runner';
 import type { BrowserRenderer } from './browser-renderer';
 import { NavigationApi } from './navigation-api';
-import type { NavigationResources } from './navigation-resource';
 import { isRoutedNavigation, preserveRequestedHash } from './navigation-routing';
+import { RouteLoader } from './route-loader';
 
 const CurrentRouteRefreshKey = 'CurrentRouteRefresh';
 
@@ -62,17 +62,17 @@ const waitForRoutedNavigation = (navigationApi: NavigationApi['Service']) =>
 
 export const makeNavigationRouteRefresh = Effect.fnUntraced(function* (
   browserRenderer: BrowserRenderer,
-  navigationResources: NavigationResources,
 ) {
-  const { navigationApi, refreshes, run } = yield* Effect.all({
+  const { navigationApi, refreshes, routeLoader, run } = yield* Effect.all({
     navigationApi: NavigationApi,
     refreshes: FiberMap.make<typeof CurrentRouteRefreshKey>(),
     run: BrowserEffectRunner,
+    routeLoader: RouteLoader,
   });
   const refreshRoute = Effect.gen(function* () {
     const currentEntry = navigationApi.getCurrentEntry();
     const destination = new URL(currentEntry?.url ?? navigationApi.getCurrentUrl());
-    const resource = yield* navigationResources.load({
+    const resource = yield* routeLoader.load({
       destination: {
         id: currentEntry?.id ?? '',
         url: destination.href,
@@ -93,7 +93,7 @@ export const makeNavigationRouteRefresh = Effect.fnUntraced(function* (
       return;
     }
 
-    const commitRefresh = navigationResources.prepareRefresh(resource.routeTree);
+    const commitRefresh = routeLoader.prepareRefresh(resource.routeTree);
     yield* Effect.all(
       [Effect.promise(() => browserRenderer.refresh(resource.routeTree)), resource.completed],
       { concurrency: 'unbounded', discard: true },
@@ -110,7 +110,7 @@ export const makeNavigationRouteRefresh = Effect.fnUntraced(function* (
   });
 
   const refreshCurrentRoute = Effect.gen(function* () {
-    navigationResources.invalidate();
+    routeLoader.invalidate();
     yield* waitForNavigationIdle(navigationApi);
     yield* Effect.raceFirst(refreshInReactTransition, waitForRoutedNavigation(navigationApi));
   }).pipe(Effect.catch((cause) => Effect.logError('Failed to refresh the current route.', cause)));

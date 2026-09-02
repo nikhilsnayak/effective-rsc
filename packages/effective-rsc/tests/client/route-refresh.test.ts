@@ -10,7 +10,7 @@ vi.mock('react-server-dom-rspack/client.browser', () => ({
 import { BrowserEffectRunner } from '../../src/client/browser-effect-runner';
 import type { BrowserRenderer } from '../../src/client/browser-renderer';
 import { NavigationApi } from '../../src/client/navigation-api';
-import type { NavigationResources } from '../../src/client/navigation-resource';
+import { RouteLoader } from '../../src/client/route-loader';
 import { makeNavigationRouteRefresh, RouteRefresher } from '../../src/client/route-refresh';
 import type { RouteTreeModel } from '../../src/rsc/route-tree';
 
@@ -91,18 +91,16 @@ it.effect('reloads the document until navigation installs streamed route refresh
 const withBrowserRefresh = <A, E>(
   navigation: TestNavigation,
   browserRenderer: BrowserRenderer,
-  navigationResources: NavigationResources,
+  routeLoader: RouteLoader['Service'],
   test: (refresh: Effect.Effect<void>) => Effect.Effect<A, E>,
 ) =>
   Effect.scoped(
     Effect.gen(function* () {
       const run = yield* BrowserEffectRunner.make;
-      const refreshCurrentRoute = yield* makeNavigationRouteRefresh(
-        browserRenderer,
-        navigationResources,
-      ).pipe(
+      const refreshCurrentRoute = yield* makeNavigationRouteRefresh(browserRenderer).pipe(
         Effect.provide(makeNavigationApiLayer(navigation)),
         Effect.provideService(BrowserEffectRunner, run),
+        Effect.provideService(RouteLoader, routeLoader),
       );
       return yield* test(refreshCurrentRoute);
     }).pipe(Effect.provideService(HttpClient.HttpClient, testHttpClient)),
@@ -122,7 +120,7 @@ it.effect('waits for the active NavigationTransition before refreshing the curre
     const rendered = Promise.withResolvers<RouteTreeModel>();
     const invalidated = vi.fn();
     const cached = vi.fn();
-    const navigationResources: NavigationResources = {
+    const routeLoader = RouteLoader.of({
       invalidate: invalidated,
       load: () =>
         Deferred.succeed(loaded, undefined).pipe(
@@ -135,8 +133,9 @@ it.effect('waits for the active NavigationTransition before refreshing the curre
             routeTree: makeRouteTree('refreshed'),
           }),
         ),
+      loadInitial: Effect.die('Unexpected initial route load.'),
       prepareRefresh: () => cached,
-    };
+    });
     const browserRenderer: BrowserRenderer = {
       navigate: () => {
         throw new TypeError('Unexpected navigation render.');
@@ -147,7 +146,7 @@ it.effect('waits for the active NavigationTransition before refreshing the curre
       },
     };
 
-    yield* withBrowserRefresh(navigation, browserRenderer, navigationResources, (refresh) =>
+    yield* withBrowserRefresh(navigation, browserRenderer, routeLoader, (refresh) =>
       Effect.gen(function* () {
         yield* refresh;
         yield* Effect.yieldNow;
@@ -174,15 +173,16 @@ it.effect('interrupts a current-route refresh when a routed navigation begins', 
     const loadInterrupted = yield* Deferred.make<void>();
     const rootRefresh = vi.fn(() => Promise.resolve());
     const cached = vi.fn();
-    const navigationResources: NavigationResources = {
+    const routeLoader = RouteLoader.of({
       invalidate: vi.fn(),
       load: () =>
         Deferred.succeed(loadStarted, undefined).pipe(
           Effect.andThen(Effect.never),
           Effect.onInterrupt(() => Deferred.succeed(loadInterrupted, undefined)),
         ),
+      loadInitial: Effect.die('Unexpected initial route load.'),
       prepareRefresh: () => cached,
-    };
+    });
     const browserRenderer: BrowserRenderer = {
       navigate: () => {
         throw new TypeError('Unexpected navigation render.');
@@ -190,7 +190,7 @@ it.effect('interrupts a current-route refresh when a routed navigation begins', 
       refresh: rootRefresh,
     };
 
-    yield* withBrowserRefresh(navigation, browserRenderer, navigationResources, (refresh) =>
+    yield* withBrowserRefresh(navigation, browserRenderer, routeLoader, (refresh) =>
       Effect.gen(function* () {
         yield* refresh;
         yield* Deferred.await(loadStarted);
@@ -211,7 +211,7 @@ it.effect('replaces an older refresh when a newer development update arrives', (
     const firstInterrupted = yield* Deferred.make<void>();
     const secondRendered = Promise.withResolvers<RouteTreeModel>();
     let loadCount = 0;
-    const navigationResources: NavigationResources = {
+    const routeLoader = RouteLoader.of({
       invalidate: vi.fn(),
       load: () => {
         loadCount += 1;
@@ -229,8 +229,9 @@ it.effect('replaces an older refresh when a newer development update arrives', (
               routeTree: makeRouteTree('second-refresh'),
             });
       },
+      loadInitial: Effect.die('Unexpected initial route load.'),
       prepareRefresh: () => () => undefined,
-    };
+    });
     const browserRenderer: BrowserRenderer = {
       navigate: () => {
         throw new TypeError('Unexpected navigation render.');
@@ -241,7 +242,7 @@ it.effect('replaces an older refresh when a newer development update arrives', (
       },
     };
 
-    yield* withBrowserRefresh(navigation, browserRenderer, navigationResources, (refresh) =>
+    yield* withBrowserRefresh(navigation, browserRenderer, routeLoader, (refresh) =>
       Effect.gen(function* () {
         yield* refresh;
         yield* Deferred.await(firstStarted);

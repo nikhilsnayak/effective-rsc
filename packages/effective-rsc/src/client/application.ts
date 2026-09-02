@@ -6,18 +6,21 @@ import { checkBrowserCapabilities } from './browser-capabilities';
 import { BrowserEffectRunner } from './browser-effect-runner';
 import { showBrowserFailure } from './browser-screen';
 import { FlightClient } from './flight-client';
-import { hydrateDocument } from './hydrate';
 import { NavigationApi } from './navigation-api';
-import { makeNavigationResources } from './navigation-resource';
 import { startNavigationRuntime } from './navigation-runtime';
 import { ReactDOMRenderer } from './react-dom-renderer';
+import { RouteLoader } from './route-loader';
 import { RouteRefresher } from './route-refresh';
 
 const BrowserLayer = Layer.mergeAll(
-  FlightClient.layer,
   ReactDOMRenderer.layer.pipe(Layer.provideMerge(BrowserEffectRunner.layer)),
+  RouteLoader.layer,
   RouteRefresher.layer,
-).pipe(Layer.provideMerge(NavigationApi.layer), Layer.provide(BrowserHttpClient.layerFetch));
+).pipe(
+  Layer.provideMerge(FlightClient.layer),
+  Layer.provideMerge(NavigationApi.layer),
+  Layer.provide(BrowserHttpClient.layerFetch),
+);
 
 const renderBrowserFailure = Effect.sync(showBrowserFailure);
 
@@ -30,14 +33,11 @@ const skipHydration = (missingApi: string) =>
 
 const activateClientNavigation = Effect.gen(function* () {
   yield* checkBrowserCapabilities;
-  const { browserRenderer, initialFlightCompleted, payload } = yield* hydrateDocument;
-  const navigationApi = yield* NavigationApi;
-  const navigationResources = yield* makeNavigationResources(
-    navigationApi.getCurrentEntry,
-    payload.routeTree,
-    initialFlightCompleted,
-  );
-  yield* startNavigationRuntime(browserRenderer, navigationResources);
+  const routeLoader = yield* RouteLoader;
+  const initialPayload = yield* routeLoader.loadInitial;
+  const reactDOMRenderer = yield* ReactDOMRenderer;
+  const browserRenderer = yield* reactDOMRenderer.hydrate(document, initialPayload);
+  yield* startNavigationRuntime(browserRenderer);
 });
 
 export const browserMain = Effect.scoped(
@@ -52,7 +52,7 @@ export const browserMain = Effect.scoped(
 
     yield* activateClientNavigation.pipe(
       Effect.catchTags({
-        BrowserHydrationError: () => renderBrowserFailure,
+        FlightLoadError: () => renderBrowserFailure,
         ReactDOMHydrationError: () => renderBrowserFailure,
         NavigationApiUnavailableError: () => skipHydration('the Navigation API'),
         NavigationPrecommitUnavailableError: () => skipHydration('NavigationPrecommitController'),

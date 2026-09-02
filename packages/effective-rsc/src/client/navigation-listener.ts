@@ -9,13 +9,13 @@ import {
   type NavigationAttempt,
   type NavigationRollbackReason,
 } from './navigation-coordinator';
-import type { NavigationResources } from './navigation-resource';
 import {
   isHistoryRollback,
   isRoutedNavigation,
   NativeDocumentNavigationInfo,
   preserveRequestedHash,
 } from './navigation-routing';
+import { RouteLoader } from './route-loader';
 
 // oxlint-disable-next-line effecttsgo/async-function -- Navigation handlers are native Promise boundaries.
 const settleOnNavigationAbort = async (work: Promise<void>, signal: AbortSignal) => {
@@ -45,11 +45,9 @@ const startNavigationTransition = (work: () => Promise<void>) => {
   return finished.promise;
 };
 
-export const listenForNavigation = Effect.fnUntraced(function* (
-  browserRenderer: BrowserRenderer,
-  navigationResources: NavigationResources,
-) {
+export const listenForNavigation = Effect.fnUntraced(function* (browserRenderer: BrowserRenderer) {
   const navigationApi = yield* NavigationApi;
+  const routeLoader = yield* RouteLoader;
   const run = yield* BrowserEffectRunner;
   const coordinator = new BrowserNavigationCoordinator(navigationApi);
 
@@ -72,7 +70,7 @@ export const listenForNavigation = Effect.fnUntraced(function* (
     precommitController?: NavigationPrecommitController,
   ) => {
     const resource = await run(
-      navigationResources.load({
+      routeLoader.load({
         destination: event.destination,
         navigationType: event.navigationType,
       }),

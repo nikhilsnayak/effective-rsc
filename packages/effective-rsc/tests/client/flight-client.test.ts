@@ -24,6 +24,15 @@ vi.doMock('react-server-dom-rspack/client.browser', () => ({
   createFromReadableStream: decodeFlight,
 }));
 
+let initialFlightController: ReadableStreamDefaultController<Uint8Array> | undefined;
+vi.doMock('rsc-html-stream/client', () => ({
+  rscStream: new ReadableStream<Uint8Array>({
+    start(controller) {
+      initialFlightController = controller;
+    },
+  }),
+}));
+
 const { FlightClient, FlightLoadError } = await import('../../src/client/flight-client');
 type FlightRequest = import('../../src/client/flight-client').FlightRequest;
 
@@ -58,6 +67,39 @@ const makePendingFlightResponse = (signal: AbortSignal) =>
       },
     },
   );
+
+it.effect('loads the embedded initial Flight without waiting for stream completion', () =>
+  Effect.gen(function* () {
+    decodeFlight.mockImplementationOnce((stream) => {
+      const reader = stream.getReader();
+      return reader.read().then(() => {
+        void reader.read();
+        return decodedPayload;
+      });
+    });
+    const client = yield* FlightClient.make.pipe(
+      Effect.provideService(
+        HttpClient.HttpClient,
+        HttpClient.make(() => Effect.die('Unexpected HTTP request.')),
+      ),
+    );
+    const loading = yield* client.loadInitial.pipe(Effect.forkChild);
+    if (initialFlightController === undefined) {
+      return yield* Effect.die('Expected the embedded Flight stream.');
+    }
+    initialFlightController.enqueue(new Uint8Array([1]));
+
+    const resource = yield* Fiber.join(loading);
+    const completion = yield* resource.completed.pipe(Effect.forkChild);
+    yield* Effect.yieldNow;
+
+    expect(resource.payload).toBe(decodedPayload);
+    expect(completion.pollUnsafe()).toBeUndefined();
+
+    initialFlightController.close();
+    yield* Fiber.join(completion);
+  }),
+);
 
 it.effect('requests and decodes a whole-tree Flight response', () =>
   Effect.gen(function* () {

@@ -18,10 +18,8 @@ vi.mock('react-server-dom-rspack/client.browser', () => ({
 }));
 
 import { FlightClient } from '../../src/client/flight-client';
-import {
-  makeNavigationResources,
-  type NavigationResources,
-} from '../../src/client/navigation-resource';
+import { NavigationApi } from '../../src/client/navigation-api';
+import { RouteLoader } from '../../src/client/route-loader';
 
 const makeRouteTree = (id: string): RouteTreeModel => ({
   child: null,
@@ -30,7 +28,15 @@ const makeRouteTree = (id: string): RouteTreeModel => ({
 });
 
 const makeNavigationEntry = (id: string, key: string, url: string) =>
-  Object.assign(new EventTarget(), { id, index: 0, key, url });
+  Object.assign(new EventTarget(), {
+    getState: () => undefined,
+    id,
+    index: 0,
+    key,
+    ondispose: null,
+    sameDocument: true,
+    url,
+  }) satisfies NavigationHistoryEntry;
 
 class TestNavigationHistory {
   currentEntry: ReturnType<typeof makeNavigationEntry>;
@@ -56,11 +62,54 @@ const makeHttpClient = (requestedUrls: Array<string>) =>
     }),
   );
 
+const makeNavigationApi = (navigationHistory: TestNavigationHistory) =>
+  NavigationApi.of({
+    getCurrentEntry: () => navigationHistory.currentEntry,
+    getCurrentUrl: () => navigationHistory.currentEntry.url,
+    getTransition: () => null,
+    navigate: () => {
+      throw new TypeError('Unexpected navigation.');
+    },
+    reloadDocument: () => undefined,
+    replaceDocument: () => undefined,
+    subscribe: () => () => undefined,
+    traverseTo: () => {
+      throw new TypeError('Unexpected history traversal.');
+    },
+  });
+
+const makeRouteLoader = Effect.fnUntraced(function* (
+  navigationHistory: TestNavigationHistory,
+  initialRouteTree: RouteTreeModel,
+  initialFlightCompleted: Effect.Effect<void> = Effect.void,
+) {
+  const flightClient = yield* FlightClient;
+  const routeLoader = yield* RouteLoader.make.pipe(
+    Effect.provideService(
+      FlightClient,
+      FlightClient.of({
+        ...flightClient,
+        loadInitial: Effect.succeed({
+          completed: initialFlightCompleted,
+          payload: {
+            formState: null,
+            routeTree: initialRouteTree,
+            serverFnResult: null,
+          },
+        }),
+      }),
+    ),
+    Effect.provideService(NavigationApi, makeNavigationApi(navigationHistory)),
+  );
+  yield* routeLoader.loadInitial;
+  return routeLoader;
+});
+
 const load = (
-  navigationResources: NavigationResources,
+  routeLoader: RouteLoader['Service'],
   entry: ReturnType<typeof makeNavigationEntry>,
   navigationType: NavigationType,
-) => navigationResources.load({ destination: entry, navigationType });
+) => routeLoader.load({ destination: entry, navigationType });
 
 it.effect('does not let initial Flight completion overwrite a refreshed cache generation', () => {
   decodedFlights.length = 0;
@@ -74,18 +123,18 @@ it.effect('does not let initial Flight completion overwrite a refreshed cache ge
         'https://effective-rsc.test/schedule/day-one',
       );
       const navigationHistory = new TestNavigationHistory(initialEntry);
-      const navigationResources = yield* makeNavigationResources(
-        () => navigationHistory.currentEntry,
+      const routeLoader = yield* makeRouteLoader(
+        navigationHistory,
         makeRouteTree('initial'),
-        initialFlight.promise,
+        Effect.promise(() => initialFlight.promise),
       );
 
-      navigationResources.prepareRefresh(makeRouteTree('refreshed'))();
+      routeLoader.prepareRefresh(makeRouteTree('refreshed'))();
       initialFlight.resolve();
       yield* Effect.promise(() => Promise.resolve());
       yield* Effect.yieldNow;
 
-      const resource = yield* load(navigationResources, initialEntry, 'traverse');
+      const resource = yield* load(routeLoader, initialEntry, 'traverse');
 
       expect(resource._tag).toBe('Route');
       if (resource._tag === 'Route') {
@@ -110,20 +159,16 @@ it.effect('invalidates cached history entries before a development refresh', () 
         'https://effective-rsc.test/schedule/day-one',
       );
       const navigationHistory = new TestNavigationHistory(initialEntry);
-      const navigationResources = yield* makeNavigationResources(
-        () => navigationHistory.currentEntry,
-        makeRouteTree('initial'),
-        Promise.resolve(),
-      );
+      const routeLoader = yield* makeRouteLoader(navigationHistory, makeRouteTree('initial'));
       yield* Effect.yieldNow;
-      navigationResources.invalidate();
+      routeLoader.invalidate();
       decodedFlights.push({
         formState: null,
         routeTree: makeRouteTree('reloaded'),
         serverFnResult: null,
       });
 
-      const resource = yield* load(navigationResources, initialEntry, 'traverse');
+      const resource = yield* load(routeLoader, initialEntry, 'traverse');
 
       expect(resource._tag === 'Route' && resource.routeTree.id).toBe('reloaded');
       expect(requestedUrls).toEqual([initialEntry.url]);
@@ -145,24 +190,20 @@ it.effect('fences an in-flight navigation cache write when a refresh invalidates
         'https://effective-rsc.test/schedule/day-one',
       );
       const navigationHistory = new TestNavigationHistory(initialEntry);
-      const navigationResources = yield* makeNavigationResources(
-        () => navigationHistory.currentEntry,
-        makeRouteTree('initial'),
-        Promise.resolve(),
-      );
+      const routeLoader = yield* makeRouteLoader(navigationHistory, makeRouteTree('initial'));
       decodedFlights.push({
         formState: null,
         routeTree: makeRouteTree('navigation'),
         serverFnResult: null,
       });
 
-      const navigationResource = yield* load(navigationResources, initialEntry, 'push');
-      navigationResources.prepareRefresh(makeRouteTree('refreshed'))();
-      if (navigationResource._tag === 'Route') {
-        navigationResource.cacheCurrent();
+      const routeLoad = yield* load(routeLoader, initialEntry, 'push');
+      routeLoader.prepareRefresh(makeRouteTree('refreshed'))();
+      if (routeLoad._tag === 'Route') {
+        routeLoad.cacheCurrent();
       }
 
-      const cached = yield* load(navigationResources, initialEntry, 'traverse');
+      const cached = yield* load(routeLoader, initialEntry, 'traverse');
 
       expect(cached._tag).toBe('Route');
       if (cached._tag === 'Route') {
@@ -192,16 +233,12 @@ it.effect('attributes a refresh to the history entry where it started', () => {
         'https://effective-rsc.test/schedule/day-two',
       );
       const navigationHistory = new TestNavigationHistory(firstEntry);
-      const navigationResources = yield* makeNavigationResources(
-        () => navigationHistory.currentEntry,
-        makeRouteTree('initial'),
-        Promise.resolve(),
-      );
+      const routeLoader = yield* makeRouteLoader(navigationHistory, makeRouteTree('initial'));
 
-      const commitRefresh = navigationResources.prepareRefresh(makeRouteTree('refreshed'));
+      const commitRefresh = routeLoader.prepareRefresh(makeRouteTree('refreshed'));
       navigationHistory.currentEntry = secondEntry;
       commitRefresh();
-      const firstCached = yield* load(navigationResources, firstEntry, 'traverse');
+      const firstCached = yield* load(routeLoader, firstEntry, 'traverse');
 
       expect(firstCached._tag === 'Route' && firstCached.routeTree.id).toBe('refreshed');
       expect(requestedUrls).toEqual([]);
@@ -228,11 +265,7 @@ it.effect('keys history cache entries by id and evicts them when the browser dis
         'https://effective-rsc.test/schedule/day-two',
       );
       const navigationHistory = new TestNavigationHistory(firstEntry);
-      const navigationResources = yield* makeNavigationResources(
-        () => navigationHistory.currentEntry,
-        makeRouteTree('first'),
-        Promise.resolve(),
-      );
+      const routeLoader = yield* makeRouteLoader(navigationHistory, makeRouteTree('first'));
       yield* Effect.yieldNow;
       decodedFlights.push({
         formState: null,
@@ -240,14 +273,14 @@ it.effect('keys history cache entries by id and evicts them when the browser dis
         serverFnResult: null,
       });
 
-      const secondResource = yield* load(navigationResources, secondEntry, 'push');
+      const secondResource = yield* load(routeLoader, secondEntry, 'push');
       navigationHistory.currentEntry = secondEntry;
       if (secondResource._tag === 'Route') {
         secondResource.cacheCurrent();
       }
 
-      const firstCached = yield* load(navigationResources, firstEntry, 'traverse');
-      const secondCached = yield* load(navigationResources, secondEntry, 'traverse');
+      const firstCached = yield* load(routeLoader, firstEntry, 'traverse');
+      const secondCached = yield* load(routeLoader, secondEntry, 'traverse');
       expect(firstCached._tag === 'Route' && firstCached.routeTree.id).toBe('first');
       expect(secondCached._tag === 'Route' && secondCached.routeTree.id).toBe('second');
 
@@ -257,7 +290,7 @@ it.effect('keys history cache entries by id and evicts them when the browser dis
         routeTree: makeRouteTree('second-reloaded'),
         serverFnResult: null,
       });
-      const reloaded = yield* load(navigationResources, secondEntry, 'traverse');
+      const reloaded = yield* load(routeLoader, secondEntry, 'traverse');
 
       expect(reloaded._tag === 'Route' && reloaded.routeTree.id).toBe('second-reloaded');
       expect(requestedUrls).toEqual([secondEntry.url, secondEntry.url]);

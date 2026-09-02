@@ -26,7 +26,7 @@ import type { BrowserRenderer } from '../../src/client/browser-renderer';
 import { FlightClient } from '../../src/client/flight-client';
 import { NavigationApi } from '../../src/client/navigation-api';
 import { listenForNavigation } from '../../src/client/navigation-listener';
-import { makeNavigationResources } from '../../src/client/navigation-resource';
+import { RouteLoader } from '../../src/client/route-loader';
 import type { RouteTreeModel } from '../../src/rsc/route-tree';
 
 type TestNavigateEvent = Event &
@@ -237,19 +237,32 @@ const listen = (
   });
   return Effect.gen(function* () {
     const run = yield* BrowserEffectRunner.make;
-    const navigationResources = yield* makeNavigationResources(
-      () => navigation.currentEntry,
-      initialRouteTree,
-      Promise.resolve(),
+    const navigationApi = yield* NavigationApi.make;
+    const flightClient = yield* FlightClient.make;
+    const routeLoader = yield* RouteLoader.make.pipe(
+      Effect.provideService(
+        FlightClient,
+        FlightClient.of({
+          ...flightClient,
+          loadInitial: Effect.succeed({
+            completed: Effect.void,
+            payload: {
+              formState: null,
+              routeTree: initialRouteTree,
+              serverFnResult: null,
+            },
+          }),
+        }),
+      ),
+      Effect.provideService(NavigationApi, navigationApi),
     );
-    return yield* listenForNavigation(browserRenderer, navigationResources).pipe(
-      Effect.provide(NavigationApi.layer),
+    yield* routeLoader.loadInitial;
+    return yield* listenForNavigation(browserRenderer).pipe(
       Effect.provideService(BrowserEffectRunner, run),
+      Effect.provideService(NavigationApi, navigationApi),
+      Effect.provideService(RouteLoader, routeLoader),
     );
-  }).pipe(
-    Effect.provide(FlightClient.layer),
-    Effect.provideService(HttpClient.HttpClient, httpClient),
-  );
+  }).pipe(Effect.provideService(HttpClient.HttpClient, httpClient));
 };
 
 afterEach(() => {

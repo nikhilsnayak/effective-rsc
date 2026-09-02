@@ -43,16 +43,8 @@ type DocumentResource = {
   readonly release: Effect.Effect<void>;
 };
 
-export class FlightClient extends Context.Service<
-  FlightClient,
-  {
-    readonly loadInitial: Effect.Effect<DecodedFlight, FlightLoadError>;
-    readonly load: (
-      request: FlightRequest,
-    ) => Effect.Effect<FlightResource | DocumentResource, FlightLoadError, Scope.Scope>;
-  }
->()('ersc/client/FlightClient') {
-  static readonly make = Effect.gen(function* () {
+export class FlightClient extends Context.Service<FlightClient>()('ersc/client/FlightClient', {
+  make: Effect.gen(function* () {
     const httpClient = yield* HttpClient.HttpClient;
 
     const loadInitial = Effect.gen(function* () {
@@ -202,9 +194,9 @@ export class FlightClient extends Context.Service<
       }).pipe(Effect.onError(() => release));
     });
 
-    return FlightClient.of({ load, loadInitial });
-  });
-
+    return { load, loadInitial };
+  }),
+}) {
   static readonly layer = Layer.effect(this, this.make);
 
   static readonly layerTest = Layer.mock(this);

@@ -1,5 +1,5 @@
 import { beforeEach, expect, it } from '@effect/vitest';
-import { Deferred, Effect, Layer, MutableRef } from 'effect';
+import { Deferred, Effect, Exit, Layer, MutableRef } from 'effect';
 import { HttpClient } from 'effect/unstable/http';
 import { vi } from 'vitest';
 
@@ -67,6 +67,77 @@ beforeEach(() => {
   reactClient.serverCallback = undefined;
 });
 
+it.effect('releases an incomplete Server Function response', () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const released = vi.fn();
+      const navigationApiLayer = NavigationApi.layerTest({
+        getCurrentEntry: () => firstEntry,
+        getCurrentUrl: () => firstEntry.url,
+        getTransition: () => null,
+        navigate: () => {
+          throw new TypeError('Unexpected navigation.');
+        },
+        reloadDocument: () => undefined,
+        replaceDocument: () => undefined,
+        subscribe: () => () => undefined,
+        traverseTo: () => {
+          throw new TypeError('Unexpected traversal.');
+        },
+      });
+      const flightClientLayer = FlightClient.layerTest({
+        load: () =>
+          Effect.succeed({
+            _tag: 'Flight' as const,
+            completed: Effect.void,
+            payload: {
+              formState: null,
+              routeTree: makeRouteTree('incomplete'),
+              serverFnResult: null,
+            },
+            release: Effect.sync(released),
+            resolvedUrl: new URL(firstEntry.url),
+          }),
+        loadInitial: Effect.die('Unexpected initial Flight load.'),
+      });
+      const run = yield* BrowserEffectRunner.make;
+
+      yield* installCallServer.pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            Layer.succeed(BrowserEffectRunner, run),
+            BrowserRenderer.layerTest({
+              commit: () => undefined,
+              initialize: () => undefined,
+              navigate: () => {
+                throw new TypeError('Unexpected navigation render.');
+              },
+              refresh: () => Promise.reject(new TypeError('Unexpected route refresh.')),
+            }),
+            flightClientLayer,
+            navigationApiLayer,
+            RouteLoader.layerTest({
+              invalidate: () => undefined,
+              prepareRefresh: () => () => undefined,
+            }),
+            RouteRefresher.layerTest({}),
+          ),
+        ),
+      );
+
+      const exit = yield* Effect.exit(Effect.promise(() => invokeServerFn('incomplete')));
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect(released).toHaveBeenCalledOnce();
+    }).pipe(
+      Effect.provideService(
+        HttpClient.HttpClient,
+        HttpClient.make(() => Effect.die('Unexpected HTTP request.')),
+      ),
+    ),
+  ),
+);
+
 type TestNavigationState = {
   readonly currentEntry: MutableRef.MutableRef<NavigationHistoryEntry | null>;
   readonly transition: MutableRef.MutableRef<NavigationTransition | null>;
@@ -84,7 +155,7 @@ const staleResponseScenario = (changeNavigation: (state: TestNavigationState) =>
         currentEntry: MutableRef.make(firstEntry),
         transition: MutableRef.make(null),
       };
-      const navigationApi = NavigationApi.of({
+      const navigationApiLayer = NavigationApi.layerTest({
         getCurrentEntry: () => MutableRef.get(navigationState.currentEntry),
         getCurrentUrl: () => MutableRef.get(navigationState.currentEntry)?.url ?? firstEntry.url,
         getTransition: () => MutableRef.get(navigationState.transition),
@@ -98,14 +169,14 @@ const staleResponseScenario = (changeNavigation: (state: TestNavigationState) =>
           throw new TypeError('Unexpected traversal.');
         },
       });
-      const flightClient = FlightClient.of({
+      const flightClientLayer = FlightClient.layerTest({
         load: () =>
           Deferred.succeed(requestStarted, undefined).pipe(
             Effect.andThen(Deferred.await(response)),
           ),
         loadInitial: Effect.die('Unexpected initial Flight load.'),
       });
-      const browserRenderer = BrowserRenderer.of({
+      const browserRendererLayer = BrowserRenderer.layerTest({
         commit: () => undefined,
         initialize: () => undefined,
         navigate: () => {
@@ -113,13 +184,13 @@ const staleResponseScenario = (changeNavigation: (state: TestNavigationState) =>
         },
         refresh: rendered,
       });
-      const routeLoader = RouteLoader.of({
+      const routeLoaderLayer = RouteLoader.layerTest({
         invalidate: () => undefined,
         load: () => Effect.die('Unexpected route load.'),
         loadInitial: Effect.die('Unexpected initial route load.'),
         prepareRefresh: () => () => undefined,
       });
-      const routeRefresher = RouteRefresher.of({
+      const routeRefresherLayer = RouteRefresher.layerTest({
         interruptCurrentRouteRefresh: Effect.void,
         refreshCurrentRoute: Deferred.succeed(currentRouteRefresh, undefined),
         replace: () => Effect.void,
@@ -130,11 +201,11 @@ const staleResponseScenario = (changeNavigation: (state: TestNavigationState) =>
         Effect.provide(
           Layer.mergeAll(
             Layer.succeed(BrowserEffectRunner, run),
-            Layer.succeed(BrowserRenderer, browserRenderer),
-            Layer.succeed(FlightClient, flightClient),
-            Layer.succeed(NavigationApi, navigationApi),
-            Layer.succeed(RouteLoader, routeLoader),
-            Layer.succeed(RouteRefresher, routeRefresher),
+            browserRendererLayer,
+            flightClientLayer,
+            navigationApiLayer,
+            routeLoaderLayer,
+            routeRefresherLayer,
           ),
         ),
       );
@@ -184,7 +255,7 @@ it.effect('does not let an older invocation response overwrite a newer response'
       const firstReleased = vi.fn();
       const interruptedCurrentRouteRefresh = vi.fn();
       const rendered: Array<string> = [];
-      const navigationApi = NavigationApi.of({
+      const navigationApiLayer = NavigationApi.layerTest({
         getCurrentEntry: () => firstEntry,
         getCurrentUrl: () => firstEntry.url,
         getTransition: () => null,
@@ -198,7 +269,7 @@ it.effect('does not let an older invocation response overwrite a newer response'
           throw new TypeError('Unexpected traversal.');
         },
       });
-      const flightClient = FlightClient.of({
+      const flightClientLayer = FlightClient.layerTest({
         load: (request) => {
           if (request._tag !== 'ServerFunction') {
             return Effect.die('Unexpected navigation Flight load.');
@@ -213,7 +284,7 @@ it.effect('does not let an older invocation response overwrite a newer response'
         },
         loadInitial: Effect.die('Unexpected initial Flight load.'),
       });
-      const browserRenderer = BrowserRenderer.of({
+      const browserRendererLayer = BrowserRenderer.layerTest({
         commit: () => undefined,
         initialize: () => undefined,
         navigate: () => {
@@ -224,7 +295,7 @@ it.effect('does not let an older invocation response overwrite a newer response'
           return Promise.resolve();
         },
       });
-      const routeLoader = RouteLoader.of({
+      const routeLoaderLayer = RouteLoader.layerTest({
         invalidate: () => undefined,
         load: () => Effect.die('Unexpected route load.'),
         loadInitial: Effect.die('Unexpected initial route load.'),
@@ -232,7 +303,7 @@ it.effect('does not let an older invocation response overwrite a newer response'
           directRefreshCommitted.resolve();
         },
       });
-      const routeRefresher = RouteRefresher.of({
+      const routeRefresherLayer = RouteRefresher.layerTest({
         interruptCurrentRouteRefresh: Effect.sync(interruptedCurrentRouteRefresh),
         refreshCurrentRoute: Deferred.succeed(currentRouteRefresh, undefined),
         replace: () => Effect.void,
@@ -243,11 +314,11 @@ it.effect('does not let an older invocation response overwrite a newer response'
         Effect.provide(
           Layer.mergeAll(
             Layer.succeed(BrowserEffectRunner, run),
-            Layer.succeed(BrowserRenderer, browserRenderer),
-            Layer.succeed(FlightClient, flightClient),
-            Layer.succeed(NavigationApi, navigationApi),
-            Layer.succeed(RouteLoader, routeLoader),
-            Layer.succeed(RouteRefresher, routeRefresher),
+            browserRendererLayer,
+            flightClientLayer,
+            navigationApiLayer,
+            routeLoaderLayer,
+            routeRefresherLayer,
           ),
         ),
       );

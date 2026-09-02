@@ -1,6 +1,5 @@
-import { Context, Effect, Layer, MutableRef, Scope } from 'effect';
+import { Context, Effect, Layer, MutableRef } from 'effect';
 
-import type { FlightPayload } from '../rsc/flight';
 import type { RouteTreeModel } from '../rsc/route-tree';
 import { FlightClient, type FlightLoadError } from './flight-client';
 import { NavigationApi } from './navigation-api';
@@ -37,18 +36,8 @@ export type RouteLoadRequest = {
   readonly navigationType: NavigationType;
 };
 
-export class RouteLoader extends Context.Service<
-  RouteLoader,
-  {
-    readonly invalidate: () => void;
-    readonly load: (
-      request: RouteLoadRequest,
-    ) => Effect.Effect<RouteLoad, FlightLoadError, Scope.Scope>;
-    readonly loadInitial: Effect.Effect<FlightPayload, FlightLoadError>;
-    readonly prepareRefresh: (routeTree: RouteTreeModel) => () => void;
-  }
->()('ersc/client/RouteLoader') {
-  static readonly make = Effect.gen(function* () {
+export class RouteLoader extends Context.Service<RouteLoader>()('ersc/client/RouteLoader', {
+  make: Effect.gen(function* () {
     const flightClient = yield* FlightClient;
     const navigationApi = yield* NavigationApi;
     const scope = yield* Effect.scope;
@@ -162,9 +151,9 @@ export class RouteLoader extends Context.Service<
 
     yield* Effect.addFinalizer(() => Effect.sync(() => clear(MutableRef.get(cacheRef))));
 
-    return RouteLoader.of({ invalidate, load, loadInitial, prepareRefresh });
-  });
-
+    return { invalidate, load, loadInitial, prepareRefresh };
+  }),
+}) {
   static readonly layer = Layer.effect(this, this.make);
 
   static readonly layerTest = Layer.mock(this);

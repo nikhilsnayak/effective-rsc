@@ -90,6 +90,7 @@ export const installCallServer = Effect.gen(function* () {
         ),
       );
     if (resource._tag === 'Document') {
+      yield* resource.release;
       return yield* new ServerFnCallError({
         cause: new Error('A Server Function response cannot request document navigation.'),
         message: 'Server Function response was incompatible with Flight.',
@@ -97,6 +98,7 @@ export const installCallServer = Effect.gen(function* () {
     }
     const serverFnResult = resource.payload.serverFnResult;
     if (serverFnResult === null) {
+      yield* resource.release;
       return yield* new ServerFnCallError({
         cause: new Error('The Flight payload omitted the Server Function return value.'),
         message: 'Server Function response was incomplete.',

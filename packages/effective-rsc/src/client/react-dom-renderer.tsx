@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, Schema, Scope } from 'effect';
+import { Context, Effect, Layer, Schema } from 'effect';
 import {
   Component,
   type ErrorInfo,
@@ -46,69 +46,64 @@ class BrowserErrorBoundary extends Component<BrowserErrorBoundaryProps, BrowserE
   }
 }
 
-export class ReactDOMRenderer extends Context.Service<
-  ReactDOMRenderer,
+export class ReactDOMRenderer extends Context.Service<ReactDOMRenderer>()(
+  'ersc/client/ReactDOMRenderer',
   {
-    readonly hydrate: (
-      container: Element | Document,
-      initialPayload: FlightPayload,
-    ) => Effect.Effect<void, ReactDOMHydrationError, Scope.Scope>;
-  }
->()('ersc/client/ReactDOMRenderer') {
-  static readonly make = Effect.gen(function* () {
-    const browserRenderer = yield* BrowserRenderer;
-    const run = yield* BrowserEffectRunner;
+    make: Effect.gen(function* () {
+      const browserRenderer = yield* BrowserRenderer;
+      const run = yield* BrowserEffectRunner;
 
-    const hydrate = Effect.fnUntraced(function* (
-      container: Element | Document,
-      initialPayload: FlightPayload,
-    ) {
-      const browserRendererReady = Promise.withResolvers<void>();
-      const reportError = (error: unknown, info: ErrorInfo) => {
-        void run(Effect.logError('Uncaught client render error.', error, info.componentStack));
-      };
+      const hydrate = Effect.fnUntraced(function* (
+        container: Element | Document,
+        initialPayload: FlightPayload,
+      ) {
+        const browserRendererReady = Promise.withResolvers<void>();
+        const reportError = (error: unknown, info: ErrorInfo) => {
+          void run(Effect.logError('Uncaught client render error.', error, info.componentStack));
+        };
 
-      function Root() {
-        const [render, setRender] = useState<BrowserRender>(() => ({
-          _tag: 'Initial',
-          routeTree: initialPayload.routeTree,
-        }));
+        function Root() {
+          const [render, setRender] = useState<BrowserRender>(() => ({
+            _tag: 'Initial',
+            routeTree: initialPayload.routeTree,
+          }));
 
-        useLayoutEffect(() => {
-          browserRenderer.initialize(initialPayload.routeTree, setRender);
-          browserRendererReady.resolve();
-        }, []);
+          useLayoutEffect(() => {
+            browserRenderer.initialize(initialPayload.routeTree, setRender);
+            browserRendererReady.resolve();
+          }, []);
 
-        useLayoutEffect(() => {
-          browserRenderer.commit(render);
-        }, [render]);
+          useLayoutEffect(() => {
+            browserRenderer.commit(render);
+          }, [render]);
 
-        return (
-          <BrowserErrorBoundary onError={reportError}>
-            <RouteTree root={render.routeTree} />
-          </BrowserErrorBoundary>
+          return (
+            <BrowserErrorBoundary onError={reportError}>
+              <RouteTree root={render.routeTree} />
+            </BrowserErrorBoundary>
+          );
+        }
+
+        yield* Effect.acquireRelease(
+          Effect.try({
+            try: () =>
+              hydrateRoot(
+                container,
+                <StrictMode>
+                  <Root />
+                </StrictMode>,
+                { formState: initialPayload.formState },
+              ),
+            catch: (cause) => new ReactDOMHydrationError({ cause }),
+          }),
+          (root) => Effect.sync(() => root.unmount()),
         );
-      }
+        yield* Effect.promise(() => browserRendererReady.promise);
+      });
 
-      yield* Effect.acquireRelease(
-        Effect.try({
-          try: () =>
-            hydrateRoot(
-              container,
-              <StrictMode>
-                <Root />
-              </StrictMode>,
-              { formState: initialPayload.formState },
-            ),
-          catch: (cause) => new ReactDOMHydrationError({ cause }),
-        }),
-        (root) => Effect.sync(() => root.unmount()),
-      );
-      yield* Effect.promise(() => browserRendererReady.promise);
-    });
-
-    return ReactDOMRenderer.of({ hydrate });
-  });
-
+      return { hydrate };
+    }),
+  },
+) {
   static readonly layer = Layer.effect(this, this.make);
 }

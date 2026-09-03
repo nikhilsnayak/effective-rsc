@@ -38,6 +38,7 @@ test('moves between conference days through the composed schedule', async ({ pag
   await expect(page).toHaveURL('/schedule/sunday');
   await expect(page.getByRole('heading', { level: 1, name: 'Saturday schedule' })).toBeHidden();
   await expect(page.getByRole('heading', { level: 1, name: 'Sunday schedule' })).toBeHidden();
+  await page.waitForFunction(() => window.navigation.transition === null);
   expect(navigationFlightFinished).toBe(false);
   await flightRequest;
 
@@ -66,7 +67,7 @@ test('reuses completed route trees for back and forward navigation', async ({ pa
     .getByRole('link', { name: 'See Sunday' })
     .evaluate((element: HTMLAnchorElement) => element.click());
   await expect(page.getByRole('heading', { level: 1, name: 'Sunday schedule' })).toBeVisible();
-  await page.waitForFunction(() => window.navigation.transition === null);
+  await expect(page.locator('[data-speaker-id="jonah-kim"]')).toBeVisible();
 
   await page.evaluate(() => window.navigation.back().finished);
   await expect(page.getByRole('heading', { level: 1, name: 'Saturday schedule' })).toBeVisible();

@@ -170,6 +170,18 @@ const makeHttpClient = (requestedUrls: Array<string> = [], contentType = 'text/x
     }),
   );
 
+const makeInvalidFlightClient = () =>
+  HttpClient.make((request) =>
+    Effect.succeed(
+      HttpClientResponse.fromWeb(
+        request,
+        new Response(new Uint8Array(), {
+          headers: { 'content-type': 'text/x-component' },
+        }),
+      ),
+    ),
+  );
+
 type BrowserRenderRequest = {
   readonly _tag: 'Navigation' | 'ServerFunction';
   readonly routeTree: RouteTreeModel;
@@ -222,11 +234,13 @@ const listen = (
   browserRenderer: BrowserRenderer['Service'] = makeBrowserRenderer(),
   httpClient = makeHttpClient(),
   documentReplacements: Array<string> = [],
+  reloadDocument: () => void = () => undefined,
 ) => {
   vi.stubGlobal('window', {
     NavigationPrecommitController: class {},
     location: {
       href: 'https://effective-rsc.test/schedule/day-one',
+      reload: reloadDocument,
       replace: (url: string) => documentReplacements.push(url),
     },
     navigation,
@@ -398,6 +412,69 @@ it.effect('uses a post-commit handler for a non-cancelable traversal', () =>
     }),
   ),
 );
+
+it.effect('reloads after a non-cancelable traversal fails to load Flight', () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const navigation = new TestNavigationApi();
+      const reloadDocument = vi.fn();
+      yield* listen(
+        navigation,
+        makeBrowserRenderer(),
+        makeInvalidFlightClient(),
+        [],
+        reloadDocument,
+      );
+      const pendingNavigation = makeNavigationEvent({
+        cancelable: false,
+        navigationType: 'traverse',
+      });
+
+      navigation.dispatch(pendingNavigation.event);
+
+      const handler = pendingNavigation.interception()?.handler;
+      if (handler === undefined) {
+        return yield* Effect.die('Expected a post-commit handler.');
+      }
+      yield* Effect.promise(() => invokeNavigationHandler(handler));
+
+      expect(reloadDocument).toHaveBeenCalledOnce();
+    }),
+  ),
+);
+
+it.effect('does not reload a superseded non-cancelable traversal', () => {
+  const navigationAbort = new AbortController();
+  navigationAbort.abort();
+  return Effect.scoped(
+    Effect.gen(function* () {
+      const navigation = new TestNavigationApi();
+      const reloadDocument = vi.fn();
+      yield* listen(
+        navigation,
+        makeBrowserRenderer(),
+        makeInvalidFlightClient(),
+        [],
+        reloadDocument,
+      );
+      const pendingNavigation = makeNavigationEvent({
+        cancelable: false,
+        navigationType: 'traverse',
+        signal: navigationAbort.signal,
+      });
+
+      navigation.dispatch(pendingNavigation.event);
+
+      const handler = pendingNavigation.interception()?.handler;
+      if (handler === undefined) {
+        return yield* Effect.die('Expected a post-commit handler.');
+      }
+      yield* Effect.promise(() => invokeNavigationHandler(handler));
+
+      expect(reloadDocument).not.toHaveBeenCalled();
+    }),
+  );
+});
 
 it.effect('reuses completed route trees for back and forward traversals', () =>
   Effect.scoped(

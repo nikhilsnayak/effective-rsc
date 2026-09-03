@@ -414,10 +414,14 @@ export const installClientRouter = Effect.gen(function* () {
       });
 
       const outcome = await preparation.promise.catch((cause) => {
-        if (!event.signal.aborted) {
-          throw cause;
+        if (event.signal.aborted) {
+          return { _tag: 'Handled' } as NavigationPreparation;
         }
-        return { _tag: 'Handled' } as NavigationPreparation;
+        if (!event.cancelable && event.navigationType === 'traverse') {
+          navigationApi.reloadDocument();
+          return { _tag: 'Handled' } as NavigationPreparation;
+        }
+        throw cause;
       });
       if (outcome._tag === 'Handled') {
         return;

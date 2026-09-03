@@ -18,9 +18,17 @@ type NavigationCandidate =
   | { readonly _tag: 'Loading'; readonly generation: NavigationGeneration }
   | { readonly _tag: 'Rendering'; readonly generation: NavigationGeneration };
 
+type VisibleNavigation =
+  | { readonly _tag: 'Settled' }
+  | { readonly _tag: 'Navigation'; readonly generation: NavigationGeneration };
+
 type RouterState =
-  | { readonly _tag: 'Ready' }
-  | { readonly _tag: 'Navigating'; readonly candidate: NavigationCandidate };
+  | { readonly _tag: 'Ready'; readonly visible: VisibleNavigation }
+  | {
+      readonly _tag: 'Navigating';
+      readonly candidate: NavigationCandidate;
+      readonly visible: VisibleNavigation;
+    };
 
 type RouterEvent =
   | { readonly _tag: 'BeginCancelable'; readonly generation: NavigationGeneration }
@@ -61,6 +69,7 @@ const reduceRouterState = (state: RouterState, event: RouterEvent): RouterTransi
       state: {
         _tag: 'Navigating',
         candidate: { _tag: 'Loading', generation: event.generation },
+        visible: state.visible,
       },
     };
   }
@@ -89,7 +98,7 @@ const reduceRouterState = (state: RouterState, event: RouterEvent): RouterTransi
     case 'DocumentLoaded':
     case 'FlightFailed':
       return state.candidate._tag === 'Loading'
-        ? { commands: [], state: { _tag: 'Ready' } }
+        ? { commands: [], state: { _tag: 'Ready', visible: state.visible } }
         : { commands: [], state };
     case 'RouteLoaded':
       return state.candidate._tag === 'Loading'
@@ -98,12 +107,19 @@ const reduceRouterState = (state: RouterState, event: RouterEvent): RouterTransi
             state: {
               _tag: 'Navigating',
               candidate: { _tag: 'Rendering', generation: event.generation },
+              visible: state.visible,
             },
           }
         : { commands: [{ _tag: 'ReleaseRoute', resource: event.resource }], state };
     case 'RenderCommitted':
       return state.candidate._tag === 'Rendering'
-        ? { commands: [], state: { _tag: 'Ready' } }
+        ? {
+            commands: [],
+            state: {
+              _tag: 'Ready',
+              visible: { _tag: 'Navigation', generation: event.generation },
+            },
+          }
         : { commands: [], state };
     case 'NavigationAborted':
       return {
@@ -114,7 +130,7 @@ const reduceRouterState = (state: RouterState, event: RouterEvent): RouterTransi
             resource: event.resource,
           },
         ],
-        state: { _tag: 'Ready' },
+        state: { _tag: 'Ready', visible: state.visible },
       };
   }
 };
@@ -134,7 +150,10 @@ export const installClientRouter = Effect.gen(function* () {
   const navigationApi = yield* NavigationApi;
   const routeLoader = yield* RouteLoader;
   const run = yield* BrowserEffectRunner;
-  const routerState = MutableRef.make<RouterState>({ _tag: 'Ready' });
+  const routerState = MutableRef.make<RouterState>({
+    _tag: 'Ready',
+    visible: { _tag: 'Settled' },
+  });
 
   const dispatch = (event: RouterEvent) => {
     const transition = reduceRouterState(MutableRef.get(routerState), event);

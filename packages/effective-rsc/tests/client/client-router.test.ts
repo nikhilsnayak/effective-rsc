@@ -727,6 +727,97 @@ it.effect('cancels a streaming Flight response abandoned before React commits', 
   );
 });
 
+it.effect('discards and releases a scheduled candidate when a newer navigation starts', () => {
+  const navigationAbort = new AbortController();
+  return Effect.scoped(
+    Effect.gen(function* () {
+      const navigation = new TestNavigationApi();
+      const renderStarted = Promise.withResolvers<void>();
+      const renderCommitted = Promise.withResolvers<void>();
+      const discardCommitted = Promise.withResolvers<void>();
+      const discardStarted = Promise.withResolvers<void>();
+      const responseAborted = Promise.withResolvers<void>();
+      let responseSignal: AbortSignal | undefined;
+      const browserRenderer = BrowserRenderer.of({
+        commit: () => undefined,
+        initialize: () => undefined,
+        navigate: () => {
+          renderStarted.resolve();
+          return {
+            committed: renderCommitted.promise,
+            discard: () => {
+              discardStarted.resolve();
+              return discardCommitted.promise;
+            },
+            retired: Promise.resolve(),
+          };
+        },
+        refresh: () => Promise.resolve(),
+      });
+      const httpClient = HttpClient.make((request, _url, signal) =>
+        Effect.sync(() => {
+          responseSignal = signal;
+          return HttpClientResponse.fromWeb(
+            request,
+            new Response(
+              new ReadableStream<Uint8Array>({
+                start(controller) {
+                  controller.enqueue(new Uint8Array([1]));
+                  signal.addEventListener(
+                    'abort',
+                    () => {
+                      controller.error(signal.reason);
+                      responseAborted.resolve();
+                    },
+                    { once: true },
+                  );
+                },
+              }),
+              {
+                headers: {
+                  'content-location': 'https://effective-rsc.test/schedule/day-two',
+                  'content-type': 'text/x-component',
+                },
+              },
+            ),
+          );
+        }),
+      );
+      yield* listen(navigation, browserRenderer, httpClient);
+      const firstNavigation = makeNavigationEvent({ signal: navigationAbort.signal });
+
+      navigation.dispatch(firstNavigation.event);
+
+      const precommitHandler = firstNavigation.interception()?.precommitHandler;
+      if (precommitHandler === undefined) {
+        return yield* Effect.die('Expected a precommit handler.');
+      }
+      const firstNavigationFinished = invokePrecommitHandler(
+        precommitHandler,
+        makePrecommitController(),
+      );
+      yield* Effect.promise(() => renderStarted.promise);
+
+      navigation.dispatch(
+        makeNavigationEvent({
+          destination: { url: 'https://effective-rsc.test/schedule/day-three' },
+        }).event,
+      );
+      yield* Effect.promise(() => discardStarted.promise);
+
+      expect(responseSignal?.aborted).toBe(false);
+
+      discardCommitted.resolve();
+      yield* Effect.promise(() => responseAborted.promise);
+
+      expect(responseSignal?.aborted).toBe(true);
+
+      navigationAbort.abort();
+      yield* Effect.promise(() => firstNavigationFinished);
+    }),
+  );
+});
+
 it.effect('retains a committed Flight response until its render retires', () => {
   const navigationAbort = new AbortController();
   return Effect.scoped(

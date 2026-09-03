@@ -97,6 +97,12 @@ type Candidate =
       readonly lifetime: GenerationLifetime;
     }
   | {
+      readonly _tag: 'Publishing';
+      readonly generation: Generation;
+      readonly entry: EntryState;
+      readonly flight: FlightState;
+    }
+  | {
       readonly _tag: 'Rendering';
       readonly generation: Generation;
       readonly entry: EntryState;
@@ -135,6 +141,7 @@ The closed lifecycle event family is:
 - `BeginCommittedTraversal`
 - `RouteLoaded`
 - `DocumentLoaded`
+- `RenderScheduled`
 - `RenderCommitted`
 - `RenderRetired`
 - `HistoryCommitted`
@@ -151,6 +158,12 @@ commands run. Commands emitted together are independent; when effects require or
 concrete command owns that sequence. In particular, superseding a scheduled candidate performs
 `discard -> release` as one command. There are no generic sequence/parallel command combinators,
 event bus, typestate classes, phase modules, or public lifecycle handles.
+
+`RouteLoaded` installs `Publishing`, which owns the Flight resource, before emitting the
+`PublishRoute` command. Once that command obtains a renderer handle, `RenderScheduled` installs
+`Rendering`, which owns both values. This handoff is synchronous and does not yield: every
+supersedable phase therefore records the resources needed to clean it up before asynchronous work
+can continue.
 
 ## Renderer interface
 

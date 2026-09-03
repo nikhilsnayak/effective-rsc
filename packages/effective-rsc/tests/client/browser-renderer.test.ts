@@ -123,6 +123,48 @@ it.effect('retires a visible navigation when a refresh commits', () =>
   }),
 );
 
+it.effect('discards a scheduled navigation without replacing the visible navigation', () =>
+  Effect.gen(function* () {
+    const visibleRouteTree = makeRouteTree('visible');
+    const renders: Array<BrowserRender> = [];
+    const renderer = yield* BrowserRenderer.make;
+    renderer.initialize(makeRouteTree('initial'), (render) => renders.push(render));
+    const visibleNavigation = renderer.navigate(visibleRouteTree);
+    const visibleRender = nextRender(renders);
+    if (visibleRender._tag !== 'Navigation') {
+      return yield* Effect.die('Expected the visible navigation render.');
+    }
+    renderer.commit(visibleRender);
+
+    const candidate = renderer.navigate(makeRouteTree('candidate'));
+    nextRender(renders);
+    const discarded = candidate.discard();
+    const discardRender = nextRender(renders);
+    expect(discardRender._tag).toBe('Discard');
+    expect(discardRender.routeTree).toBe(visibleRouteTree);
+
+    let candidateRetired = false;
+    let visibleRetired = false;
+    void candidate.retired.then(() => {
+      candidateRetired = true;
+    });
+    void visibleNavigation.retired.then(() => {
+      visibleRetired = true;
+    });
+    yield* Effect.promise(() => Promise.resolve());
+    expect(candidateRetired).toBe(false);
+
+    renderer.commit(discardRender);
+    yield* Effect.promise(() => discarded);
+
+    expect(candidateRetired).toBe(true);
+    expect(visibleRetired).toBe(false);
+    expect(() => candidate.discard()).toThrow(
+      'Only a scheduled browser navigation can be discarded.',
+    );
+  }),
+);
+
 it.effect('advances the stable route tree only after Flight completes', () =>
   Effect.gen(function* () {
     const firstRouteTree = makeRouteTree('first');

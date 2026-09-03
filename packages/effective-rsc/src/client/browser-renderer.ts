@@ -5,6 +5,7 @@ import type { RouteTreeModel } from '../rsc/route-tree';
 export type BrowserRendererNavigation = {
   readonly committed: Promise<void>;
   readonly complete: () => void;
+  readonly discard: () => Promise<void>;
   readonly retired: Promise<void>;
   readonly rollback: () => Promise<void>;
 };
@@ -18,6 +19,7 @@ type BrowserRenderNavigationState = {
 
 type BrowserRenderNavigationPhase =
   | 'Scheduled'
+  | 'DiscardRequested'
   | 'Visible'
   | 'RollbackRequested'
   | 'Completed'
@@ -49,6 +51,12 @@ export type BrowserRender =
       readonly _tag: 'Navigation';
       readonly navigation: BrowserRenderNavigationState;
       readonly routeTree: RouteTreeModel;
+    }
+  | {
+      readonly _tag: 'Discard';
+      readonly navigation: BrowserRenderNavigationState;
+      readonly routeTree: RouteTreeModel;
+      readonly visible: BrowserRenderOwner;
     }
   | {
       readonly _tag: 'Refresh';
@@ -142,11 +150,40 @@ export class BrowserRenderer extends Context.Service<BrowserRenderer>()(
               lifecycle.phases.set(navigation, 'Completed');
             }
           },
+          discard: () => {
+            if (getNavigationPhase(lifecycle, navigation) !== 'Scheduled') {
+              throw new TypeError('Only a scheduled browser navigation can be discarded.');
+            }
+            lifecycle.phases.set(navigation, 'DiscardRequested');
+            if (
+              lifecycle.active._tag === 'Navigation' &&
+              lifecycle.active.navigation === navigation
+            ) {
+              const visible = lifecycle.visible;
+              lifecycle.active =
+                visible._tag === 'Navigation' &&
+                getNavigationPhase(lifecycle, visible.navigation) === 'Visible'
+                  ? visible
+                  : { _tag: 'Stable' };
+            }
+            publish({
+              _tag: 'Discard',
+              navigation,
+              routeTree:
+                lifecycle.visible._tag === 'Navigation'
+                  ? lifecycle.visible.navigation.routeTree
+                  : lifecycle.stableRouteTree,
+              visible: lifecycle.visible,
+            });
+            return navigation.retired.promise;
+          },
           rollback: () => {
             switch (getNavigationPhase(lifecycle, navigation)) {
               case 'Completed':
               case 'Retired':
                 return Promise.resolve();
+              case 'DiscardRequested':
+                return navigation.retired.promise;
               case 'Scheduled':
               case 'Visible':
                 lifecycle.phases.set(navigation, 'RollbackRequested');
@@ -193,7 +230,9 @@ export class BrowserRenderer extends Context.Service<BrowserRenderer>()(
         const visible: BrowserRenderOwner =
           render._tag === 'Navigation'
             ? { _tag: 'Navigation', navigation: render.navigation }
-            : { _tag: 'Stable' };
+            : render._tag === 'Discard'
+              ? render.visible
+              : { _tag: 'Stable' };
         lifecycle.visible = visible;
 
         if (
@@ -213,6 +252,9 @@ export class BrowserRenderer extends Context.Service<BrowserRenderer>()(
 
         switch (render._tag) {
           case 'Initial':
+            break;
+          case 'Discard':
+            retireNavigation(lifecycle, render.navigation);
             break;
           case 'Navigation':
             if (getNavigationPhase(lifecycle, render.navigation) === 'Scheduled') {

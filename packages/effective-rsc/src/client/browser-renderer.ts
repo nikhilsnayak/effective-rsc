@@ -4,7 +4,6 @@ import type { RouteTreeModel } from '../rsc/route-tree';
 
 export type BrowserRendererNavigation = {
   readonly committed: Promise<void>;
-  readonly complete: () => void;
   readonly discard: () => Promise<void>;
   readonly retired: Promise<void>;
   readonly rollback: () => Promise<void>;
@@ -142,14 +141,6 @@ export class BrowserRenderer extends Context.Service<BrowserRenderer>()(
 
         return {
           committed: navigation.committed.promise,
-          complete: () => {
-            const active = lifecycle.active;
-            if (active._tag === 'Navigation' && active.navigation === navigation) {
-              lifecycle.active = { _tag: 'Stable' };
-              lifecycle.stableRouteTree = navigation.routeTree;
-              lifecycle.phases.set(navigation, 'Completed');
-            }
-          },
           discard: () => {
             if (getNavigationPhase(lifecycle, navigation) !== 'Scheduled') {
               throw new TypeError('Only a scheduled browser navigation can be discarded.');
@@ -259,6 +250,14 @@ export class BrowserRenderer extends Context.Service<BrowserRenderer>()(
           case 'Navigation':
             if (getNavigationPhase(lifecycle, render.navigation) === 'Scheduled') {
               lifecycle.phases.set(render.navigation, 'Visible');
+            }
+            if (
+              lifecycle.active._tag === 'Navigation' &&
+              lifecycle.active.navigation === render.navigation
+            ) {
+              lifecycle.active = { _tag: 'Stable' };
+              lifecycle.stableRouteTree = render.routeTree;
+              lifecycle.phases.set(render.navigation, 'Completed');
             }
             render.navigation.committed.resolve();
             break;

@@ -181,10 +181,7 @@ const initialRouteTree: RouteTreeModel = {
   id: 'day-one',
 };
 
-const makeBrowserRenderer = (
-  renders: Array<BrowserRenderRequest> = [],
-  navigationOutcomes: Array<'Complete' | 'Rollback'> = [],
-) =>
+const makeBrowserRenderer = (renders: Array<BrowserRenderRequest> = []) =>
   BrowserRenderer.of({
     commit: () => undefined,
     initialize: () => undefined,
@@ -192,13 +189,9 @@ const makeBrowserRenderer = (
       renders.push({ _tag: 'Navigation', routeTree });
       return {
         committed: Promise.resolve(),
-        complete: () => navigationOutcomes.push('Complete'),
         discard: () => Promise.resolve(),
         retired: Promise.resolve(),
-        rollback: () => {
-          navigationOutcomes.push('Rollback');
-          return Promise.resolve();
-        },
+        rollback: () => Promise.resolve(),
       };
     },
     refresh: (routeTree) => {
@@ -279,14 +272,9 @@ it.effect('splits a cancelable navigation between React commit and Flight comple
     const navigation = new TestNavigationApi();
     const requestedUrls: Array<string> = [];
     const renders: Array<BrowserRenderRequest> = [];
-    const navigationOutcomes: Array<'Complete' | 'Rollback'> = [];
     yield* Effect.scoped(
       Effect.gen(function* () {
-        yield* listen(
-          navigation,
-          makeBrowserRenderer(renders, navigationOutcomes),
-          makeHttpClient(requestedUrls),
-        );
+        yield* listen(navigation, makeBrowserRenderer(renders), makeHttpClient(requestedUrls));
         const pendingNavigation = makeNavigationEvent();
 
         navigation.dispatch(pendingNavigation.event);
@@ -317,7 +305,6 @@ it.effect('splits a cancelable navigation between React commit and Flight comple
           return yield* Effect.die('Expected a navigation render.');
         }
         expect(render.routeTree.id).toBe('root');
-        expect(navigationOutcomes).toEqual(['Complete']);
       }),
     );
   }),
@@ -599,7 +586,6 @@ it.effect('cancels a streaming Flight response abandoned before React commits', 
           renderStarted.resolve();
           return {
             committed: renderCommitted.promise,
-            complete: () => undefined,
             discard: () => Promise.resolve(),
             retired: Promise.resolve(),
             rollback: () => {
@@ -708,7 +694,6 @@ it.effect('retains a committed Flight response until its render retires', () => 
         initialize: () => undefined,
         navigate: () => ({
           committed: Promise.resolve(),
-          complete: () => undefined,
           discard: () => Promise.resolve(),
           retired: renderRetired.promise,
           rollback: () => Promise.resolve(),

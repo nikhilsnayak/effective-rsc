@@ -132,12 +132,7 @@ export const installClientRouter = Effect.gen(function* () {
       const { redirected, rendererNavigation, resolvedDestination, resource } = outcome;
       const waitForNavigationCommit = Effect.uninterruptibleMask((restore) =>
         restore(Effect.promise(() => rendererNavigation.committed)).pipe(
-          Effect.tap(
-            Effect.sync(() => {
-              rendererNavigation.complete();
-              attempt.complete();
-            }),
-          ),
+          Effect.tap(Effect.sync(attempt.complete)),
           Effect.onExit((exit) =>
             Exit.isFailure(exit)
               ? Effect.promise(() =>

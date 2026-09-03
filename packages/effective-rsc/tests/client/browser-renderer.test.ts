@@ -33,12 +33,11 @@ it.effect('initializes once for a React root', () =>
   }),
 );
 
-it.effect('restores the stable route tree when a visible navigation is canceled', () =>
+it.effect('does not roll back a navigation after it commits', () =>
   Effect.gen(function* () {
-    const initialRouteTree = makeRouteTree('initial');
     const renders: Array<BrowserRender> = [];
     const renderer = yield* BrowserRenderer.make;
-    renderer.initialize(initialRouteTree, (render) => renders.push(render));
+    renderer.initialize(makeRouteTree('initial'), (render) => renders.push(render));
     const navigation = renderer.navigate(makeRouteTree('destination'));
     const navigationRender = nextRender(renders);
     if (navigationRender._tag !== 'Navigation') {
@@ -47,15 +46,7 @@ it.effect('restores the stable route tree when a visible navigation is canceled'
     renderer.commit(navigationRender);
     yield* Effect.promise(() => navigation.committed);
 
-    const retired = navigation.rollback();
-    const rollbackRender = nextRender(renders);
-    expect(rollbackRender._tag).toBe('Rollback');
-    if (rollbackRender._tag !== 'Rollback') {
-      return yield* Effect.die('Expected a rollback render.');
-    }
-    expect(rollbackRender.routeTree).toBe(initialRouteTree);
-    renderer.commit(rollbackRender);
-    yield* Effect.promise(() => retired);
+    yield* Effect.promise(() => navigation.rollback());
 
     expect(renders).toEqual([]);
   }),
@@ -165,26 +156,24 @@ it.effect('discards a scheduled navigation without replacing the visible navigat
   }),
 );
 
-it.effect('advances the stable route tree only after Flight completes', () =>
+it.effect('advances the stable route tree when a navigation commits', () =>
   Effect.gen(function* () {
     const firstRouteTree = makeRouteTree('first');
     const renders: Array<BrowserRender> = [];
     const renderer = yield* BrowserRenderer.make;
     renderer.initialize(makeRouteTree('initial'), (render) => renders.push(render));
-    const first = renderer.navigate(firstRouteTree);
+    renderer.navigate(firstRouteTree);
     const firstRender = nextRender(renders);
     if (firstRender._tag !== 'Navigation') {
       return yield* Effect.die('Expected the first navigation render.');
     }
     renderer.commit(firstRender);
-    first.complete();
 
     const second = renderer.navigate(makeRouteTree('second'));
     const secondRender = nextRender(renders);
     if (secondRender._tag !== 'Navigation') {
       return yield* Effect.die('Expected the second navigation render.');
     }
-    renderer.commit(secondRender);
     const retired = second.rollback();
     const rollbackRender = nextRender(renders);
     if (rollbackRender._tag !== 'Rollback') {
@@ -216,7 +205,6 @@ it.effect('uses a committed Server Function refresh as the next rollback target'
     if (navigationRender._tag !== 'Navigation') {
       return yield* Effect.die('Expected a navigation render.');
     }
-    renderer.commit(navigationRender);
     const retired = navigation.rollback();
     const rollbackRender = nextRender(renders);
     if (rollbackRender._tag !== 'Rollback') {

@@ -190,7 +190,7 @@ const makeBrowserRenderer = (renders: Array<BrowserRenderRequest> = []) =>
       return {
         committed: Promise.resolve(),
         discard: () => Promise.resolve(),
-        retired: Promise.resolve(),
+        retired: Promise.withResolvers<void>().promise,
       };
     },
     refresh: (routeTree) => {

@@ -14,6 +14,17 @@ import { RouteLoader, type RouteLoad } from './route-loader';
 type NavigationGeneration = symbol;
 type RouteResource = Extract<RouteLoad, { readonly _tag: 'Route' }>;
 
+type NavigationEntryState =
+  | { readonly _tag: 'PendingCommit' }
+  | {
+      readonly _tag: 'Committed';
+      readonly entry: NavigationHistoryEntry | null;
+    };
+
+type NavigationFlightState =
+  | { readonly _tag: 'Streaming'; readonly resource: RouteResource }
+  | { readonly _tag: 'Completed'; readonly cache: RouteResource['cache'] };
+
 type NavigationCandidate =
   | { readonly _tag: 'Loading'; readonly generation: NavigationGeneration }
   | { readonly _tag: 'Rendering'; readonly generation: NavigationGeneration };
@@ -22,6 +33,8 @@ type VisibleNavigation =
   | { readonly _tag: 'Settled' }
   | {
       readonly _tag: 'Navigation';
+      readonly entry: NavigationEntryState;
+      readonly flight: NavigationFlightState;
       readonly generation: NavigationGeneration;
       readonly rendererNavigation: BrowserRendererNavigation;
     };
@@ -47,8 +60,15 @@ type RouterEvent =
       readonly _tag: 'RenderCommitted';
       readonly generation: NavigationGeneration;
       readonly rendererNavigation: BrowserRendererNavigation;
+      readonly resource: RouteResource;
     }
   | { readonly _tag: 'RenderRetired'; readonly generation: NavigationGeneration }
+  | {
+      readonly _tag: 'HistoryCommitted';
+      readonly entry: NavigationHistoryEntry | null;
+      readonly generation: NavigationGeneration;
+    }
+  | { readonly _tag: 'FlightCompleted'; readonly generation: NavigationGeneration }
   | { readonly _tag: 'FlightFailed'; readonly generation: NavigationGeneration }
   | {
       readonly _tag: 'NavigationAborted';
@@ -61,6 +81,16 @@ type RouterCommand =
   | { readonly _tag: 'PublishRoute'; readonly resource: RouteResource }
   | { readonly _tag: 'ReleaseRoute'; readonly resource: RouteResource }
   | {
+      readonly _tag: 'CacheRoute';
+      readonly cache: RouteResource['cache'];
+      readonly entry: NavigationHistoryEntry;
+    }
+  | {
+      readonly _tag: 'CacheAndReleaseRoute';
+      readonly entry: NavigationHistoryEntry;
+      readonly resource: RouteResource;
+    }
+  | {
       readonly _tag: 'DiscardRoute';
       readonly rendererNavigation: BrowserRendererNavigation;
       readonly resource: RouteResource;
@@ -72,14 +102,86 @@ type RouterTransition = {
 };
 
 const reduceRouterState = (state: RouterState, event: RouterEvent): RouterTransition => {
-  if (event._tag === 'RenderRetired') {
-    if (state.visible._tag === 'Settled' || state.visible.generation !== event.generation) {
-      return { commands: [], state };
+  if (state.visible._tag === 'Navigation' && state.visible.generation === event.generation) {
+    const visible = state.visible;
+    switch (event._tag) {
+      case 'RenderRetired':
+        return {
+          commands:
+            visible.flight._tag === 'Streaming'
+              ? [{ _tag: 'ReleaseRoute', resource: visible.flight.resource }]
+              : [],
+          state: { ...state, visible: { _tag: 'Settled' } },
+        };
+      case 'HistoryCommitted':
+        if (visible.entry._tag === 'Committed') {
+          throw new TypeError('A visible navigation history entry cannot commit twice.');
+        }
+        if (visible.flight._tag === 'Streaming') {
+          return {
+            commands: [],
+            state: {
+              ...state,
+              visible: {
+                ...visible,
+                entry: { _tag: 'Committed', entry: event.entry },
+              },
+            },
+          };
+        }
+        return {
+          commands:
+            event.entry === null
+              ? []
+              : [{ _tag: 'CacheRoute', cache: visible.flight.cache, entry: event.entry }],
+          state: { ...state, visible: { _tag: 'Settled' } },
+        };
+      case 'FlightCompleted':
+        if (visible.flight._tag === 'Completed') {
+          throw new TypeError('A visible navigation Flight stream cannot complete twice.');
+        }
+        if (visible.entry._tag === 'PendingCommit') {
+          return {
+            commands: [{ _tag: 'ReleaseRoute', resource: visible.flight.resource }],
+            state: {
+              ...state,
+              visible: {
+                ...visible,
+                flight: { _tag: 'Completed', cache: visible.flight.resource.cache },
+              },
+            },
+          };
+        }
+        return {
+          commands:
+            visible.entry.entry === null
+              ? [{ _tag: 'ReleaseRoute', resource: visible.flight.resource }]
+              : [
+                  {
+                    _tag: 'CacheAndReleaseRoute',
+                    entry: visible.entry.entry,
+                    resource: visible.flight.resource,
+                  },
+                ],
+          state: { ...state, visible: { _tag: 'Settled' } },
+        };
+      case 'FlightFailed':
+        if (visible.flight._tag === 'Completed') {
+          throw new TypeError('A completed visible Flight stream cannot fail.');
+        }
+        return {
+          commands: [{ _tag: 'ReleaseRoute', resource: visible.flight.resource }],
+          state: { ...state, visible: { _tag: 'Settled' } },
+        };
     }
-    return {
-      commands: [],
-      state: { ...state, visible: { _tag: 'Settled' } },
-    };
+  }
+
+  if (
+    event._tag === 'RenderRetired' ||
+    event._tag === 'HistoryCommitted' ||
+    event._tag === 'FlightCompleted'
+  ) {
+    return { commands: [], state };
   }
 
   if (event._tag === 'BeginCancelable' || event._tag === 'BeginCommittedTraversal') {
@@ -131,19 +233,25 @@ const reduceRouterState = (state: RouterState, event: RouterEvent): RouterTransi
           }
         : { commands: [{ _tag: 'ReleaseRoute', resource: event.resource }], state };
     case 'RenderCommitted':
-      return state.candidate._tag === 'Rendering'
-        ? {
-            commands: [],
-            state: {
-              _tag: 'Ready',
-              visible: {
-                _tag: 'Navigation',
-                generation: event.generation,
-                rendererNavigation: event.rendererNavigation,
-              },
-            },
-          }
-        : { commands: [], state };
+      if (state.candidate._tag === 'Loading') {
+        return { commands: [], state };
+      }
+      return {
+        commands:
+          state.visible._tag === 'Navigation' && state.visible.flight._tag === 'Streaming'
+            ? [{ _tag: 'ReleaseRoute', resource: state.visible.flight.resource }]
+            : [],
+        state: {
+          _tag: 'Ready',
+          visible: {
+            _tag: 'Navigation',
+            entry: { _tag: 'PendingCommit' },
+            flight: { _tag: 'Streaming', resource: event.resource },
+            generation: event.generation,
+            rendererNavigation: event.rendererNavigation,
+          },
+        },
+      };
     case 'NavigationAborted':
       return {
         commands: [
@@ -183,6 +291,27 @@ export const installClientRouter = Effect.gen(function* () {
     MutableRef.set(routerState, transition.state);
     return transition;
   };
+
+  const executePostcommitCommands = Effect.fnUntraced(function* (
+    commands: ReadonlyArray<RouterCommand>,
+  ) {
+    for (const command of commands) {
+      switch (command._tag) {
+        case 'ReleaseRoute':
+          yield* command.resource.release;
+          break;
+        case 'CacheRoute':
+          yield* Effect.sync(() => command.cache(command.entry));
+          break;
+        case 'CacheAndReleaseRoute':
+          yield* Effect.sync(() => command.resource.cache(command.entry));
+          yield* command.resource.release;
+          break;
+        default:
+          throw new TypeError(`Cannot execute ${command._tag} after navigation commit.`);
+      }
+    }
+  });
 
   const openDocument = (event: NavigateEvent, destination: URL) => {
     if (event.navigationType === 'traverse') {
@@ -316,8 +445,14 @@ export const installClientRouter = Effect.gen(function* () {
       const waitForNavigationCommit = Effect.uninterruptibleMask((restore) =>
         restore(Effect.promise(() => rendererNavigation.committed)).pipe(
           Effect.tap(
-            Effect.sync(() => {
-              dispatch({ _tag: 'RenderCommitted', generation, rendererNavigation });
+            Effect.suspend(() => {
+              const transition = dispatch({
+                _tag: 'RenderCommitted',
+                generation,
+                rendererNavigation,
+                resource,
+              });
+              return executePostcommitCommands(transition.commands);
             }),
           ),
           Effect.onExit((exit) => (Exit.isFailure(exit) ? discardAbortedNavigation : Effect.void)),
@@ -332,43 +467,38 @@ export const installClientRouter = Effect.gen(function* () {
         throw cause;
       }
 
-      const waitForRenderRetirement = Effect.promise(() => rendererNavigation.retired).pipe(
-        Effect.tap(
-          Effect.sync(() => {
-            dispatch({ _tag: 'RenderRetired', generation });
-          }),
-        ),
-        Effect.ignore,
-      );
+      const waitForRenderRetirement = Effect.gen(function* () {
+        yield* Effect.promise(() => rendererNavigation.retired);
+        const transition = dispatch({ _tag: 'RenderRetired', generation });
+        yield* executePostcommitCommands(transition.commands);
+      }).pipe(Effect.ignore);
       void run(waitForRenderRetirement).catch(() => undefined);
 
-      const committedEntry = Promise.withResolvers<NavigationHistoryEntry | null>();
-      const trackFlight = Effect.gen(function* () {
-        const flightOutcome = yield* Effect.raceFirst(
-          resource.completed.pipe(Effect.as('Completed' as const)),
-          Effect.promise(() => rendererNavigation.retired).pipe(Effect.as('Retired' as const)),
-        );
-        if (flightOutcome === 'Retired') {
-          return;
-        }
-
-        const entry = yield* Effect.promise(() => committedEntry.promise);
-        if (entry !== null) {
-          yield* Effect.sync(() => resource.cache(entry));
-        }
-      }).pipe(Effect.ignore, Effect.ensuring(resource.release));
-
-      void run(trackFlight).catch(() => undefined);
+      const waitForFlightCompletion = Effect.gen(function* () {
+        const flightExit = yield* Effect.exit(resource.completed);
+        const transition = dispatch({
+          _tag: Exit.isSuccess(flightExit) ? 'FlightCompleted' : 'FlightFailed',
+          generation,
+        });
+        yield* executePostcommitCommands(transition.commands);
+      });
+      void run(waitForFlightCompletion).catch(() => undefined);
 
       if (redirected && precommitController !== undefined) {
         precommitController.redirect(resolvedDestination.href, { history: 'auto' });
       }
-      if (precommitController === undefined) {
-        committedEntry.resolve(navigationApi.getCurrentEntry());
-      } else {
-        precommitController.addHandler(() => {
-          committedEntry.resolve(navigationApi.getCurrentEntry());
+      const commitHistory = Effect.suspend(() => {
+        const transition = dispatch({
+          _tag: 'HistoryCommitted',
+          entry: navigationApi.getCurrentEntry(),
+          generation,
         });
+        return executePostcommitCommands(transition.commands);
+      });
+      if (precommitController === undefined) {
+        await run(commitHistory);
+      } else {
+        precommitController.addHandler(() => run(commitHistory));
       }
     };
 

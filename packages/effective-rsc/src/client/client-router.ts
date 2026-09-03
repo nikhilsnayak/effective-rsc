@@ -12,6 +12,7 @@ import {
 import { RouteLoader, type RouteLoad } from './route-loader';
 
 type NavigationGeneration = symbol;
+type RouteResource = Extract<RouteLoad, { readonly _tag: 'Route' }>;
 
 type NavigationCandidate =
   | { readonly _tag: 'Loading'; readonly generation: NavigationGeneration }
@@ -24,31 +25,39 @@ type RouterState =
 type RouterEvent =
   | { readonly _tag: 'BeginCancelable'; readonly generation: NavigationGeneration }
   | { readonly _tag: 'BeginCommittedTraversal'; readonly generation: NavigationGeneration }
-  | { readonly _tag: 'RouteLoaded'; readonly generation: NavigationGeneration }
+  | { readonly _tag: 'DocumentLoaded'; readonly generation: NavigationGeneration }
+  | {
+      readonly _tag: 'RouteLoaded';
+      readonly generation: NavigationGeneration;
+      readonly resource: RouteResource;
+    }
   | { readonly _tag: 'RenderCommitted'; readonly generation: NavigationGeneration }
   | { readonly _tag: 'FlightFailed'; readonly generation: NavigationGeneration }
-  | { readonly _tag: 'NavigationAborted'; readonly generation: NavigationGeneration };
+  | {
+      readonly _tag: 'NavigationAborted';
+      readonly generation: NavigationGeneration;
+      readonly rendererNavigation: BrowserRendererNavigation;
+      readonly resource: RouteResource;
+    };
 
-type RouterTransition =
-  | { readonly _tag: 'Continue'; readonly state: RouterState }
-  | { readonly _tag: 'Render'; readonly state: RouterState }
-  | { readonly _tag: 'Discard'; readonly state: RouterState };
+type RouterCommand =
+  | { readonly _tag: 'PublishRoute'; readonly resource: RouteResource }
+  | { readonly _tag: 'ReleaseRoute'; readonly resource: RouteResource }
+  | {
+      readonly _tag: 'DiscardRoute';
+      readonly rendererNavigation: BrowserRendererNavigation;
+      readonly resource: RouteResource;
+    };
 
-type NavigationRenderResult<Render> =
-  | { readonly _tag: 'Rendered'; readonly value: Render }
-  | { readonly _tag: 'Discarded' };
-
-type NavigationAttempt = {
-  readonly abort: (discardRender: () => Promise<void>) => Promise<void>;
-  readonly complete: () => void;
-  readonly fail: () => void;
-  readonly render: <Render>(render: () => Render) => NavigationRenderResult<Render>;
+type RouterTransition = {
+  readonly state: RouterState;
+  readonly commands: ReadonlyArray<RouterCommand>;
 };
 
 const reduceRouterState = (state: RouterState, event: RouterEvent): RouterTransition => {
   if (event._tag === 'BeginCancelable' || event._tag === 'BeginCommittedTraversal') {
     return {
-      _tag: 'Continue',
+      commands: [],
       state: {
         _tag: 'Navigating',
         candidate: { _tag: 'Loading', generation: event.generation },
@@ -57,33 +66,56 @@ const reduceRouterState = (state: RouterState, event: RouterEvent): RouterTransi
   }
 
   if (state._tag === 'Ready' || state.candidate.generation !== event.generation) {
-    return {
-      _tag: event._tag === 'RouteLoaded' ? 'Discard' : 'Continue',
-      state,
-    };
+    switch (event._tag) {
+      case 'RouteLoaded':
+        return { commands: [{ _tag: 'ReleaseRoute', resource: event.resource }], state };
+      case 'NavigationAborted':
+        return {
+          commands: [
+            {
+              _tag: 'DiscardRoute',
+              rendererNavigation: event.rendererNavigation,
+              resource: event.resource,
+            },
+          ],
+          state,
+        };
+      default:
+        return { commands: [], state };
+    }
   }
 
   switch (event._tag) {
+    case 'DocumentLoaded':
     case 'FlightFailed':
       return state.candidate._tag === 'Loading'
-        ? { _tag: 'Continue', state: { _tag: 'Ready' } }
-        : { _tag: 'Continue', state };
+        ? { commands: [], state: { _tag: 'Ready' } }
+        : { commands: [], state };
     case 'RouteLoaded':
       return state.candidate._tag === 'Loading'
         ? {
-            _tag: 'Render',
+            commands: [{ _tag: 'PublishRoute', resource: event.resource }],
             state: {
               _tag: 'Navigating',
               candidate: { _tag: 'Rendering', generation: event.generation },
             },
           }
-        : { _tag: 'Discard', state };
+        : { commands: [{ _tag: 'ReleaseRoute', resource: event.resource }], state };
     case 'RenderCommitted':
       return state.candidate._tag === 'Rendering'
-        ? { _tag: 'Continue', state: { _tag: 'Ready' } }
-        : { _tag: 'Continue', state };
+        ? { commands: [], state: { _tag: 'Ready' } }
+        : { commands: [], state };
     case 'NavigationAborted':
-      return { _tag: 'Continue', state: { _tag: 'Ready' } };
+      return {
+        commands: [
+          {
+            _tag: 'DiscardRoute',
+            rendererNavigation: event.rendererNavigation,
+            resource: event.resource,
+          },
+        ],
+        state: { _tag: 'Ready' },
+      };
   }
 };
 
@@ -94,7 +126,7 @@ type NavigationPreparation =
       readonly redirected: boolean;
       readonly rendererNavigation: BrowserRendererNavigation;
       readonly resolvedDestination: URL;
-      readonly resource: Extract<RouteLoad, { readonly _tag: 'Route' }>;
+      readonly resource: RouteResource;
     };
 
 export const installClientRouter = Effect.gen(function* () {
@@ -108,40 +140,6 @@ export const installClientRouter = Effect.gen(function* () {
     const transition = reduceRouterState(MutableRef.get(routerState), event);
     MutableRef.set(routerState, transition.state);
     return transition;
-  };
-
-  const beginNavigation = (event: NavigateEvent): NavigationAttempt => {
-    const generation: NavigationGeneration = Symbol('NavigationGeneration');
-    dispatch({
-      _tag: event.cancelable ? 'BeginCancelable' : 'BeginCommittedTraversal',
-      generation,
-    });
-
-    // oxlint-disable-next-line effecttsgo/async-function -- React render retirement is a native Promise boundary.
-    const abort = async (discardRender: () => Promise<void>) => {
-      await discardRender();
-      dispatch({ _tag: 'NavigationAborted', generation });
-    };
-
-    return {
-      abort,
-      complete: () => {
-        dispatch({ _tag: 'RenderCommitted', generation });
-      },
-      fail: () => {
-        dispatch({ _tag: 'FlightFailed', generation });
-      },
-      render: (render) => {
-        const transition = dispatch({ _tag: 'RouteLoaded', generation });
-        if (transition._tag === 'Discard') {
-          return { _tag: 'Discarded' };
-        }
-        if (transition._tag !== 'Render') {
-          throw new TypeError('An active loading navigation must accept its render.');
-        }
-        return { _tag: 'Rendered', value: render() };
-      },
-    };
   };
 
   const openDocument = (event: NavigateEvent, destination: URL) => {
@@ -161,7 +159,11 @@ export const installClientRouter = Effect.gen(function* () {
     }
 
     const destination = new URL(event.destination.url);
-    const attempt = beginNavigation(event);
+    const generation: NavigationGeneration = Symbol('NavigationGeneration');
+    dispatch({
+      _tag: event.cancelable ? 'BeginCancelable' : 'BeginCommittedTraversal',
+      generation,
+    });
     // oxlint-disable-next-line effecttsgo/async-function -- Navigation handlers are native Promise boundaries.
     const handler = async (precommitController?: NavigationPrecommitController) => {
       const preparation = Promise.withResolvers<NavigationPreparation>();
@@ -172,9 +174,16 @@ export const installClientRouter = Effect.gen(function* () {
             destination: event.destination,
             navigationType: event.navigationType,
           })
-          .pipe(Effect.onError(() => Effect.sync(attempt.fail)));
+          .pipe(
+            Effect.onError(() =>
+              Effect.sync(() => {
+                dispatch({ _tag: 'FlightFailed', generation });
+              }),
+            ),
+          );
 
         if (resource._tag === 'Document') {
+          dispatch({ _tag: 'DocumentLoaded', generation });
           yield* resource.release;
           openDocument(event, destination);
           return { _tag: 'Handled' } as const;
@@ -182,6 +191,7 @@ export const installClientRouter = Effect.gen(function* () {
 
         const resolvedDestination = preserveRequestedHash(destination, resource.resolvedUrl);
         if (resolvedDestination.origin !== destination.origin) {
+          dispatch({ _tag: 'DocumentLoaded', generation });
           yield* resource.release;
           openDocument(event, resolvedDestination);
           return { _tag: 'Handled' } as const;
@@ -192,31 +202,37 @@ export const installClientRouter = Effect.gen(function* () {
           redirected &&
           (precommitController === undefined || event.navigationType === 'traverse')
         ) {
+          dispatch({ _tag: 'DocumentLoaded', generation });
           yield* resource.release;
           navigationApi.replaceDocument(resolvedDestination.href);
           return { _tag: 'Handled' } as const;
         }
 
-        const renderResult = yield* Effect.sync(() => {
-          let result!: NavigationRenderResult<BrowserRendererNavigation>;
-          startTransition(() => {
-            result = attempt.render(() => browserRenderer.navigate(resource.routeTree));
-          });
-          return result;
-        });
-
-        if (renderResult._tag === 'Discarded') {
-          yield* resource.release;
-          return { _tag: 'Handled' } as const;
+        const transition = dispatch({ _tag: 'RouteLoaded', generation, resource });
+        for (const command of transition.commands) {
+          if (command._tag === 'ReleaseRoute') {
+            yield* command.resource.release;
+            return { _tag: 'Handled' } as const;
+          }
+          if (command._tag === 'PublishRoute') {
+            const rendererNavigation = yield* Effect.sync(() => {
+              let navigation!: BrowserRendererNavigation;
+              startTransition(() => {
+                navigation = browserRenderer.navigate(command.resource.routeTree);
+              });
+              return navigation;
+            });
+            return {
+              _tag: 'Rendered',
+              redirected,
+              rendererNavigation,
+              resolvedDestination,
+              resource: command.resource,
+            } as const;
+          }
         }
 
-        return {
-          _tag: 'Rendered',
-          redirected,
-          rendererNavigation: renderResult.value,
-          resolvedDestination,
-          resource,
-        } as const;
+        throw new TypeError('A loaded route must be published or released.');
       });
 
       // oxlint-disable-next-line effecttsgo/async-function -- React Transition Actions are a native Promise boundary.
@@ -237,16 +253,32 @@ export const installClientRouter = Effect.gen(function* () {
       }
 
       const { redirected, rendererNavigation, resolvedDestination, resource } = outcome;
+      const discardAbortedNavigation = Effect.suspend(() => {
+        const transition = dispatch({
+          _tag: 'NavigationAborted',
+          generation,
+          rendererNavigation,
+          resource,
+        });
+        for (const command of transition.commands) {
+          if (command._tag === 'DiscardRoute') {
+            return Effect.promise(() => command.rendererNavigation.discard()).pipe(
+              Effect.ensuring(command.resource.release),
+            );
+          }
+        }
+        return Effect.die(
+          new TypeError('An aborted rendered route must be discarded and released.'),
+        );
+      });
       const waitForNavigationCommit = Effect.uninterruptibleMask((restore) =>
         restore(Effect.promise(() => rendererNavigation.committed)).pipe(
-          Effect.tap(Effect.sync(attempt.complete)),
-          Effect.onExit((exit) =>
-            Exit.isFailure(exit)
-              ? Effect.promise(() => attempt.abort(rendererNavigation.discard)).pipe(
-                  Effect.ensuring(resource.release),
-                )
-              : Effect.void,
+          Effect.tap(
+            Effect.sync(() => {
+              dispatch({ _tag: 'RenderCommitted', generation });
+            }),
           ),
+          Effect.onExit((exit) => (Exit.isFailure(exit) ? discardAbortedNavigation : Effect.void)),
         ),
       );
       try {

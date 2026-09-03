@@ -137,7 +137,7 @@ it.effect('waits for the active NavigationTransition before refreshing the curre
         Deferred.succeed(loaded, undefined).pipe(
           Effect.as({
             _tag: 'Route' as const,
-            cacheCurrent: () => undefined,
+            cache: () => undefined,
             completed: Effect.void,
             release: Effect.void,
             resolvedUrl: new URL(entry.url),
@@ -275,7 +275,7 @@ it.effect('replaces an older refresh when a newer development update arrives', (
             )
           : Effect.succeed({
               _tag: 'Route' as const,
-              cacheCurrent: () => undefined,
+              cache: () => undefined,
               completed: Effect.void,
               release: Effect.void,
               resolvedUrl: new URL(entry.url),

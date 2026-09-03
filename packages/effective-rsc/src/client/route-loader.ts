@@ -20,8 +20,8 @@ type RouteCache = Map<string, CachedRoute>;
 export type RouteLoad =
   | {
       readonly _tag: 'Route';
+      readonly cache: (entry: NavigationHistoryEntry) => void;
       readonly completed: Effect.Effect<void, FlightLoadError>;
-      readonly cacheCurrent: () => void;
       readonly release: Effect.Effect<void>;
       readonly resolvedUrl: URL;
       readonly routeTree: RouteTreeModel;
@@ -74,15 +74,13 @@ export class RouteLoader extends Context.Service<RouteLoader>()('ersc/client/Rou
       MutableRef.set(cacheRef, new Map());
     };
 
-    const cacheCurrent = (cache: RouteCache, routeTree: RouteTreeModel) => () => {
-      if (MutableRef.get(cacheRef) !== cache) {
-        return;
-      }
-      const entry = navigationApi.getCurrentEntry();
-      if (entry !== null) {
+    const cacheRoute =
+      (cache: RouteCache, routeTree: RouteTreeModel) => (entry: NavigationHistoryEntry) => {
+        if (MutableRef.get(cacheRef) !== cache) {
+          return;
+        }
         store(cache, entry, routeTree);
-      }
-    };
+      };
 
     const prepareRefresh = (routeTree: RouteTreeModel) => {
       invalidate();
@@ -102,7 +100,7 @@ export class RouteLoader extends Context.Service<RouteLoader>()('ersc/client/Rou
         if (cached !== undefined) {
           return {
             _tag: 'Route',
-            cacheCurrent: () => undefined,
+            cache: () => undefined,
             completed: Effect.void,
             release: Effect.void,
             resolvedUrl: new URL(request.destination.url),
@@ -120,7 +118,7 @@ export class RouteLoader extends Context.Service<RouteLoader>()('ersc/client/Rou
       }
       return {
         _tag: 'Route',
-        cacheCurrent: cacheCurrent(cache, resource.payload.routeTree),
+        cache: cacheRoute(cache, resource.payload.routeTree),
         completed: resource.completed,
         release: resource.release,
         resolvedUrl: resource.resolvedUrl,

@@ -200,7 +200,7 @@ it.effect('fences an in-flight navigation cache write when a refresh invalidates
       const routeLoad = yield* load(routeLoader, initialEntry, 'push');
       routeLoader.prepareRefresh(makeRouteTree('refreshed'))();
       if (routeLoad._tag === 'Route') {
-        routeLoad.cacheCurrent();
+        routeLoad.cache(initialEntry);
       }
 
       const cached = yield* load(routeLoader, initialEntry, 'traverse');
@@ -249,7 +249,7 @@ it.effect('attributes a refresh to the history entry where it started', () => {
   );
 });
 
-it.effect('keys history cache entries by id and evicts them when the browser disposes them', () => {
+it.effect('caches the supplied entry and evicts it on disposal', () => {
   decodedFlights.length = 0;
   const requestedUrls: Array<string> = [];
   return Effect.scoped(
@@ -274,9 +274,8 @@ it.effect('keys history cache entries by id and evicts them when the browser dis
       });
 
       const secondResource = yield* load(routeLoader, secondEntry, 'push');
-      navigationHistory.currentEntry = secondEntry;
       if (secondResource._tag === 'Route') {
-        secondResource.cacheCurrent();
+        secondResource.cache(secondEntry);
       }
 
       const firstCached = yield* load(routeLoader, firstEntry, 'traverse');

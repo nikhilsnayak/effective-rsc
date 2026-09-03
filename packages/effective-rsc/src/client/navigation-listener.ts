@@ -150,26 +150,31 @@ export const listenForNavigation = Effect.gen(function* () {
         Effect.promise(() => attempt.rollback(reason, rendererNavigation.rollback)).pipe(
           Effect.ensuring(resource.release),
         );
-      const completeFlight = resource.completed.pipe(
-        Effect.tap(() =>
-          Effect.sync(() => {
-            rendererNavigation.complete();
-            attempt.complete();
-            resource.cacheCurrent();
-          }),
-        ),
-        Effect.onExit((exit) =>
-          Exit.isFailure(exit)
-            ? rollbackAndRelease(event.signal.aborted ? 'Aborted' : 'Failed')
-            : Effect.void,
-        ),
-      );
+      const completeFlight = (entry: NavigationHistoryEntry | null) =>
+        resource.completed.pipe(
+          Effect.tap(() =>
+            Effect.sync(() => {
+              rendererNavigation.complete();
+              attempt.complete();
+              if (entry !== null) {
+                resource.cache(entry);
+              }
+            }),
+          ),
+          Effect.onExit((exit) =>
+            Exit.isFailure(exit)
+              ? rollbackAndRelease(event.signal.aborted ? 'Aborted' : 'Failed')
+              : Effect.void,
+          ),
+        );
       const completePostcommitFlight = () =>
-        run(completeFlight, { signal: event.signal }).catch((cause) => {
-          if (!event.signal.aborted) {
-            throw cause;
-          }
-        });
+        run(completeFlight(navigationApi.getCurrentEntry()), { signal: event.signal }).catch(
+          (cause) => {
+            if (!event.signal.aborted) {
+              throw cause;
+            }
+          },
+        );
 
       if (redirected && precommitController !== undefined) {
         precommitController.redirect(resolvedDestination.href, { history: 'auto' });

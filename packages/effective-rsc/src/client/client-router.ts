@@ -20,7 +20,11 @@ type NavigationCandidate =
 
 type VisibleNavigation =
   | { readonly _tag: 'Settled' }
-  | { readonly _tag: 'Navigation'; readonly generation: NavigationGeneration };
+  | {
+      readonly _tag: 'Navigation';
+      readonly generation: NavigationGeneration;
+      readonly rendererNavigation: BrowserRendererNavigation;
+    };
 
 type RouterState =
   | { readonly _tag: 'Ready'; readonly visible: VisibleNavigation }
@@ -39,7 +43,12 @@ type RouterEvent =
       readonly generation: NavigationGeneration;
       readonly resource: RouteResource;
     }
-  | { readonly _tag: 'RenderCommitted'; readonly generation: NavigationGeneration }
+  | {
+      readonly _tag: 'RenderCommitted';
+      readonly generation: NavigationGeneration;
+      readonly rendererNavigation: BrowserRendererNavigation;
+    }
+  | { readonly _tag: 'RenderRetired'; readonly generation: NavigationGeneration }
   | { readonly _tag: 'FlightFailed'; readonly generation: NavigationGeneration }
   | {
       readonly _tag: 'NavigationAborted';
@@ -63,6 +72,16 @@ type RouterTransition = {
 };
 
 const reduceRouterState = (state: RouterState, event: RouterEvent): RouterTransition => {
+  if (event._tag === 'RenderRetired') {
+    if (state.visible._tag === 'Settled' || state.visible.generation !== event.generation) {
+      return { commands: [], state };
+    }
+    return {
+      commands: [],
+      state: { ...state, visible: { _tag: 'Settled' } },
+    };
+  }
+
   if (event._tag === 'BeginCancelable' || event._tag === 'BeginCommittedTraversal') {
     return {
       commands: [],
@@ -117,7 +136,11 @@ const reduceRouterState = (state: RouterState, event: RouterEvent): RouterTransi
             commands: [],
             state: {
               _tag: 'Ready',
-              visible: { _tag: 'Navigation', generation: event.generation },
+              visible: {
+                _tag: 'Navigation',
+                generation: event.generation,
+                rendererNavigation: event.rendererNavigation,
+              },
             },
           }
         : { commands: [], state };
@@ -294,7 +317,7 @@ export const installClientRouter = Effect.gen(function* () {
         restore(Effect.promise(() => rendererNavigation.committed)).pipe(
           Effect.tap(
             Effect.sync(() => {
-              dispatch({ _tag: 'RenderCommitted', generation });
+              dispatch({ _tag: 'RenderCommitted', generation, rendererNavigation });
             }),
           ),
           Effect.onExit((exit) => (Exit.isFailure(exit) ? discardAbortedNavigation : Effect.void)),
@@ -308,6 +331,16 @@ export const installClientRouter = Effect.gen(function* () {
         }
         throw cause;
       }
+
+      const waitForRenderRetirement = Effect.promise(() => rendererNavigation.retired).pipe(
+        Effect.tap(
+          Effect.sync(() => {
+            dispatch({ _tag: 'RenderRetired', generation });
+          }),
+        ),
+        Effect.ignore,
+      );
+      void run(waitForRenderRetirement).catch(() => undefined);
 
       const committedEntry = Promise.withResolvers<NavigationHistoryEntry | null>();
       const trackFlight = Effect.gen(function* () {

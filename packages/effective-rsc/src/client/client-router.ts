@@ -9,7 +9,6 @@ import {
   type NavigationRenderResult,
 } from './navigation-coordinator';
 import {
-  isHistoryRollback,
   isRoutedNavigation,
   NativeDocumentNavigationInfo,
   preserveRequestedHash,
@@ -31,7 +30,7 @@ export const installClientRouter = Effect.gen(function* () {
   const navigationApi = yield* NavigationApi;
   const routeLoader = yield* RouteLoader;
   const run = yield* BrowserEffectRunner;
-  const coordinator = new BrowserNavigationCoordinator(navigationApi);
+  const coordinator = new BrowserNavigationCoordinator();
 
   const openDocument = (event: NavigateEvent, destination: URL) => {
     if (event.navigationType === 'traverse') {
@@ -45,16 +44,12 @@ export const installClientRouter = Effect.gen(function* () {
   };
 
   const onNavigate = (event: NavigateEvent) => {
-    if (isHistoryRollback(event)) {
-      event.intercept({ handler: () => Promise.resolve() });
-      return;
-    }
     if (!isRoutedNavigation(event)) {
       return;
     }
 
     const destination = new URL(event.destination.url);
-    const attempt = coordinator.begin(event.navigationType);
+    const attempt = coordinator.begin();
     // oxlint-disable-next-line effecttsgo/async-function -- Navigation handlers are native Promise boundaries.
     const handler = async (precommitController?: NavigationPrecommitController) => {
       const preparation = Promise.withResolvers<NavigationPreparation>();

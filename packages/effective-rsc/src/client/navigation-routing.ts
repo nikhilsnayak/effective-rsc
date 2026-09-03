@@ -1,13 +1,8 @@
 const ReactTransitionNavigationInfo = 'react-transition';
 
-export const HistoryRollbackNavigationInfo = 'ersc-history-rollback';
 export const NativeDocumentNavigationInfo = 'ersc-native-document';
 
-export const isHistoryRollback = (event: NavigateEvent) =>
-  event.info === HistoryRollbackNavigationInfo;
-
 export const isRoutedNavigation = (event: NavigateEvent) =>
-  !isHistoryRollback(event) &&
   event.canIntercept &&
   !event.hashChange &&
   event.downloadRequest === null &&

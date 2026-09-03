@@ -1,8 +1,6 @@
 import { describe, expect, it } from '@effect/vitest';
 
 import {
-  HistoryRollbackNavigationInfo,
-  isHistoryRollback,
   isRoutedNavigation,
   NativeDocumentNavigationInfo,
   preserveRequestedHash,
@@ -24,14 +22,6 @@ const makeEvent = (overrides: Partial<RoutingFields> = {}) =>
     ...overrides,
   }) as NavigateEvent;
 
-describe('isHistoryRollback', () => {
-  it('recognizes only the rollback marker ERSC dispatches', () => {
-    expect(isHistoryRollback(makeEvent({ info: HistoryRollbackNavigationInfo }))).toBe(true);
-    expect(isHistoryRollback(makeEvent({ info: NativeDocumentNavigationInfo }))).toBe(false);
-    expect(isHistoryRollback(makeEvent())).toBe(false);
-  });
-});
-
 describe('isRoutedNavigation', () => {
   it('routes an ordinary same-document navigation', () => {
     expect(isRoutedNavigation(makeEvent())).toBe(true);
@@ -48,7 +38,6 @@ describe('isRoutedNavigation', () => {
   });
 
   it('leaves navigations ERSC itself dispatches to the browser', () => {
-    expect(isRoutedNavigation(makeEvent({ info: HistoryRollbackNavigationInfo }))).toBe(false);
     expect(isRoutedNavigation(makeEvent({ info: NativeDocumentNavigationInfo }))).toBe(false);
     expect(isRoutedNavigation(makeEvent({ info: 'react-transition' }))).toBe(false);
   });

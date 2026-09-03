@@ -1,39 +1,14 @@
 import { MutableRef } from 'effect';
 
-import { HistoryRollbackNavigationInfo } from './navigation-routing';
-
-type NavigationHistory = {
-  readonly getCurrentEntry: () => Pick<NavigationHistoryEntry, 'getState' | 'key' | 'url'> | null;
-  readonly getCurrentUrl: () => string;
-  readonly navigate: (
-    url: string,
-    options: { readonly history: 'replace'; readonly info: unknown; readonly state: unknown },
-  ) => { readonly finished?: Promise<unknown> };
-  readonly traverseTo: (
-    key: string,
-    options: { readonly info: unknown },
-  ) => { readonly finished?: Promise<unknown> };
-};
-
-type NavigationRollbackTarget =
-  | { readonly _tag: 'Replace'; readonly state: unknown; readonly url: string }
-  | { readonly _tag: 'Traverse'; readonly key: string };
-
-type NavigationAttemptOutcome = 'Preserve' | 'Restore';
-
 type NavigationAttemptState =
-  | {
-      readonly _tag: 'Pending';
-      readonly outcome: PromiseWithResolvers<NavigationAttemptOutcome>;
-    }
+  | { readonly _tag: 'Pending' }
   | { readonly _tag: 'Rendering' }
   | { readonly _tag: 'Failed' }
-  | { readonly _tag: 'Superseded'; readonly outcome: Promise<NavigationAttemptOutcome> }
+  | { readonly _tag: 'Superseded' }
   | { readonly _tag: 'Completed' }
   | { readonly _tag: 'RolledBack' };
 
 type NavigationAttemptData = {
-  readonly rollbackTarget: NavigationRollbackTarget;
   readonly state: MutableRef.MutableRef<NavigationAttemptState>;
 };
 
@@ -57,9 +32,6 @@ export type NavigationAttempt = {
   ) => Promise<void>;
 };
 
-const navigationFinished = (result: { readonly finished?: Promise<unknown> }) =>
-  result.finished ?? Promise.resolve();
-
 const navigationDispatchCompleted = () =>
   // oxlint-disable-next-line effecttsgo/new-promise -- Browser task scheduling is a native Promise boundary.
   new Promise<void>((resolve) => {
@@ -67,44 +39,16 @@ const navigationDispatchCompleted = () =>
     setTimeout(resolve, 0);
   });
 
-const attemptOutcome = (attempt: NavigationAttemptData): Promise<NavigationAttemptOutcome> => {
-  const state = MutableRef.get(attempt.state);
-  switch (state._tag) {
-    case 'Completed':
-    case 'Rendering':
-      return Promise.resolve('Preserve');
-    case 'Failed':
-    case 'RolledBack':
-      return Promise.resolve('Restore');
-    case 'Pending':
-      return state.outcome.promise;
-    case 'Superseded':
-      return state.outcome;
-  }
-};
-
 export class BrowserNavigationCoordinator {
   private readonly state = MutableRef.make<NavigationCoordinatorState>({ _tag: 'Idle' });
-  private readonly navigationHistory: NavigationHistory;
 
-  constructor(navigationHistory: NavigationHistory) {
-    this.navigationHistory = navigationHistory;
-  }
-
-  begin(navigationType: NavigationType): NavigationAttempt {
+  begin(): NavigationAttempt {
     const active = MutableRef.get(this.state);
     const attempt: NavigationAttemptData = {
-      rollbackTarget:
-        active._tag === 'Active'
-          ? active.attempt.rollbackTarget
-          : this.makeRollbackTarget(navigationType),
-      state: MutableRef.make<NavigationAttemptState>({
-        _tag: 'Pending',
-        outcome: Promise.withResolvers<NavigationAttemptOutcome>(),
-      }),
+      state: MutableRef.make<NavigationAttemptState>({ _tag: 'Pending' }),
     };
     if (active._tag === 'Active') {
-      this.supersede(active.attempt, attempt);
+      this.supersede(active.attempt);
     }
     MutableRef.set(this.state, { _tag: 'Active', attempt });
     return {
@@ -130,7 +74,6 @@ export class BrowserNavigationCoordinator {
     }
     MutableRef.set(attempt.state, { _tag: 'Failed' });
     this.clearActive(attempt);
-    state.outcome.resolve('Restore');
   }
 
   private render<Render>(
@@ -143,7 +86,6 @@ export class BrowserNavigationCoordinator {
     }
     const value = render();
     MutableRef.set(attempt.state, { _tag: 'Rendering' });
-    state.outcome.resolve('Preserve');
     return { _tag: 'Rendered', value };
   }
 
@@ -155,20 +97,15 @@ export class BrowserNavigationCoordinator {
   ) {
     if (reason === 'Aborted') {
       // The Navigation API aborts the ongoing NavigateEvent before dispatching its successor.
-      // Let that dispatch finish so begin() can observe the successor before deciding whether to
-      // restore. A microtask is too early because aborting fires navigateerror synchronously.
+      // Let that dispatch finish so the successor can become active before the obsolete render is
+      // cleaned up. A microtask is too early because aborting fires navigateerror synchronously.
       // https://html.spec.whatwg.org/multipage/nav-history-apis.html#fire-a-push/replace/reload-navigate-event
       await navigationDispatchCompleted();
     }
 
-    const state = MutableRef.get(attempt.state);
-    const outcome = state._tag === 'Superseded' ? await state.outcome : 'Restore';
     await rollbackRender();
-    if (outcome === 'Restore') {
-      await this.rollbackHistory(attempt.rollbackTarget);
-      MutableRef.set(attempt.state, { _tag: 'RolledBack' });
-      this.clearActive(attempt);
-    }
+    MutableRef.set(attempt.state, { _tag: 'RolledBack' });
+    this.clearActive(attempt);
   }
 
   private clearActive(attempt: NavigationAttemptData) {
@@ -178,53 +115,12 @@ export class BrowserNavigationCoordinator {
     }
   }
 
-  private makeRollbackTarget(navigationType: NavigationType): NavigationRollbackTarget {
-    const currentEntry = this.navigationHistory.getCurrentEntry();
-    if (navigationType !== 'replace' && currentEntry !== null) {
-      return { _tag: 'Traverse', key: currentEntry.key };
-    }
-    return {
-      _tag: 'Replace',
-      state: currentEntry?.getState(),
-      url: currentEntry?.url ?? this.navigationHistory.getCurrentUrl(),
-    };
-  }
-
-  private rollbackHistory(target: NavigationRollbackTarget): Promise<unknown> {
-    switch (target._tag) {
-      case 'Replace':
-        if (this.navigationHistory.getCurrentEntry()?.url === target.url) {
-          return Promise.resolve();
-        }
-        return navigationFinished(
-          this.navigationHistory.navigate(target.url, {
-            history: 'replace',
-            info: HistoryRollbackNavigationInfo,
-            state: target.state,
-          }),
-        );
-      case 'Traverse':
-        if (this.navigationHistory.getCurrentEntry()?.key === target.key) {
-          return Promise.resolve();
-        }
-        return navigationFinished(
-          this.navigationHistory.traverseTo(target.key, {
-            info: HistoryRollbackNavigationInfo,
-          }),
-        );
-    }
-  }
-
-  private supersede(attempt: NavigationAttemptData, successor: NavigationAttemptData) {
+  private supersede(attempt: NavigationAttemptData) {
     const state = MutableRef.get(attempt.state);
-    const outcome = attemptOutcome(successor);
     switch (state._tag) {
       case 'Pending':
-        MutableRef.set(attempt.state, { _tag: 'Superseded', outcome });
-        state.outcome.resolve(outcome);
-        break;
       case 'Rendering':
-        MutableRef.set(attempt.state, { _tag: 'Superseded', outcome });
+        MutableRef.set(attempt.state, { _tag: 'Superseded' });
         break;
       case 'Completed':
       case 'Failed':

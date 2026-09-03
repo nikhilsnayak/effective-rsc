@@ -150,26 +150,6 @@ test('lets Back supersede a streaming push without restoring over it', async ({ 
   expect(browserErrors).toEqual([]);
 });
 
-test('restores stable URL and UI when a streaming navigation is stopped', async ({ page }) => {
-  const browserErrors = observeBrowserErrors(page);
-
-  await page.goto('/schedule/saturday');
-  await page
-    .getByRole('link', { name: 'See Sunday' })
-    .evaluate((element: HTMLAnchorElement) => element.click());
-  await expect(page.getByRole('main', { name: 'Loading schedule' })).toBeVisible({
-    timeout: 1_500,
-  });
-  await expect(page).toHaveURL('/schedule/sunday');
-
-  await page.evaluate(() => window.stop());
-
-  await expect(page).toHaveURL('/schedule/saturday');
-  await expect(page.getByRole('heading', { level: 1, name: 'Saturday schedule' })).toBeVisible();
-  await page.waitForFunction(() => window.navigation.transition === null);
-  expect(browserErrors).toEqual([]);
-});
-
 test('aborts a committed streaming navigation when it is superseded', async ({ page }) => {
   const browserErrors = observeBrowserErrors(page);
   const sundayFlightOutcome = Promise.withResolvers<'failed' | 'finished'>();

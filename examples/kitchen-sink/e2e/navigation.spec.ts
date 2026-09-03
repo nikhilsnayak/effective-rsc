@@ -150,105 +150,42 @@ test('lets Back supersede a streaming push without restoring over it', async ({ 
   expect(browserErrors).toEqual([]);
 });
 
-test('aborts a committed streaming navigation when it is superseded', async ({ page }) => {
+test('keeps a committed Flight alive while its successor prepares', async ({ page }) => {
   const browserErrors = observeBrowserErrors(page);
-  const sundayFlightOutcome = Promise.withResolvers<'failed' | 'finished'>();
-  const isSundayFlight = (request: Request) =>
-    new URL(request.url()).pathname === '/schedule/sunday' && isNavigationFlightRequest(request);
-  page.on('requestfailed', (request) => {
-    if (isSundayFlight(request)) {
-      sundayFlightOutcome.resolve('failed');
-    }
-  });
-  page.on('requestfinished', (request) => {
-    if (isSundayFlight(request)) {
-      sundayFlightOutcome.resolve('finished');
-    }
-  });
-
   await page.goto('/schedule/saturday');
-  await page.evaluate(() => {
-    Reflect.get(window, 'navigation').addEventListener('navigate', (event: Event) => {
-      const destination = Reflect.get(Reflect.get(event, 'destination'), 'url');
-      if (new URL(destination).pathname === '/schedule/sunday') {
-        Reflect.get(event, 'signal').addEventListener(
-          'abort',
-          () => {
-            Reflect.set(window, '__ersc_sunday_navigation_aborted__', true);
-          },
-          { once: true },
-        );
-      }
-    });
-  });
   await page
     .getByRole('link', { name: 'See Sunday' })
     .evaluate((element: HTMLAnchorElement) => element.click());
-  await expect(page.getByRole('main', { name: 'Loading schedule' })).toBeVisible({
-    timeout: 1_500,
-  });
+  await expect(page.getByRole('heading', { level: 1, name: 'Sunday schedule' })).toBeVisible();
   await expect(page).toHaveURL('/schedule/sunday');
-  expect(await page.evaluate(() => Boolean(Reflect.get(window, 'navigation').transition))).toBe(
-    true,
-  );
+  await page.waitForFunction(() => window.navigation.transition === null);
+  const firstSpeaker = page.locator('[data-speaker-id="rohan-mehta"]');
+  const lastSpeaker = page.locator('[data-speaker-id="jonah-kim"]');
+  await expect(firstSpeaker).toBeVisible();
+  await expect(lastSpeaker).toBeHidden();
 
-  // Hold the replacement Flight at an explicit gate so cancellation can settle while the
-  // superseded fallback is still the only committed UI.
-  const releaseSupersedingFlight = Promise.withResolvers<void>();
+  const releaseSaturdayFlight = Promise.withResolvers<void>();
   await page.route(
-    (url) => url.pathname === '/',
+    (url) => url.pathname === '/schedule/saturday',
     // oxlint-disable-next-line effecttsgo/async-function -- Playwright owns this Promise boundary.
     async (route, request) => {
       if (isNavigationFlightRequest(request)) {
-        await releaseSupersedingFlight.promise;
+        await releaseSaturdayFlight.promise;
       }
       await route.continue();
     },
   );
-
-  await page.evaluate(() => {
-    const observeRollback = () => {
-      const saturdayHeading = [...document.querySelectorAll('h1')].find(
-        (heading) => heading.textContent === 'Saturday schedule',
-      );
-      if (saturdayHeading !== undefined && saturdayHeading.getClientRects().length > 0) {
-        Reflect.set(window, '__ersc_supersession_rolled_back__', true);
-      }
-    };
-    new MutationObserver(observeRollback).observe(document.body, {
-      childList: true,
-      subtree: true,
-    });
-  });
-
   await page
-    .getByRole('banner')
-    .getByRole('link', { name: 'effective-rsc Conf home' })
+    .getByRole('navigation', { name: 'Conference schedule' })
+    .getByRole('link', { name: 'Saturday 22 Aug' })
     .evaluate((element: HTMLAnchorElement) => element.click());
-  expect(await sundayFlightOutcome.promise).toBe('failed');
-  expect(await page.evaluate(() => Reflect.get(window, '__ersc_sunday_navigation_aborted__'))).toBe(
-    true,
-  );
-  await page.evaluate(() => Reflect.set(window, '__ersc_supersession_frame_count__', 0));
-  await page.waitForFunction(
-    () => {
-      const frameCount = Number(Reflect.get(window, '__ersc_supersession_frame_count__')) + 1;
-      Reflect.set(window, '__ersc_supersession_frame_count__', frameCount);
-      return frameCount >= 2;
-    },
-    undefined,
-    { polling: 'raf' },
-  );
-  expect(
-    await page.evaluate(() => Reflect.get(window, '__ersc_supersession_rolled_back__')),
-  ).not.toBe(true);
+  await expect(lastSpeaker).toBeVisible();
+  await expect(page).toHaveURL('/schedule/sunday');
+  await expect(page.getByRole('heading', { level: 1, name: 'Something went wrong' })).toBeHidden();
 
-  releaseSupersedingFlight.resolve();
-  await expect(page).toHaveURL('/');
-  await expect(page.getByRole('heading', { level: 1, name: 'effective-rsc Conf' })).toBeVisible();
-  expect(
-    await page.evaluate(() => Reflect.get(window, '__ersc_supersession_rolled_back__')),
-  ).not.toBe(true);
+  releaseSaturdayFlight.resolve();
+  await expect(page).toHaveURL('/schedule/saturday');
+  await expect(page.getByRole('heading', { level: 1, name: 'Saturday schedule' })).toBeVisible();
   expect(browserErrors).toEqual([]);
 });
 

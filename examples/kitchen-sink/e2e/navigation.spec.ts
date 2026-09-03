@@ -305,6 +305,7 @@ test('retains the root Layout when navigating from the landing page into a day',
 
   await expect(page).toHaveURL('/schedule/saturday');
   await expect(page.getByRole('heading', { level: 1, name: 'Saturday schedule' })).toBeVisible();
+  await page.waitForFunction(() => window.navigation.transition === null);
   await expect(page.getByRole('heading', { level: 1, name: 'effective-rsc Conf' })).toBeHidden();
   expect(
     await conferenceHeader.evaluate((element) => Reflect.get(element, '__ersc_shell_marker__')),

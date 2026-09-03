@@ -16,10 +16,10 @@ import {
 } from './navigation-routing';
 import { RouteLoader, type RouteLoad } from './route-loader';
 
-type NavigationOutcome =
+type NavigationPreparation =
   | { readonly _tag: 'Handled' }
   | {
-      readonly _tag: 'Committed';
+      readonly _tag: 'Rendered';
       readonly redirected: boolean;
       readonly rendererNavigation: BrowserRendererNavigation;
       readonly resolvedDestination: URL;
@@ -57,7 +57,7 @@ export const installClientRouter = Effect.gen(function* () {
     const attempt = coordinator.begin(event.navigationType);
     // oxlint-disable-next-line effecttsgo/async-function -- Navigation handlers are native Promise boundaries.
     const handler = async (precommitController?: NavigationPrecommitController) => {
-      const navigationOutcome = Promise.withResolvers<NavigationOutcome>();
+      const preparation = Promise.withResolvers<NavigationPreparation>();
 
       const navigationAction = Effect.gen(function* () {
         const resource = yield* routeLoader
@@ -70,16 +70,14 @@ export const installClientRouter = Effect.gen(function* () {
         if (resource._tag === 'Document') {
           yield* resource.release;
           openDocument(event, destination);
-          navigationOutcome.resolve({ _tag: 'Handled' });
-          return;
+          return { _tag: 'Handled' } as const;
         }
 
         const resolvedDestination = preserveRequestedHash(destination, resource.resolvedUrl);
         if (resolvedDestination.origin !== destination.origin) {
           yield* resource.release;
           openDocument(event, resolvedDestination);
-          navigationOutcome.resolve({ _tag: 'Handled' });
-          return;
+          return { _tag: 'Handled' } as const;
         }
 
         const redirected = destination.href !== resolvedDestination.href;
@@ -89,8 +87,7 @@ export const installClientRouter = Effect.gen(function* () {
         ) {
           yield* resource.release;
           navigationApi.replaceDocument(resolvedDestination.href);
-          navigationOutcome.resolve({ _tag: 'Handled' });
-          return;
+          return { _tag: 'Handled' } as const;
         }
 
         const renderResult = yield* Effect.sync(() => {
@@ -103,55 +100,65 @@ export const installClientRouter = Effect.gen(function* () {
 
         if (renderResult._tag === 'Discarded') {
           yield* resource.release;
-          navigationOutcome.resolve({ _tag: 'Handled' });
-          return;
+          return { _tag: 'Handled' } as const;
         }
 
-        yield* Effect.uninterruptibleMask((restore) =>
-          restore(Effect.promise(() => renderResult.value.committed)).pipe(
-            Effect.tap(
-              Effect.sync(() => {
-                renderResult.value.complete();
-                attempt.complete();
-              }),
-            ),
-            Effect.onExit((exit) =>
-              Exit.isFailure(exit)
-                ? Effect.promise(() =>
-                    attempt.rollback(
-                      event.signal.aborted ? 'Aborted' : 'Failed',
-                      renderResult.value.rollback,
-                    ),
-                  ).pipe(Effect.ensuring(resource.release))
-                : Effect.void,
-            ),
-          ),
-        );
-        navigationOutcome.resolve({
-          _tag: 'Committed',
+        return {
+          _tag: 'Rendered',
           redirected,
           rendererNavigation: renderResult.value,
           resolvedDestination,
           resource,
-        });
+        } as const;
       });
 
       // oxlint-disable-next-line effecttsgo/async-function -- React Transition Actions are a native Promise boundary.
       startTransition(async () => {
-        await run(navigationAction, { signal: event.signal }).catch(navigationOutcome.reject);
+        await run(navigationAction, { signal: event.signal })
+          .then(preparation.resolve)
+          .catch(preparation.reject);
       });
 
-      const outcome = await navigationOutcome.promise.catch((cause) => {
+      const outcome = await preparation.promise.catch((cause) => {
         if (!event.signal.aborted) {
           throw cause;
         }
-        return { _tag: 'Handled' } as NavigationOutcome;
+        return { _tag: 'Handled' } as NavigationPreparation;
       });
       if (outcome._tag === 'Handled') {
         return;
       }
 
       const { redirected, rendererNavigation, resolvedDestination, resource } = outcome;
+      const waitForNavigationCommit = Effect.uninterruptibleMask((restore) =>
+        restore(Effect.promise(() => rendererNavigation.committed)).pipe(
+          Effect.tap(
+            Effect.sync(() => {
+              rendererNavigation.complete();
+              attempt.complete();
+            }),
+          ),
+          Effect.onExit((exit) =>
+            Exit.isFailure(exit)
+              ? Effect.promise(() =>
+                  attempt.rollback(
+                    event.signal.aborted ? 'Aborted' : 'Failed',
+                    rendererNavigation.rollback,
+                  ),
+                ).pipe(Effect.ensuring(resource.release))
+              : Effect.void,
+          ),
+        ),
+      );
+      try {
+        await run(waitForNavigationCommit, { signal: event.signal });
+      } catch (cause) {
+        if (event.signal.aborted) {
+          return;
+        }
+        throw cause;
+      }
+
       const committedEntry = Promise.withResolvers<NavigationHistoryEntry | null>();
       const trackFlight = Effect.gen(function* () {
         const flightOutcome = yield* Effect.raceFirst(

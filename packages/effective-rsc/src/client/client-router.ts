@@ -26,15 +26,21 @@ type NavigationFlightState =
   | { readonly _tag: 'Completed'; readonly cache: RouteResource['cache'] };
 
 type NavigationCandidate =
-  | { readonly _tag: 'Loading'; readonly generation: NavigationGeneration }
+  | {
+      readonly _tag: 'Loading';
+      readonly generation: NavigationGeneration;
+      readonly lifetime: AbortController;
+    }
   | {
       readonly _tag: 'Publishing';
       readonly generation: NavigationGeneration;
+      readonly lifetime: AbortController;
       readonly resource: RouteResource;
     }
   | {
       readonly _tag: 'Rendering';
       readonly generation: NavigationGeneration;
+      readonly lifetime: AbortController;
       readonly rendererNavigation: BrowserRendererNavigation;
       readonly resource: RouteResource;
     };
@@ -58,8 +64,16 @@ type RouterState =
     };
 
 type RouterEvent =
-  | { readonly _tag: 'BeginCancelable'; readonly generation: NavigationGeneration }
-  | { readonly _tag: 'BeginCommittedTraversal'; readonly generation: NavigationGeneration }
+  | {
+      readonly _tag: 'BeginCancelable';
+      readonly generation: NavigationGeneration;
+      readonly lifetime: AbortController;
+    }
+  | {
+      readonly _tag: 'BeginCommittedTraversal';
+      readonly generation: NavigationGeneration;
+      readonly lifetime: AbortController;
+    }
   | { readonly _tag: 'DocumentLoaded'; readonly generation: NavigationGeneration }
   | {
       readonly _tag: 'RouteLoaded';
@@ -84,6 +98,7 @@ type RouterEvent =
   | { readonly _tag: 'NavigationAborted'; readonly generation: NavigationGeneration };
 
 type RouterCommand =
+  | { readonly _tag: 'SupersedeCandidate'; readonly candidate: NavigationCandidate }
   | {
       readonly _tag: 'PublishRoute';
       readonly generation: NavigationGeneration;
@@ -197,26 +212,18 @@ const reduceRouterState = (state: RouterState, event: RouterEvent): RouterTransi
   if (event._tag === 'BeginCancelable' || event._tag === 'BeginCommittedTraversal') {
     const nextState: RouterState = {
       _tag: 'Navigating',
-      candidate: { _tag: 'Loading', generation: event.generation },
+      candidate: {
+        _tag: 'Loading',
+        generation: event.generation,
+        lifetime: event.lifetime,
+      },
       visible: state.visible,
     };
-    if (state._tag === 'Ready' || state.candidate._tag === 'Loading') {
+    if (state._tag === 'Ready') {
       return { commands: [], state: nextState };
     }
-    if (state.candidate._tag === 'Publishing') {
-      return {
-        commands: [{ _tag: 'ReleaseRoute', resource: state.candidate.resource }],
-        state: nextState,
-      };
-    }
     return {
-      commands: [
-        {
-          _tag: 'DiscardRoute',
-          rendererNavigation: state.candidate.rendererNavigation,
-          resource: state.candidate.resource,
-        },
-      ],
+      commands: [{ _tag: 'SupersedeCandidate', candidate: state.candidate }],
       state: nextState,
     };
   }
@@ -261,6 +268,7 @@ const reduceRouterState = (state: RouterState, event: RouterEvent): RouterTransi
           candidate: {
             _tag: 'Publishing',
             generation: event.generation,
+            lifetime: state.candidate.lifetime,
             resource: event.resource,
           },
           visible: state.visible,
@@ -280,6 +288,7 @@ const reduceRouterState = (state: RouterState, event: RouterEvent): RouterTransi
           candidate: {
             _tag: 'Rendering',
             generation: event.generation,
+            lifetime: state.candidate.lifetime,
             rendererNavigation: event.rendererNavigation,
             resource: event.resource,
           },
@@ -360,6 +369,21 @@ export const installClientRouter = Effect.gen(function* () {
   ) {
     for (const command of commands) {
       switch (command._tag) {
+        case 'SupersedeCandidate': {
+          const candidate = command.candidate;
+          yield* Effect.sync(() => candidate.lifetime.abort());
+          if (candidate._tag === 'Loading') {
+            break;
+          }
+          if (candidate._tag === 'Publishing') {
+            yield* candidate.resource.release;
+            break;
+          }
+          yield* Effect.promise(() => candidate.rendererNavigation.discard()).pipe(
+            Effect.ensuring(candidate.resource.release),
+          );
+          break;
+        }
         case 'ReleaseRoute':
           yield* command.resource.release;
           break;
@@ -399,9 +423,12 @@ export const installClientRouter = Effect.gen(function* () {
 
     const destination = new URL(event.destination.url);
     const generation: NavigationGeneration = Symbol('NavigationGeneration');
+    const lifetime = new AbortController();
+    const navigationSignal = AbortSignal.any([event.signal, lifetime.signal]);
     const begin = dispatch({
       _tag: event.cancelable ? 'BeginCancelable' : 'BeginCommittedTraversal',
       generation,
+      lifetime,
     });
     void run(executeRouterCommands(begin.commands)).catch(() => undefined);
     // oxlint-disable-next-line effecttsgo/async-function -- Navigation handlers are native Promise boundaries.
@@ -487,7 +514,7 @@ export const installClientRouter = Effect.gen(function* () {
 
       // oxlint-disable-next-line effecttsgo/async-function -- React Transition Actions are a native Promise boundary.
       startTransition(async () => {
-        await run(navigationAction, { signal: event.signal })
+        await run(navigationAction, { signal: navigationSignal })
           .then(preparation.resolve)
           .catch(preparation.reject);
       });
@@ -497,7 +524,7 @@ export const installClientRouter = Effect.gen(function* () {
         return executeRouterCommands(transition.commands);
       });
       const outcome = await preparation.promise.catch((cause) => {
-        if (event.signal.aborted) {
+        if (navigationSignal.aborted) {
           return run(abortNavigation.pipe(Effect.as({ _tag: 'Handled' } as NavigationPreparation)));
         }
         if (!event.cancelable && event.navigationType === 'traverse') {
@@ -526,9 +553,9 @@ export const installClientRouter = Effect.gen(function* () {
         ),
       );
       try {
-        await run(waitForNavigationCommit, { signal: event.signal });
+        await run(waitForNavigationCommit, { signal: navigationSignal });
       } catch (cause) {
-        if (event.signal.aborted) {
+        if (navigationSignal.aborted) {
           return;
         }
         throw cause;

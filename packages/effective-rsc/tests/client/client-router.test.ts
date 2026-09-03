@@ -727,6 +727,71 @@ it.effect('cancels a streaming Flight response abandoned before React commits', 
   );
 });
 
+it.effect('interrupts a pending Flight load when a newer navigation starts', () => {
+  const navigationAbort = new AbortController();
+  return Effect.scoped(
+    Effect.gen(function* () {
+      const navigation = new TestNavigationApi();
+      const requestStarted = Promise.withResolvers<void>();
+      const responseAborted = Promise.withResolvers<void>();
+      const renders: Array<BrowserRenderRequest> = [];
+      const httpClient = HttpClient.make((request, _url, signal) =>
+        Effect.sync(() =>
+          HttpClientResponse.fromWeb(
+            request,
+            new Response(
+              new ReadableStream<Uint8Array>({
+                start(controller) {
+                  requestStarted.resolve();
+                  signal.addEventListener(
+                    'abort',
+                    () => {
+                      controller.error(signal.reason);
+                      responseAborted.resolve();
+                    },
+                    { once: true },
+                  );
+                },
+              }),
+              {
+                headers: {
+                  'content-location': 'https://effective-rsc.test/schedule/day-two',
+                  'content-type': 'text/x-component',
+                },
+              },
+            ),
+          ),
+        ),
+      );
+      yield* listen(navigation, makeBrowserRenderer(renders), httpClient);
+      const firstNavigation = makeNavigationEvent({ signal: navigationAbort.signal });
+
+      navigation.dispatch(firstNavigation.event);
+
+      const precommitHandler = firstNavigation.interception()?.precommitHandler;
+      if (precommitHandler === undefined) {
+        return yield* Effect.die('Expected a precommit handler.');
+      }
+      const firstNavigationFinished = invokePrecommitHandler(
+        precommitHandler,
+        makePrecommitController(),
+      );
+      yield* Effect.promise(() => requestStarted.promise);
+
+      navigation.dispatch(
+        makeNavigationEvent({
+          destination: { url: 'https://effective-rsc.test/schedule/day-three' },
+        }).event,
+      );
+      yield* Effect.promise(() => responseAborted.promise);
+      yield* Effect.promise(() => firstNavigationFinished);
+
+      expect(navigationAbort.signal.aborted).toBe(false);
+      expect(renders).toEqual([]);
+    }),
+  );
+});
+
 it.effect('discards and releases a scheduled candidate when a newer navigation starts', () => {
   const navigationAbort = new AbortController();
   return Effect.scoped(
@@ -811,8 +876,8 @@ it.effect('discards and releases a scheduled candidate when a newer navigation s
       yield* Effect.promise(() => responseAborted.promise);
 
       expect(responseSignal?.aborted).toBe(true);
+      expect(navigationAbort.signal.aborted).toBe(false);
 
-      navigationAbort.abort();
       yield* Effect.promise(() => firstNavigationFinished);
     }),
   );

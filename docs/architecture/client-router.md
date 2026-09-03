@@ -101,12 +101,14 @@ type Candidate =
       readonly generation: Generation;
       readonly entry: EntryState;
       readonly flight: FlightState;
+      readonly lifetime: GenerationLifetime;
     }
   | {
       readonly _tag: 'Rendering';
       readonly generation: Generation;
       readonly entry: EntryState;
       readonly flight: FlightState;
+      readonly lifetime: GenerationLifetime;
       readonly render: RendererNavigation;
     };
 
@@ -164,6 +166,12 @@ event bus, typestate classes, phase modules, or public lifecycle handles.
 `Rendering`, which owns both values. This handoff is synchronous and does not yield: every
 supersedable phase therefore records the resources needed to clean it up before asynchronous work
 can continue.
+
+Every candidate phase also owns an `AbortController`. Its signal is combined with the native
+`NavigateEvent.signal` for precommit work. `BeginCancelable` and `BeginCommittedTraversal` install
+the successor before emitting one phase-aware `SupersedeCandidate` command, which interrupts the
+old lifetime and then performs any required ordered cleanup. The router therefore does not depend
+on delivery timing of the browser's supersession abort to stop an obsolete load or handler.
 
 ## Renderer interface
 

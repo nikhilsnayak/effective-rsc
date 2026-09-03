@@ -7,9 +7,9 @@ import { BrowserEffectRunner } from './browser-effect-runner';
 import { BrowserRenderer } from './browser-renderer';
 import { showBrowserFailure } from './browser-screen';
 import { installCallServer } from './call-server';
+import { installClientRouter } from './client-router';
 import { FlightClient } from './flight-client';
 import { NavigationApi } from './navigation-api';
-import { listenForNavigation } from './navigation-listener';
 import { ReactDOMRenderer } from './react-dom-renderer';
 import { RouteLoader } from './route-loader';
 import { installRouteRefresh, RouteRefresher } from './route-refresh';
@@ -42,7 +42,7 @@ const activateClientNavigation = Effect.gen(function* () {
 
   const initialPayload = yield* routeLoader.loadInitial;
   yield* reactDOMRenderer.hydrate(document, initialPayload);
-  yield* listenForNavigation;
+  yield* installClientRouter;
   yield* installCallServer;
   yield* installRouteRefresh;
 });

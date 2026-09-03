@@ -23,9 +23,9 @@ vi.mock('react-server-dom-rspack/client.browser', () => ({
 
 import { BrowserEffectRunner } from '../../src/client/browser-effect-runner';
 import { BrowserRenderer } from '../../src/client/browser-renderer';
+import { installClientRouter } from '../../src/client/client-router';
 import { FlightClient } from '../../src/client/flight-client';
 import { NavigationApi } from '../../src/client/navigation-api';
-import { listenForNavigation } from '../../src/client/navigation-listener';
 import { RouteLoader } from '../../src/client/route-loader';
 import type { RouteTreeModel } from '../../src/rsc/route-tree';
 
@@ -261,7 +261,7 @@ const listen = (
       Effect.provideService(NavigationApi, navigationApi),
     );
     yield* routeLoader.loadInitial;
-    return yield* listenForNavigation.pipe(
+    return yield* installClientRouter.pipe(
       Effect.provideService(BrowserEffectRunner, run),
       Effect.provideService(BrowserRenderer, browserRenderer),
       Effect.provideService(NavigationApi, navigationApi),

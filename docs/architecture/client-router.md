@@ -21,9 +21,9 @@ coordinator state, or lifecycle operations.
 adapter. Neither owns the end-to-end routing policy. Refresh, Server Function, and HMR selection
 remain separate modules; they do not enter a global router scheduler.
 
-The implementation replaces `navigation-listener.ts` and `navigation-coordinator.ts` rather than
-layering another coordinator over them. Start with one private `client-router.ts`; split an internal
-module only when it has an independently useful interface.
+The implementation moves installed routing behavior into `client-router.ts` and absorbs
+`navigation-coordinator.ts` rather than layering another coordinator over them. Keep the router in
+one private module; split an internal module only when it has an independently useful interface.
 
 ## Native and Flight lifetimes
 

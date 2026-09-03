@@ -26,7 +26,7 @@ type NavigationOutcome =
       readonly resource: Extract<RouteLoad, { readonly _tag: 'Route' }>;
     };
 
-export const listenForNavigation = Effect.gen(function* () {
+export const installClientRouter = Effect.gen(function* () {
   const browserRenderer = yield* BrowserRenderer;
   const navigationApi = yield* NavigationApi;
   const routeLoader = yield* RouteLoader;

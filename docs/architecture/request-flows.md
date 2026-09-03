@@ -74,6 +74,7 @@ rendering.
 ## Owners
 
 - [`client/navigation-api.ts`](../../packages/effective-rsc/src/client/navigation-api.ts)
+- [`client/client-router.ts`](../../packages/effective-rsc/src/client/client-router.ts)
 - [`client/navigation-coordinator.ts`](../../packages/effective-rsc/src/client/navigation-coordinator.ts)
 - [`server/server-fn-request.ts`](../../packages/effective-rsc/src/server/server-fn-request.ts)
 - [`server/application.ts`](../../packages/effective-rsc/src/server/application.ts)

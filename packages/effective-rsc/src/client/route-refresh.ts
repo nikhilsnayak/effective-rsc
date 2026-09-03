@@ -51,8 +51,15 @@ export class RouteRefresher extends Context.Service<RouteRefresher>()(
   static readonly layerTest = Layer.mock(this);
 }
 
-const waitForNavigationIdle = (navigationApi: NavigationApi['Service']) =>
-  Effect.suspend(() => {
+export const installRouteRefresh = Effect.gen(function* () {
+  const browserRenderer = yield* BrowserRenderer;
+  const navigationApi = yield* NavigationApi;
+  const routeLoader = yield* RouteLoader;
+  const routeRefresher = yield* RouteRefresher;
+  const run = yield* BrowserEffectRunner;
+  const refreshes = yield* FiberMap.make<typeof CurrentRouteRefreshKey>();
+
+  const waitForNavigationIdle = Effect.suspend(() => {
     const transition = navigationApi.getTransition();
     return transition === null
       ? Effect.succeed('Idle' as const)
@@ -64,8 +71,7 @@ const waitForNavigationIdle = (navigationApi: NavigationApi['Service']) =>
         ).pipe(Effect.as('Settled' as const));
   }).pipe(Effect.repeat({ while: (state) => state === 'Settled' }), Effect.asVoid);
 
-const waitForRoutedNavigation = (navigationApi: NavigationApi['Service']) =>
-  Effect.callback<void>((resume) => {
+  const waitForRoutedNavigation = Effect.callback<void>((resume) => {
     const onNavigate = (event: NavigateEvent) => {
       if (isRoutedNavigation(event)) {
         resume(Effect.void);
@@ -74,14 +80,6 @@ const waitForRoutedNavigation = (navigationApi: NavigationApi['Service']) =>
     const unsubscribe = navigationApi.subscribe(onNavigate);
     return Effect.sync(unsubscribe);
   });
-
-export const installRouteRefresh = Effect.gen(function* () {
-  const browserRenderer = yield* BrowserRenderer;
-  const navigationApi = yield* NavigationApi;
-  const routeLoader = yield* RouteLoader;
-  const routeRefresher = yield* RouteRefresher;
-  const run = yield* BrowserEffectRunner;
-  const refreshes = yield* FiberMap.make<typeof CurrentRouteRefreshKey>();
 
   const refreshRoute = Effect.gen(function* () {
     const currentEntry = navigationApi.getCurrentEntry();
@@ -125,8 +123,8 @@ export const installRouteRefresh = Effect.gen(function* () {
 
   const refreshCurrentRoute = Effect.gen(function* () {
     routeLoader.invalidate();
-    yield* waitForNavigationIdle(navigationApi);
-    yield* Effect.raceFirst(refreshInReactTransition, waitForRoutedNavigation(navigationApi));
+    yield* waitForNavigationIdle;
+    yield* Effect.raceFirst(refreshInReactTransition, waitForRoutedNavigation);
   }).pipe(Effect.catch((cause) => Effect.logError('Failed to refresh the current route.', cause)));
 
   yield* routeRefresher.replace({

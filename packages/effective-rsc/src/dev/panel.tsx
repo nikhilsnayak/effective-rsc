@@ -1,5 +1,6 @@
 import { Collapsible } from '@base-ui/react/collapsible';
 import { Dialog } from '@base-ui/react/dialog';
+import { ScrollArea } from '@base-ui/react/scroll-area';
 import { Effect, Queue, Ref, Stream } from 'effect';
 import { createRoot, type Root } from 'react-dom/client';
 
@@ -87,29 +88,62 @@ export const applyDevPanelEvent = (state: DevPanelState, event: DevPanelEvent): 
   }
 };
 
-function RuntimeFailure({ failure }: { readonly failure: DevRuntimeFailure }) {
+function ErrorMark() {
   return (
-    <article>
-      <h2 className='category'>
-        {failure._tag === 'UnhandledRejection' ? 'Unhandled rejection' : 'Runtime error'}
-      </h2>
-      <p>
-        {failure.name}: {failure.message}
-      </p>
-      {failure.componentStack === undefined ? null : (
-        <>
-          <h3 className='component-stack-title'>React component stack</h3>
-          <pre>{failure.componentStack}</pre>
-        </>
-      )}
-      {failure.stack === undefined ? null : (
-        <Collapsible.Root className='stack'>
-          <Collapsible.Trigger className='stack-trigger'>Stack trace</Collapsible.Trigger>
-          <Collapsible.Panel className='stack-panel'>
-            <pre>{failure.stack}</pre>
-          </Collapsible.Panel>
-        </Collapsible.Root>
-      )}
+    <span aria-hidden='true' className='error-mark'>
+      <svg fill='none' viewBox='0 0 18 18'>
+        <path d='M9 5.25v4.5' stroke='currentColor' strokeLinecap='round' strokeWidth='1.5' />
+        <circle cx='9' cy='12.75' fill='currentColor' r='.75' />
+        <path
+          d='M7.27 2.76 1.64 12.5A2 2 0 0 0 3.37 15.5h11.26a2 2 0 0 0 1.73-3L10.73 2.76a2 2 0 0 0-3.46 0Z'
+          stroke='currentColor'
+          strokeWidth='1.5'
+        />
+      </svg>
+    </span>
+  );
+}
+
+function RuntimeFailure({
+  failure,
+  index,
+}: {
+  readonly failure: DevRuntimeFailure;
+  readonly index: number;
+}) {
+  return (
+    <article className='failure'>
+      <div aria-hidden='true' className='failure-index'>
+        {String(index + 1).padStart(2, '0')}
+      </div>
+      <div className='failure-body'>
+        <h2 className='category'>
+          <span className='status-dot' />
+          {failure._tag === 'UnhandledRejection' ? 'Unhandled rejection' : 'Runtime error'}
+        </h2>
+        <p className='message'>
+          <span className='error-name'>{failure.name}:</span> {failure.message}
+        </p>
+        {failure.componentStack === undefined ? null : (
+          <section className='trace-section'>
+            <h3 className='component-stack-title'>React component stack</h3>
+            <pre className='code-frame'>{failure.componentStack}</pre>
+          </section>
+        )}
+        {failure.stack === undefined ? null : (
+          <Collapsible.Root className='stack'>
+            <Collapsible.Trigger className='stack-trigger'>
+              <svg aria-hidden='true' fill='none' viewBox='0 0 16 16'>
+                <path d='m5.75 3.5 4.5 4.5-4.5 4.5' stroke='currentColor' strokeWidth='1.5' />
+              </svg>
+              Stack trace
+            </Collapsible.Trigger>
+            <Collapsible.Panel className='stack-panel'>
+              <pre className='code-frame'>{failure.stack}</pre>
+            </Collapsible.Panel>
+          </Collapsible.Root>
+        )}
+      </div>
     </article>
   );
 }
@@ -125,29 +159,56 @@ function DevPanelContent({ state }: { readonly state: DevPanelState }) {
     return null;
   }
 
+  const isBuildFailure = state.content._tag === 'BuildFailed';
+  const failureCount = isBuildFailure ? 1 : state.content.failures.length;
+
   return (
     <>
       <header>
-        <span className='brand'>effective-rsc dev</span>
-        <Dialog.Title className='title'>
-          {state.content._tag === 'BuildFailed' ? 'Build failed' : 'Runtime failures'}
-        </Dialog.Title>
+        <ErrorMark />
+        <div className='heading'>
+          <span className='brand'>
+            effective-rsc <span>/ development</span>
+          </span>
+          <Dialog.Title className='title'>
+            {isBuildFailure ? 'Build failed' : 'Runtime failures'}
+          </Dialog.Title>
+        </div>
+        <span className='failure-count'>
+          {failureCount} {failureCount === 1 ? 'issue' : 'issues'}
+        </span>
         <Dialog.Close aria-label='Close development panel' className='close'>
-          {'\u00d7'}
+          <svg aria-hidden='true' fill='none' viewBox='0 0 18 18'>
+            <path d='m4.5 4.5 9 9m0-9-9 9' stroke='currentColor' strokeWidth='1.5' />
+          </svg>
         </Dialog.Close>
       </header>
-      <div aria-live='assertive' className='content'>
-        {state.content._tag === 'BuildFailed' ? (
-          <pre>{state.content.diagnostics}</pre>
-        ) : (
-          state.content.failures.map((failure) => (
-            <RuntimeFailure
-              failure={failure}
-              key={`${failure.name}\n${failure.message}\n${failure.stack ?? ''}`}
-            />
-          ))
-        )}
-      </div>
+      <ScrollArea.Root className='content'>
+        <ScrollArea.Viewport className='content-viewport'>
+          <ScrollArea.Content aria-live='assertive'>
+            {isBuildFailure ? (
+              <section className='build-failure'>
+                <div className='section-heading'>
+                  <span>Compiler output</span>
+                  <span>Fix the error and save to retry</span>
+                </div>
+                <pre className='build-output'>{state.content.diagnostics}</pre>
+              </section>
+            ) : (
+              state.content.failures.map((failure, index) => (
+                <RuntimeFailure
+                  failure={failure}
+                  index={index}
+                  key={`${failure.name}\n${failure.message}\n${failure.stack ?? ''}`}
+                />
+              ))
+            )}
+          </ScrollArea.Content>
+        </ScrollArea.Viewport>
+        <ScrollArea.Scrollbar className='scrollbar'>
+          <ScrollArea.Thumb className='scrollbar-thumb' />
+        </ScrollArea.Scrollbar>
+      </ScrollArea.Root>
     </>
   );
 }

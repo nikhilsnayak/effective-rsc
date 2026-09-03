@@ -20,16 +20,11 @@ export type NavigationRenderResult<Render> =
   | { readonly _tag: 'Rendered'; readonly value: Render }
   | { readonly _tag: 'Discarded' };
 
-export type NavigationRollbackReason = 'Aborted' | 'Failed';
-
 export type NavigationAttempt = {
   readonly complete: () => void;
   readonly fail: () => void;
   readonly render: <Render>(render: () => Render) => NavigationRenderResult<Render>;
-  readonly rollback: (
-    reason: NavigationRollbackReason,
-    rollbackRender: () => Promise<void>,
-  ) => Promise<void>;
+  readonly rollback: (rollbackRender: () => Promise<void>) => Promise<void>;
 };
 
 const navigationDispatchCompleted = () =>
@@ -55,7 +50,7 @@ export class BrowserNavigationCoordinator {
       complete: () => this.complete(attempt),
       fail: () => this.fail(attempt),
       render: (render) => this.render(attempt, render),
-      rollback: (reason, rollbackRender) => this.rollback(attempt, reason, rollbackRender),
+      rollback: (rollbackRender) => this.rollback(attempt, rollbackRender),
     };
   }
 
@@ -90,18 +85,12 @@ export class BrowserNavigationCoordinator {
   }
 
   // oxlint-disable-next-line effecttsgo/async-function -- Browser navigation is a native Promise boundary.
-  private async rollback(
-    attempt: NavigationAttemptData,
-    reason: NavigationRollbackReason,
-    rollbackRender: () => Promise<void>,
-  ) {
-    if (reason === 'Aborted') {
-      // The Navigation API aborts the ongoing NavigateEvent before dispatching its successor.
-      // Let that dispatch finish so the successor can become active before the obsolete render is
-      // cleaned up. A microtask is too early because aborting fires navigateerror synchronously.
-      // https://html.spec.whatwg.org/multipage/nav-history-apis.html#fire-a-push/replace/reload-navigate-event
-      await navigationDispatchCompleted();
-    }
+  private async rollback(attempt: NavigationAttemptData, rollbackRender: () => Promise<void>) {
+    // The Navigation API aborts the ongoing NavigateEvent before dispatching its successor.
+    // Let that dispatch finish so the successor can become active before the obsolete render is
+    // cleaned up. A microtask is too early because aborting fires navigateerror synchronously.
+    // https://html.spec.whatwg.org/multipage/nav-history-apis.html#fire-a-push/replace/reload-navigate-event
+    await navigationDispatchCompleted();
 
     await rollbackRender();
     MutableRef.set(attempt.state, { _tag: 'RolledBack' });

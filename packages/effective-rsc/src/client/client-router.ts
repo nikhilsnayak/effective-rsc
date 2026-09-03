@@ -130,12 +130,9 @@ export const installClientRouter = Effect.gen(function* () {
           Effect.tap(Effect.sync(attempt.complete)),
           Effect.onExit((exit) =>
             Exit.isFailure(exit)
-              ? Effect.promise(() =>
-                  attempt.rollback(
-                    event.signal.aborted ? 'Aborted' : 'Failed',
-                    rendererNavigation.rollback,
-                  ),
-                ).pipe(Effect.ensuring(resource.release))
+              ? Effect.promise(() => attempt.rollback(rendererNavigation.rollback)).pipe(
+                  Effect.ensuring(resource.release),
+                )
               : Effect.void,
           ),
         ),

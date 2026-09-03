@@ -10,7 +10,7 @@ it.effect('retires a superseded render when its successor arrives after abort mi
     const retired: Array<string> = [];
 
     expect(first.render(() => 'first')).toEqual({ _tag: 'Rendered', value: 'first' });
-    const firstRollback = first.rollback('Aborted', () => {
+    const firstRollback = first.rollback(() => {
       retired.push('first');
       return Promise.resolve();
     });
@@ -34,7 +34,7 @@ it.effect('finishes superseded render cleanup when its successor fails', () =>
     const retired: Array<string> = [];
 
     first.render(() => 'first');
-    const firstRollback = first.rollback('Aborted', () => {
+    const firstRollback = first.rollback(() => {
       retired.push('first');
       return Promise.resolve();
     });

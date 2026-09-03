@@ -24,6 +24,10 @@ Bun server scope
 Effect interruption and Web Stream cancellation propagate across these boundaries. Work is not
 detached unless another explicit owner retains it.
 
+This table describes the current implementation. [D-066](../DECISIONS.md) plans to replace the
+Navigation handler as the postcommit owner with the client router. See
+[Client router](client-router.md) for the target ownership transfer and retirement rules.
+
 ## Protocol ownership
 
 | Concern                              | Owner                               | ERSC responsibility                                              |

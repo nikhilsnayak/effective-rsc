@@ -47,6 +47,10 @@ navigations fetch new Flight even when their URL is cached. An unsettled superse
 completed cache hit. Cancellation rolls back URL and visible UI; supersession keeps the current UI
 until the replacement commits.
 
+This is the current implementation. [D-066](../DECISIONS.md) plans to finish native Navigation at
+the first Layout commit and transfer the remaining Flight lifetime to the client router. The target
+flow and its migration invariants are specified in [Client router](client-router.md).
+
 ## Server Function
 
 Hydrated calls use React's native Server Function POST. ERSC requires an Origin whose host matches

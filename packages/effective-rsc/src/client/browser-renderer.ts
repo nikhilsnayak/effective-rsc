@@ -5,6 +5,7 @@ import type { RouteTreeModel } from '../rsc/route-tree';
 export type BrowserRendererNavigation = {
   readonly committed: Promise<void>;
   readonly complete: () => void;
+  readonly retired: Promise<void>;
   readonly rollback: () => Promise<void>;
 };
 
@@ -174,6 +175,7 @@ export class BrowserRenderer extends Context.Service<BrowserRenderer>()(
             }
             return navigation.retired.promise;
           },
+          retired: navigation.retired.promise,
         };
       };
 
@@ -187,11 +189,19 @@ export class BrowserRenderer extends Context.Service<BrowserRenderer>()(
 
       const commit = (render: BrowserRender) => {
         const { lifecycle } = getReadyState();
+        const previousVisible = lifecycle.visible;
         const visible: BrowserRenderOwner =
           render._tag === 'Navigation'
             ? { _tag: 'Navigation', navigation: render.navigation }
             : { _tag: 'Stable' };
         lifecycle.visible = visible;
+
+        if (
+          previousVisible._tag === 'Navigation' &&
+          (visible._tag !== 'Navigation' || visible.navigation !== previousVisible.navigation)
+        ) {
+          retireNavigation(lifecycle, previousVisible.navigation);
+        }
 
         lifecycle.retiring = lifecycle.retiring.filter((navigation) => {
           if (visible._tag === 'Navigation' && visible.navigation === navigation) {

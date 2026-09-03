@@ -193,6 +193,7 @@ const makeBrowserRenderer = (
       return {
         committed: Promise.resolve(),
         complete: () => navigationOutcomes.push('Complete'),
+        retired: Promise.resolve(),
         rollback: () => {
           navigationOutcomes.push('Rollback');
           return Promise.resolve();
@@ -598,6 +599,7 @@ it.effect('cancels a streaming Flight response abandoned before React commits', 
           return {
             committed: renderCommitted.promise,
             complete: () => undefined,
+            retired: Promise.resolve(),
             rollback: () => {
               rollbackStarted.resolve();
               return rollbackCommitted.promise;
@@ -700,6 +702,7 @@ it.effect('cancels a committed streaming Flight response before its handler comp
         navigate: () => ({
           committed: Promise.resolve(),
           complete: () => undefined,
+          retired: Promise.resolve(),
           rollback: () => {
             rollbackStarted.resolve();
             return rollbackCommitted.promise;

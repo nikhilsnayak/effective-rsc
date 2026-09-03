@@ -61,7 +61,7 @@ it.effect('restores the stable route tree when a visible navigation is canceled'
   }),
 );
 
-it.effect('retires a superseded render only after its successor becomes visible', () =>
+it.effect('retires a navigation only after its successor becomes visible', () =>
   Effect.gen(function* () {
     const renders: Array<BrowserRender> = [];
     const renderer = yield* BrowserRenderer.make;
@@ -78,9 +78,8 @@ it.effect('retires a superseded render only after its successor becomes visible'
     if (secondRender._tag !== 'Navigation') {
       return yield* Effect.die('Expected the second navigation render.');
     }
-    const firstRetired = first.rollback();
     let firstRetirementObserved = false;
-    void firstRetired.then(() => {
+    void first.retired.then(() => {
       firstRetirementObserved = true;
     });
 
@@ -89,10 +88,38 @@ it.effect('retires a superseded render only after its successor becomes visible'
     expect(firstRetirementObserved).toBe(false);
 
     renderer.commit(secondRender);
-    yield* Effect.promise(() => firstRetired);
+    yield* Effect.promise(() => first.retired);
 
     expect(firstRetirementObserved).toBe(true);
     expect(renders).toEqual([]);
+  }),
+);
+
+it.effect('retires a visible navigation when a refresh commits', () =>
+  Effect.gen(function* () {
+    const renders: Array<BrowserRender> = [];
+    const renderer = yield* BrowserRenderer.make;
+    renderer.initialize(makeRouteTree('initial'), (render) => renders.push(render));
+    const navigation = renderer.navigate(makeRouteTree('destination'));
+    const navigationRender = nextRender(renders);
+    if (navigationRender._tag !== 'Navigation') {
+      return yield* Effect.die('Expected a navigation render.');
+    }
+    renderer.commit(navigationRender);
+
+    const refresh = renderer.refresh(makeRouteTree('refreshed'));
+    const refreshRender = nextRender(renders);
+    let retirementObserved = false;
+    void navigation.retired.then(() => {
+      retirementObserved = true;
+    });
+    yield* Effect.promise(() => Promise.resolve());
+    expect(retirementObserved).toBe(false);
+
+    renderer.commit(refreshRender);
+    yield* Effect.promise(() => Promise.all([navigation.retired, refresh]));
+
+    expect(retirementObserved).toBe(true);
   }),
 );
 

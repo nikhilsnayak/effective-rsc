@@ -1,7 +1,6 @@
 import { Context, Effect, Layer, MutableRef } from 'effect';
 
 import type { RouteTreeModel } from '../rsc/route-tree';
-import { retainSharedLayoutContent } from './route-tree';
 
 export type BrowserRendererNavigation = {
   readonly committed: Promise<void>;
@@ -125,7 +124,7 @@ export class BrowserRenderer extends Context.Service<BrowserRenderer>()(
         const navigation: BrowserRenderNavigationState = {
           committed: Promise.withResolvers<void>(),
           retired: Promise.withResolvers<void>(),
-          routeTree: retainSharedLayoutContent(lifecycle.stableRouteTree, routeTree),
+          routeTree,
           stableRouteTree: lifecycle.stableRouteTree,
         };
         lifecycle.phases.set(navigation, 'Scheduled');

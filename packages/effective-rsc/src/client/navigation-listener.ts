@@ -1,12 +1,11 @@
-import { Effect } from 'effect';
+import { Effect, Exit } from 'effect';
 import { startTransition } from 'react';
 
 import { BrowserEffectRunner } from './browser-effect-runner';
-import { BrowserRenderer } from './browser-renderer';
+import { BrowserRenderer, type BrowserRendererNavigation } from './browser-renderer';
 import { NavigationApi } from './navigation-api';
 import {
   BrowserNavigationCoordinator,
-  type NavigationAttempt,
   type NavigationRollbackReason,
 } from './navigation-coordinator';
 import {
@@ -15,35 +14,17 @@ import {
   NativeDocumentNavigationInfo,
   preserveRequestedHash,
 } from './navigation-routing';
-import { RouteLoader } from './route-loader';
+import { RouteLoader, type RouteLoad } from './route-loader';
 
-// oxlint-disable-next-line effecttsgo/async-function -- Navigation handlers are native Promise boundaries.
-const settleOnNavigationAbort = async (work: Promise<void>, signal: AbortSignal) => {
-  try {
-    await work;
-  } catch (cause) {
-    if (!signal.aborted) {
-      throw cause;
-    }
-  }
-};
-
-const startNavigationTransition = (work: () => Promise<void>) => {
-  const finished = Promise.withResolvers<void>();
-
-  // Calling work inside the transition lets React track the suspended navigation from its fetch.
-  // oxlint-disable-next-line effecttsgo/async-function -- React Transition Actions are a native Promise boundary.
-  startTransition(async () => {
-    try {
-      await work();
-      finished.resolve();
-    } catch (cause) {
-      finished.reject(cause);
-    }
-  });
-
-  return finished.promise;
-};
+type NavigationOutcome =
+  | { readonly _tag: 'Handled' }
+  | {
+      readonly _tag: 'Committed';
+      readonly redirected: boolean;
+      readonly rendererNavigation: BrowserRendererNavigation;
+      readonly resolvedDestination: URL;
+      readonly resource: Extract<RouteLoad, { readonly _tag: 'Route' }>;
+    };
 
 export const listenForNavigation = Effect.gen(function* () {
   const browserRenderer = yield* BrowserRenderer;
@@ -63,95 +44,6 @@ export const listenForNavigation = Effect.gen(function* () {
     });
   };
 
-  // oxlint-disable-next-line effecttsgo/async-function -- React Transition Actions are a native Promise boundary.
-  const performNavigation = async (
-    attempt: NavigationAttempt,
-    event: NavigateEvent,
-    destination: URL,
-    precommitController?: NavigationPrecommitController,
-  ) => {
-    const resource = await run(
-      routeLoader.load({
-        destination: event.destination,
-        navigationType: event.navigationType,
-      }),
-      { signal: event.signal },
-    ).catch((cause) => {
-      attempt.fail();
-      throw cause;
-    });
-
-    if (resource._tag === 'Document') {
-      await run(resource.release);
-      openDocument(event, destination);
-      return;
-    }
-
-    const resolvedDestination = preserveRequestedHash(destination, resource.resolvedUrl);
-    if (resolvedDestination.origin !== destination.origin) {
-      await run(resource.release);
-      openDocument(event, resolvedDestination);
-      return;
-    }
-
-    const redirected = destination.href !== resolvedDestination.href;
-    if (redirected && (precommitController === undefined || event.navigationType === 'traverse')) {
-      await run(resource.release);
-      navigationApi.replaceDocument(resolvedDestination.href);
-      return;
-    }
-
-    const renderResult = attempt.render(() => browserRenderer.navigate(resource.routeTree));
-    if (renderResult._tag === 'Discarded') {
-      await run(resource.release);
-      return;
-    }
-
-    const rendererNavigation = renderResult.value;
-    const rollbackAndRelease = (reason: NavigationRollbackReason) =>
-      Effect.promise(() => attempt.rollback(reason, rendererNavigation.rollback)).pipe(
-        Effect.ensuring(resource.release),
-      );
-    const flightCompletion = resource.completed.pipe(
-      Effect.tap(() =>
-        Effect.sync(() => {
-          rendererNavigation.complete();
-          attempt.complete();
-          resource.cacheCurrent();
-        }),
-      ),
-    );
-    const completePostcommitFlight = () =>
-      settleOnNavigationAbort(
-        run(
-          flightCompletion.pipe(
-            Effect.onError(() => rollbackAndRelease(event.signal.aborted ? 'Aborted' : 'Failed')),
-          ),
-          { signal: event.signal },
-        ),
-        event.signal,
-      );
-
-    try {
-      await run(
-        Effect.promise(() => rendererNavigation.committed),
-        { signal: event.signal },
-      );
-
-      if (redirected && precommitController !== undefined) {
-        precommitController.redirect(resolvedDestination.href, { history: 'auto' });
-      }
-      if (precommitController === undefined) {
-        await run(flightCompletion, { signal: event.signal });
-      } else {
-        precommitController.addHandler(completePostcommitFlight);
-      }
-    } catch (cause) {
-      await run(rollbackAndRelease(event.signal.aborted ? 'Aborted' : 'Failed'));
-      throw cause;
-    }
-  };
-
   const onNavigate = (event: NavigateEvent) => {
     if (isHistoryRollback(event)) {
       event.intercept({ handler: () => Promise.resolve() });
@@ -163,13 +55,131 @@ export const listenForNavigation = Effect.gen(function* () {
 
     const destination = new URL(event.destination.url);
     const attempt = coordinator.begin(event.navigationType);
-    const handler = (precommitController?: NavigationPrecommitController) =>
-      startNavigationTransition(() =>
-        settleOnNavigationAbort(
-          performNavigation(attempt, event, destination, precommitController),
-          event.signal,
+    // oxlint-disable-next-line effecttsgo/async-function -- Navigation handlers are native Promise boundaries.
+    const handler = async (precommitController?: NavigationPrecommitController) => {
+      const navigationOutcome = Promise.withResolvers<NavigationOutcome>();
+
+      const navigationAction = Effect.gen(function* () {
+        const resource = yield* routeLoader
+          .load({
+            destination: event.destination,
+            navigationType: event.navigationType,
+          })
+          .pipe(Effect.onError(() => Effect.sync(attempt.fail)));
+
+        if (resource._tag === 'Document') {
+          yield* resource.release;
+          openDocument(event, destination);
+          navigationOutcome.resolve({ _tag: 'Handled' });
+          return;
+        }
+
+        const resolvedDestination = preserveRequestedHash(destination, resource.resolvedUrl);
+        if (resolvedDestination.origin !== destination.origin) {
+          yield* resource.release;
+          openDocument(event, resolvedDestination);
+          navigationOutcome.resolve({ _tag: 'Handled' });
+          return;
+        }
+
+        const redirected = destination.href !== resolvedDestination.href;
+        if (
+          redirected &&
+          (precommitController === undefined || event.navigationType === 'traverse')
+        ) {
+          yield* resource.release;
+          navigationApi.replaceDocument(resolvedDestination.href);
+          navigationOutcome.resolve({ _tag: 'Handled' });
+          return;
+        }
+
+        startTransition(() => {
+          const renderResult = attempt.render(() => browserRenderer.navigate(resource.routeTree));
+          if (renderResult._tag === 'Discarded') {
+            run(resource.release).then(
+              () => navigationOutcome.resolve({ _tag: 'Handled' }),
+              navigationOutcome.reject,
+            );
+            return;
+          }
+
+          const rendererNavigation = renderResult.value;
+          const rollbackAndRelease = (reason: NavigationRollbackReason) =>
+            Effect.promise(() => attempt.rollback(reason, rendererNavigation.rollback)).pipe(
+              Effect.ensuring(resource.release),
+            );
+          const commit = Effect.promise(() => rendererNavigation.committed).pipe(
+            Effect.onExit((exit) =>
+              Exit.isFailure(exit)
+                ? rollbackAndRelease(event.signal.aborted ? 'Aborted' : 'Failed')
+                : Effect.void,
+            ),
+          );
+
+          run(commit, { signal: event.signal }).then(
+            () =>
+              navigationOutcome.resolve({
+                _tag: 'Committed',
+                redirected,
+                rendererNavigation,
+                resolvedDestination,
+                resource,
+              }),
+            navigationOutcome.reject,
+          );
+        });
+      });
+
+      // oxlint-disable-next-line effecttsgo/async-function -- React Transition Actions are a native Promise boundary.
+      startTransition(async () => {
+        await run(navigationAction, { signal: event.signal }).catch(navigationOutcome.reject);
+      });
+
+      const outcome = await navigationOutcome.promise.catch((cause) => {
+        if (!event.signal.aborted) {
+          throw cause;
+        }
+        return { _tag: 'Handled' } as NavigationOutcome;
+      });
+      if (outcome._tag === 'Handled') {
+        return;
+      }
+
+      const { redirected, rendererNavigation, resolvedDestination, resource } = outcome;
+      const rollbackAndRelease = (reason: NavigationRollbackReason) =>
+        Effect.promise(() => attempt.rollback(reason, rendererNavigation.rollback)).pipe(
+          Effect.ensuring(resource.release),
+        );
+      const completeFlight = resource.completed.pipe(
+        Effect.tap(() =>
+          Effect.sync(() => {
+            rendererNavigation.complete();
+            attempt.complete();
+            resource.cacheCurrent();
+          }),
+        ),
+        Effect.onExit((exit) =>
+          Exit.isFailure(exit)
+            ? rollbackAndRelease(event.signal.aborted ? 'Aborted' : 'Failed')
+            : Effect.void,
         ),
       );
+      const completePostcommitFlight = () =>
+        run(completeFlight, { signal: event.signal }).catch((cause) => {
+          if (!event.signal.aborted) {
+            throw cause;
+          }
+        });
+
+      if (redirected && precommitController !== undefined) {
+        precommitController.redirect(resolvedDestination.href, { history: 'auto' });
+      }
+      if (precommitController === undefined) {
+        await completePostcommitFlight();
+      } else {
+        precommitController.addHandler(completePostcommitFlight);
+      }
+    };
 
     event.intercept(
       event.cancelable

@@ -124,9 +124,10 @@ wiring error and throws a plain `TypeError`.
 
 ## Events and commands
 
-State changes are synchronous and atomic through a pure reducer and `MutableRef.modify`. Loading,
-Flight consumption, and React rendering remain concurrent; the router does not introduce a queue,
-mutex, or synchronized execution lane.
+State changes are synchronous and atomic through a pure reducer. Dispatch reads the current
+`MutableRef`, computes the reducer result, installs the next state before running commands, and does
+not yield between those steps. Loading, Flight consumption, and React rendering remain concurrent;
+the router does not introduce a queue, mutex, or synchronized execution lane.
 
 The closed lifecycle event family is:
 

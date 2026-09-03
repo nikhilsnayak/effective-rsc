@@ -11,21 +11,28 @@ import {
 } from './navigation-routing';
 import { RouteLoader, type RouteLoad } from './route-loader';
 
-type NavigationAttemptState =
-  | { readonly _tag: 'Pending' }
-  | { readonly _tag: 'Rendering' }
-  | { readonly _tag: 'Failed' }
-  | { readonly _tag: 'Superseded' }
-  | { readonly _tag: 'Completed' }
-  | { readonly _tag: 'Aborted' };
+type NavigationGeneration = symbol;
 
-type NavigationAttemptData = {
-  readonly state: MutableRef.MutableRef<NavigationAttemptState>;
-};
+type NavigationCandidate =
+  | { readonly _tag: 'Loading'; readonly generation: NavigationGeneration }
+  | { readonly _tag: 'Rendering'; readonly generation: NavigationGeneration };
 
-type NavigationCoordinatorState =
-  | { readonly _tag: 'Idle' }
-  | { readonly _tag: 'Active'; readonly attempt: NavigationAttemptData };
+type RouterState =
+  | { readonly _tag: 'Ready' }
+  | { readonly _tag: 'Navigating'; readonly candidate: NavigationCandidate };
+
+type RouterEvent =
+  | { readonly _tag: 'BeginCancelable'; readonly generation: NavigationGeneration }
+  | { readonly _tag: 'BeginCommittedTraversal'; readonly generation: NavigationGeneration }
+  | { readonly _tag: 'RouteLoaded'; readonly generation: NavigationGeneration }
+  | { readonly _tag: 'RenderCommitted'; readonly generation: NavigationGeneration }
+  | { readonly _tag: 'FlightFailed'; readonly generation: NavigationGeneration }
+  | { readonly _tag: 'NavigationAborted'; readonly generation: NavigationGeneration };
+
+type RouterTransition =
+  | { readonly _tag: 'Continue'; readonly state: RouterState }
+  | { readonly _tag: 'Render'; readonly state: RouterState }
+  | { readonly _tag: 'Discard'; readonly state: RouterState };
 
 type NavigationRenderResult<Render> =
   | { readonly _tag: 'Rendered'; readonly value: Render }
@@ -38,85 +45,47 @@ type NavigationAttempt = {
   readonly render: <Render>(render: () => Render) => NavigationRenderResult<Render>;
 };
 
-class BrowserNavigationCoordinator {
-  private readonly state = MutableRef.make<NavigationCoordinatorState>({ _tag: 'Idle' });
-
-  begin(): NavigationAttempt {
-    const active = MutableRef.get(this.state);
-    const attempt: NavigationAttemptData = {
-      state: MutableRef.make<NavigationAttemptState>({ _tag: 'Pending' }),
-    };
-    if (active._tag === 'Active') {
-      this.supersede(active.attempt);
-    }
-    MutableRef.set(this.state, { _tag: 'Active', attempt });
+const reduceRouterState = (state: RouterState, event: RouterEvent): RouterTransition => {
+  if (event._tag === 'BeginCancelable' || event._tag === 'BeginCommittedTraversal') {
     return {
-      abort: (discardRender) => this.abort(attempt, discardRender),
-      complete: () => this.complete(attempt),
-      fail: () => this.fail(attempt),
-      render: (render) => this.render(attempt, render),
+      _tag: 'Continue',
+      state: {
+        _tag: 'Navigating',
+        candidate: { _tag: 'Loading', generation: event.generation },
+      },
     };
   }
 
-  private complete(attempt: NavigationAttemptData) {
-    if (MutableRef.get(attempt.state)._tag !== 'Rendering') {
-      return;
-    }
-    MutableRef.set(attempt.state, { _tag: 'Completed' });
-    this.clearActive(attempt);
+  if (state._tag === 'Ready' || state.candidate.generation !== event.generation) {
+    return {
+      _tag: event._tag === 'RouteLoaded' ? 'Discard' : 'Continue',
+      state,
+    };
   }
 
-  private fail(attempt: NavigationAttemptData) {
-    const state = MutableRef.get(attempt.state);
-    if (state._tag !== 'Pending') {
-      return;
-    }
-    MutableRef.set(attempt.state, { _tag: 'Failed' });
-    this.clearActive(attempt);
+  switch (event._tag) {
+    case 'FlightFailed':
+      return state.candidate._tag === 'Loading'
+        ? { _tag: 'Continue', state: { _tag: 'Ready' } }
+        : { _tag: 'Continue', state };
+    case 'RouteLoaded':
+      return state.candidate._tag === 'Loading'
+        ? {
+            _tag: 'Render',
+            state: {
+              _tag: 'Navigating',
+              candidate: { _tag: 'Rendering', generation: event.generation },
+            },
+          }
+        : { _tag: 'Discard', state };
+    case 'RenderCommitted':
+      return state.candidate._tag === 'Rendering'
+        ? { _tag: 'Continue', state: { _tag: 'Ready' } }
+        : { _tag: 'Continue', state };
+    case 'NavigationAborted':
+      return { _tag: 'Continue', state: { _tag: 'Ready' } };
   }
-
-  private render<Render>(
-    attempt: NavigationAttemptData,
-    render: () => Render,
-  ): NavigationRenderResult<Render> {
-    const state = MutableRef.get(attempt.state);
-    if (state._tag !== 'Pending') {
-      return { _tag: 'Discarded' };
-    }
-    const value = render();
-    MutableRef.set(attempt.state, { _tag: 'Rendering' });
-    return { _tag: 'Rendered', value };
-  }
-
-  // oxlint-disable-next-line effecttsgo/async-function -- React render retirement is a native Promise boundary.
-  private async abort(attempt: NavigationAttemptData, discardRender: () => Promise<void>) {
-    await discardRender();
-    MutableRef.set(attempt.state, { _tag: 'Aborted' });
-    this.clearActive(attempt);
-  }
-
-  private clearActive(attempt: NavigationAttemptData) {
-    const active = MutableRef.get(this.state);
-    if (active._tag === 'Active' && active.attempt === attempt) {
-      MutableRef.set(this.state, { _tag: 'Idle' });
-    }
-  }
-
-  private supersede(attempt: NavigationAttemptData) {
-    const state = MutableRef.get(attempt.state);
-    switch (state._tag) {
-      case 'Pending':
-      case 'Rendering':
-        MutableRef.set(attempt.state, { _tag: 'Superseded' });
-        break;
-      case 'Completed':
-      case 'Failed':
-      case 'Aborted':
-      case 'Superseded':
-        throw new TypeError('Only the active browser navigation can be superseded.');
-    }
-  }
-}
+};
 
 type NavigationPreparation =
   | { readonly _tag: 'Handled' }
@@ -133,7 +102,47 @@ export const installClientRouter = Effect.gen(function* () {
   const navigationApi = yield* NavigationApi;
   const routeLoader = yield* RouteLoader;
   const run = yield* BrowserEffectRunner;
-  const coordinator = new BrowserNavigationCoordinator();
+  const routerState = MutableRef.make<RouterState>({ _tag: 'Ready' });
+
+  const dispatch = (event: RouterEvent) => {
+    const transition = reduceRouterState(MutableRef.get(routerState), event);
+    MutableRef.set(routerState, transition.state);
+    return transition;
+  };
+
+  const beginNavigation = (event: NavigateEvent): NavigationAttempt => {
+    const generation: NavigationGeneration = Symbol('NavigationGeneration');
+    dispatch({
+      _tag: event.cancelable ? 'BeginCancelable' : 'BeginCommittedTraversal',
+      generation,
+    });
+
+    // oxlint-disable-next-line effecttsgo/async-function -- React render retirement is a native Promise boundary.
+    const abort = async (discardRender: () => Promise<void>) => {
+      await discardRender();
+      dispatch({ _tag: 'NavigationAborted', generation });
+    };
+
+    return {
+      abort,
+      complete: () => {
+        dispatch({ _tag: 'RenderCommitted', generation });
+      },
+      fail: () => {
+        dispatch({ _tag: 'FlightFailed', generation });
+      },
+      render: (render) => {
+        const transition = dispatch({ _tag: 'RouteLoaded', generation });
+        if (transition._tag === 'Discard') {
+          return { _tag: 'Discarded' };
+        }
+        if (transition._tag !== 'Render') {
+          throw new TypeError('An active loading navigation must accept its render.');
+        }
+        return { _tag: 'Rendered', value: render() };
+      },
+    };
+  };
 
   const openDocument = (event: NavigateEvent, destination: URL) => {
     if (event.navigationType === 'traverse') {
@@ -152,7 +161,7 @@ export const installClientRouter = Effect.gen(function* () {
     }
 
     const destination = new URL(event.destination.url);
-    const attempt = coordinator.begin();
+    const attempt = beginNavigation(event);
     // oxlint-disable-next-line effecttsgo/async-function -- Navigation handlers are native Promise boundaries.
     const handler = async (precommitController?: NavigationPrecommitController) => {
       const preparation = Promise.withResolvers<NavigationPreparation>();

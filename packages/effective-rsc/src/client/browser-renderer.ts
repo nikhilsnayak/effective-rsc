@@ -6,21 +6,18 @@ export type BrowserRendererNavigation = {
   readonly committed: Promise<void>;
   readonly discard: () => Promise<void>;
   readonly retired: Promise<void>;
-  readonly rollback: () => Promise<void>;
 };
 
 type BrowserRenderNavigationState = {
   readonly committed: PromiseWithResolvers<void>;
   readonly retired: PromiseWithResolvers<void>;
   readonly routeTree: RouteTreeModel;
-  readonly stableRouteTree: RouteTreeModel;
 };
 
 type BrowserRenderNavigationPhase =
   | 'Scheduled'
   | 'DiscardRequested'
   | 'Visible'
-  | 'RollbackRequested'
   | 'Completed'
   | 'Retired';
 
@@ -60,11 +57,6 @@ export type BrowserRender =
   | {
       readonly _tag: 'Refresh';
       readonly committed: PromiseWithResolvers<void>;
-      readonly routeTree: RouteTreeModel;
-    }
-  | {
-      readonly _tag: 'Rollback';
-      readonly navigation: BrowserRenderNavigationState;
       readonly routeTree: RouteTreeModel;
     };
 
@@ -133,7 +125,6 @@ export class BrowserRenderer extends Context.Service<BrowserRenderer>()(
           committed: Promise.withResolvers<void>(),
           retired: Promise.withResolvers<void>(),
           routeTree,
-          stableRouteTree: lifecycle.stableRouteTree,
         };
         lifecycle.phases.set(navigation, 'Scheduled');
         lifecycle.active = { _tag: 'Navigation', navigation };
@@ -166,41 +157,6 @@ export class BrowserRenderer extends Context.Service<BrowserRenderer>()(
                   : lifecycle.stableRouteTree,
               visible: lifecycle.visible,
             });
-            return navigation.retired.promise;
-          },
-          rollback: () => {
-            switch (getNavigationPhase(lifecycle, navigation)) {
-              case 'Completed':
-              case 'Retired':
-                return Promise.resolve();
-              case 'DiscardRequested':
-                return navigation.retired.promise;
-              case 'Scheduled':
-              case 'Visible':
-                lifecycle.phases.set(navigation, 'RollbackRequested');
-                break;
-              case 'RollbackRequested':
-                return navigation.retired.promise;
-            }
-
-            const active = lifecycle.active;
-            const visible = lifecycle.visible;
-            if (
-              active._tag === 'Navigation' ||
-              (visible._tag === 'Navigation' && visible.navigation === navigation)
-            ) {
-              lifecycle.retiring = [...lifecycle.retiring, navigation];
-            } else {
-              retireNavigation(lifecycle, navigation);
-            }
-            if (active._tag === 'Navigation' && active.navigation === navigation) {
-              lifecycle.active = { _tag: 'Stable' };
-              publish({
-                _tag: 'Rollback',
-                navigation,
-                routeTree: navigation.stableRouteTree,
-              });
-            }
             return navigation.retired.promise;
           },
           retired: navigation.retired.promise,
@@ -264,9 +220,6 @@ export class BrowserRenderer extends Context.Service<BrowserRenderer>()(
           case 'Refresh':
             lifecycle.stableRouteTree = render.routeTree;
             render.committed.resolve();
-            break;
-          case 'Rollback':
-            retireNavigation(lifecycle, render.navigation);
             break;
         }
       };

@@ -6,7 +6,7 @@ type NavigationAttemptState =
   | { readonly _tag: 'Failed' }
   | { readonly _tag: 'Superseded' }
   | { readonly _tag: 'Completed' }
-  | { readonly _tag: 'RolledBack' };
+  | { readonly _tag: 'Aborted' };
 
 type NavigationAttemptData = {
   readonly state: MutableRef.MutableRef<NavigationAttemptState>;
@@ -21,18 +21,11 @@ export type NavigationRenderResult<Render> =
   | { readonly _tag: 'Discarded' };
 
 export type NavigationAttempt = {
+  readonly abort: (discardRender: () => Promise<void>) => Promise<void>;
   readonly complete: () => void;
   readonly fail: () => void;
   readonly render: <Render>(render: () => Render) => NavigationRenderResult<Render>;
-  readonly rollback: (rollbackRender: () => Promise<void>) => Promise<void>;
 };
-
-const navigationDispatchCompleted = () =>
-  // oxlint-disable-next-line effecttsgo/new-promise -- Browser task scheduling is a native Promise boundary.
-  new Promise<void>((resolve) => {
-    // oxlint-disable-next-line effecttsgo/global-timers -- A task, rather than a microtask, lets the browser dispatch a superseding NavigateEvent.
-    setTimeout(resolve, 0);
-  });
 
 export class BrowserNavigationCoordinator {
   private readonly state = MutableRef.make<NavigationCoordinatorState>({ _tag: 'Idle' });
@@ -47,10 +40,10 @@ export class BrowserNavigationCoordinator {
     }
     MutableRef.set(this.state, { _tag: 'Active', attempt });
     return {
+      abort: (discardRender) => this.abort(attempt, discardRender),
       complete: () => this.complete(attempt),
       fail: () => this.fail(attempt),
       render: (render) => this.render(attempt, render),
-      rollback: (rollbackRender) => this.rollback(attempt, rollbackRender),
     };
   }
 
@@ -84,16 +77,10 @@ export class BrowserNavigationCoordinator {
     return { _tag: 'Rendered', value };
   }
 
-  // oxlint-disable-next-line effecttsgo/async-function -- Browser navigation is a native Promise boundary.
-  private async rollback(attempt: NavigationAttemptData, rollbackRender: () => Promise<void>) {
-    // The Navigation API aborts the ongoing NavigateEvent before dispatching its successor.
-    // Let that dispatch finish so the successor can become active before the obsolete render is
-    // cleaned up. A microtask is too early because aborting fires navigateerror synchronously.
-    // https://html.spec.whatwg.org/multipage/nav-history-apis.html#fire-a-push/replace/reload-navigate-event
-    await navigationDispatchCompleted();
-
-    await rollbackRender();
-    MutableRef.set(attempt.state, { _tag: 'RolledBack' });
+  // oxlint-disable-next-line effecttsgo/async-function -- React render retirement is a native Promise boundary.
+  private async abort(attempt: NavigationAttemptData, discardRender: () => Promise<void>) {
+    await discardRender();
+    MutableRef.set(attempt.state, { _tag: 'Aborted' });
     this.clearActive(attempt);
   }
 
@@ -113,7 +100,7 @@ export class BrowserNavigationCoordinator {
         break;
       case 'Completed':
       case 'Failed':
-      case 'RolledBack':
+      case 'Aborted':
       case 'Superseded':
         throw new TypeError('Only the active browser navigation can be superseded.');
     }

@@ -33,7 +33,7 @@ it.effect('initializes once for a React root', () =>
   }),
 );
 
-it.effect('does not roll back a navigation after it commits', () =>
+it.effect('rejects discard after a navigation commits', () =>
   Effect.gen(function* () {
     const renders: Array<BrowserRender> = [];
     const renderer = yield* BrowserRenderer.make;
@@ -46,8 +46,9 @@ it.effect('does not roll back a navigation after it commits', () =>
     renderer.commit(navigationRender);
     yield* Effect.promise(() => navigation.committed);
 
-    yield* Effect.promise(() => navigation.rollback());
-
+    expect(() => navigation.discard()).toThrow(
+      'Only a scheduled browser navigation can be discarded.',
+    );
     expect(renders).toEqual([]);
   }),
 );
@@ -174,19 +175,19 @@ it.effect('advances the stable route tree when a navigation commits', () =>
     if (secondRender._tag !== 'Navigation') {
       return yield* Effect.die('Expected the second navigation render.');
     }
-    const retired = second.rollback();
-    const rollbackRender = nextRender(renders);
-    if (rollbackRender._tag !== 'Rollback') {
-      return yield* Effect.die('Expected a rollback render.');
+    const retired = second.discard();
+    const discardRender = nextRender(renders);
+    if (discardRender._tag !== 'Discard') {
+      return yield* Effect.die('Expected a discard render.');
     }
 
-    expect(rollbackRender.routeTree).toBe(firstRouteTree);
-    renderer.commit(rollbackRender);
+    expect(discardRender.routeTree).toBe(firstRouteTree);
+    renderer.commit(discardRender);
     yield* Effect.promise(() => retired);
   }),
 );
 
-it.effect('uses a committed Server Function refresh as the next rollback target', () =>
+it.effect('uses a committed Server Function refresh as the next discard target', () =>
   Effect.gen(function* () {
     const refreshedRouteTree = makeRouteTree('refreshed');
     const renders: Array<BrowserRender> = [];
@@ -205,14 +206,14 @@ it.effect('uses a committed Server Function refresh as the next rollback target'
     if (navigationRender._tag !== 'Navigation') {
       return yield* Effect.die('Expected a navigation render.');
     }
-    const retired = navigation.rollback();
-    const rollbackRender = nextRender(renders);
-    if (rollbackRender._tag !== 'Rollback') {
-      return yield* Effect.die('Expected a rollback render.');
+    const retired = navigation.discard();
+    const discardRender = nextRender(renders);
+    if (discardRender._tag !== 'Discard') {
+      return yield* Effect.die('Expected a discard render.');
     }
 
-    expect(rollbackRender.routeTree).toBe(refreshedRouteTree);
-    renderer.commit(rollbackRender);
+    expect(discardRender.routeTree).toBe(refreshedRouteTree);
+    renderer.commit(discardRender);
     yield* Effect.promise(() => retired);
   }),
 );

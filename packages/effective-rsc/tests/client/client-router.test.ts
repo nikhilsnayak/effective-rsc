@@ -191,7 +191,6 @@ const makeBrowserRenderer = (renders: Array<BrowserRenderRequest> = []) =>
         committed: Promise.resolve(),
         discard: () => Promise.resolve(),
         retired: Promise.resolve(),
-        rollback: () => Promise.resolve(),
       };
     },
     refresh: (routeTree) => {
@@ -576,8 +575,8 @@ it.effect('cancels a streaming Flight response abandoned before React commits', 
       const navigation = new TestNavigationApi();
       const renderStarted = Promise.withResolvers<void>();
       const renderCommitted = Promise.withResolvers<void>();
-      const rollbackCommitted = Promise.withResolvers<void>();
-      const rollbackStarted = Promise.withResolvers<void>();
+      const discardCommitted = Promise.withResolvers<void>();
+      const discardStarted = Promise.withResolvers<void>();
       let responseSignal: AbortSignal | undefined;
       const browserRenderer = BrowserRenderer.of({
         commit: () => undefined,
@@ -586,12 +585,11 @@ it.effect('cancels a streaming Flight response abandoned before React commits', 
           renderStarted.resolve();
           return {
             committed: renderCommitted.promise,
-            discard: () => Promise.resolve(),
-            retired: Promise.resolve(),
-            rollback: () => {
-              rollbackStarted.resolve();
-              return rollbackCommitted.promise;
+            discard: () => {
+              discardStarted.resolve();
+              return discardCommitted.promise;
             },
+            retired: Promise.resolve(),
           };
         },
         refresh: () => Promise.resolve(),
@@ -638,11 +636,11 @@ it.effect('cancels a streaming Flight response abandoned before React commits', 
       expect(responseSignal?.aborted).toBe(false);
 
       navigationAbort.abort();
-      yield* Effect.promise(() => rollbackStarted.promise);
+      yield* Effect.promise(() => discardStarted.promise);
 
       expect(responseSignal?.aborted).toBe(false);
 
-      rollbackCommitted.resolve();
+      discardCommitted.resolve();
       const exit = yield* Effect.promise(() => navigationFinished).pipe(Effect.exit);
 
       expect(Exit.isSuccess(exit)).toBe(true);
@@ -696,7 +694,6 @@ it.effect('retains a committed Flight response until its render retires', () => 
           committed: Promise.resolve(),
           discard: () => Promise.resolve(),
           retired: renderRetired.promise,
-          rollback: () => Promise.resolve(),
         }),
         refresh: () => Promise.resolve(),
       });

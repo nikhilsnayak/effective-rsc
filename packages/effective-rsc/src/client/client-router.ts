@@ -6,7 +6,7 @@ import { BrowserRenderer, type BrowserRendererNavigation } from './browser-rende
 import { NavigationApi } from './navigation-api';
 import {
   BrowserNavigationCoordinator,
-  type NavigationRollbackReason,
+  type NavigationRenderResult,
 } from './navigation-coordinator';
 import {
   isHistoryRollback,
@@ -93,40 +93,46 @@ export const installClientRouter = Effect.gen(function* () {
           return;
         }
 
-        startTransition(() => {
-          const renderResult = attempt.render(() => browserRenderer.navigate(resource.routeTree));
-          if (renderResult._tag === 'Discarded') {
-            run(resource.release).then(
-              () => navigationOutcome.resolve({ _tag: 'Handled' }),
-              navigationOutcome.reject,
-            );
-            return;
-          }
+        const renderResult = yield* Effect.sync(() => {
+          let result!: NavigationRenderResult<BrowserRendererNavigation>;
+          startTransition(() => {
+            result = attempt.render(() => browserRenderer.navigate(resource.routeTree));
+          });
+          return result;
+        });
 
-          const rendererNavigation = renderResult.value;
-          const rollbackAndRelease = (reason: NavigationRollbackReason) =>
-            Effect.promise(() => attempt.rollback(reason, rendererNavigation.rollback)).pipe(
-              Effect.ensuring(resource.release),
-            );
-          const commit = Effect.promise(() => rendererNavigation.committed).pipe(
+        if (renderResult._tag === 'Discarded') {
+          yield* resource.release;
+          navigationOutcome.resolve({ _tag: 'Handled' });
+          return;
+        }
+
+        yield* Effect.uninterruptibleMask((restore) =>
+          restore(Effect.promise(() => renderResult.value.committed)).pipe(
+            Effect.tap(
+              Effect.sync(() => {
+                renderResult.value.complete();
+                attempt.complete();
+              }),
+            ),
             Effect.onExit((exit) =>
               Exit.isFailure(exit)
-                ? rollbackAndRelease(event.signal.aborted ? 'Aborted' : 'Failed')
+                ? Effect.promise(() =>
+                    attempt.rollback(
+                      event.signal.aborted ? 'Aborted' : 'Failed',
+                      renderResult.value.rollback,
+                    ),
+                  ).pipe(Effect.ensuring(resource.release))
                 : Effect.void,
             ),
-          );
-
-          run(commit, { signal: event.signal }).then(
-            () =>
-              navigationOutcome.resolve({
-                _tag: 'Committed',
-                redirected,
-                rendererNavigation,
-                resolvedDestination,
-                resource,
-              }),
-            navigationOutcome.reject,
-          );
+          ),
+        );
+        navigationOutcome.resolve({
+          _tag: 'Committed',
+          redirected,
+          rendererNavigation: renderResult.value,
+          resolvedDestination,
+          resource,
         });
       });
 
@@ -146,43 +152,33 @@ export const installClientRouter = Effect.gen(function* () {
       }
 
       const { redirected, rendererNavigation, resolvedDestination, resource } = outcome;
-      const rollbackAndRelease = (reason: NavigationRollbackReason) =>
-        Effect.promise(() => attempt.rollback(reason, rendererNavigation.rollback)).pipe(
-          Effect.ensuring(resource.release),
+      const committedEntry = Promise.withResolvers<NavigationHistoryEntry | null>();
+      const trackFlight = Effect.gen(function* () {
+        const flightOutcome = yield* Effect.raceFirst(
+          resource.completed.pipe(Effect.as('Completed' as const)),
+          Effect.promise(() => rendererNavigation.retired).pipe(Effect.as('Retired' as const)),
         );
-      const completeFlight = (entry: NavigationHistoryEntry | null) =>
-        resource.completed.pipe(
-          Effect.tap(() =>
-            Effect.sync(() => {
-              rendererNavigation.complete();
-              attempt.complete();
-              if (entry !== null) {
-                resource.cache(entry);
-              }
-            }),
-          ),
-          Effect.onExit((exit) =>
-            Exit.isFailure(exit)
-              ? rollbackAndRelease(event.signal.aborted ? 'Aborted' : 'Failed')
-              : Effect.void,
-          ),
-        );
-      const completePostcommitFlight = () =>
-        run(completeFlight(navigationApi.getCurrentEntry()), { signal: event.signal }).catch(
-          (cause) => {
-            if (!event.signal.aborted) {
-              throw cause;
-            }
-          },
-        );
+        if (flightOutcome === 'Retired') {
+          return;
+        }
+
+        const entry = yield* Effect.promise(() => committedEntry.promise);
+        if (entry !== null) {
+          yield* Effect.sync(() => resource.cache(entry));
+        }
+      }).pipe(Effect.ignore, Effect.ensuring(resource.release));
+
+      void run(trackFlight).catch(() => undefined);
 
       if (redirected && precommitController !== undefined) {
         precommitController.redirect(resolvedDestination.href, { history: 'auto' });
       }
       if (precommitController === undefined) {
-        await completePostcommitFlight();
+        committedEntry.resolve(navigationApi.getCurrentEntry());
       } else {
-        precommitController.addHandler(completePostcommitFlight);
+        precommitController.addHandler(() => {
+          committedEntry.resolve(navigationApi.getCurrentEntry());
+        });
       }
     };
 

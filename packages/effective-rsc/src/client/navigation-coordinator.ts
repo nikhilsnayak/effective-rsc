@@ -41,7 +41,7 @@ type NavigationCoordinatorState =
   | { readonly _tag: 'Idle' }
   | { readonly _tag: 'Active'; readonly attempt: NavigationAttemptData };
 
-type NavigationRenderResult<Render> =
+export type NavigationRenderResult<Render> =
   | { readonly _tag: 'Rendered'; readonly value: Render }
   | { readonly _tag: 'Discarded' };
 

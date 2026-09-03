@@ -323,7 +323,7 @@ it.effect('splits a cancelable navigation between React commit and Flight comple
   }),
 );
 
-it.effect('keeps the post-commit handler pending until the Flight stream reaches EOF', () =>
+it.effect('settles the post-commit handler before the Flight stream reaches EOF', () =>
   Effect.scoped(
     Effect.gen(function* () {
       const navigation = new TestNavigationApi();
@@ -374,7 +374,7 @@ it.effect('keeps the post-commit handler pending until the Flight stream reaches
       });
       yield* Effect.promise(() => Promise.resolve());
 
-      expect(handlerSettled).toBe(false);
+      expect(handlerSettled).toBe(true);
       if (responseController === undefined) {
         return yield* Effect.die('Expected a streaming Flight response.');
       }
@@ -666,13 +666,13 @@ it.effect('cancels a streaming Flight response abandoned before React commits', 
   );
 });
 
-it.effect('cancels a committed streaming Flight response before its handler completes', () => {
+it.effect('retains a committed Flight response until its render retires', () => {
   const navigationAbort = new AbortController();
   return Effect.scoped(
     Effect.gen(function* () {
       const navigation = new TestNavigationApi();
-      const rollbackCommitted = Promise.withResolvers<void>();
-      const rollbackStarted = Promise.withResolvers<void>();
+      const renderRetired = Promise.withResolvers<void>();
+      const responseAborted = Promise.withResolvers<void>();
       let responseSignal: AbortSignal | undefined;
       const httpClient = HttpClient.make((request, _url, signal) =>
         Effect.sync(() => {
@@ -683,9 +683,14 @@ it.effect('cancels a committed streaming Flight response before its handler comp
               new ReadableStream<Uint8Array>({
                 start(controller) {
                   controller.enqueue(new Uint8Array([1]));
-                  signal.addEventListener('abort', () => controller.error(signal.reason), {
-                    once: true,
-                  });
+                  signal.addEventListener(
+                    'abort',
+                    () => {
+                      controller.error(signal.reason);
+                      responseAborted.resolve();
+                    },
+                    { once: true },
+                  );
                 },
               }),
               {
@@ -705,11 +710,8 @@ it.effect('cancels a committed streaming Flight response before its handler comp
           committed: Promise.resolve(),
           complete: () => undefined,
           discard: () => Promise.resolve(),
-          retired: Promise.resolve(),
-          rollback: () => {
-            rollbackStarted.resolve();
-            return rollbackCommitted.promise;
-          },
+          retired: renderRetired.promise,
+          rollback: () => Promise.resolve(),
         }),
         refresh: () => Promise.resolve(),
       });
@@ -735,21 +737,20 @@ it.effect('cancels a committed streaming Flight response before its handler comp
       if (handler === undefined) {
         return yield* Effect.die('Expected a post-commit handler.');
       }
-      const navigationFinished = invokeNavigationHandler(handler);
+      yield* Effect.promise(() => invokeNavigationHandler(handler));
 
       expect(responseSignal?.aborted).toBe(false);
 
       navigationAbort.abort();
-      yield* Effect.promise(() => rollbackStarted.promise);
+      yield* Effect.yieldNow;
 
       expect(responseSignal?.aborted).toBe(false);
 
-      rollbackCommitted.resolve();
-      const exit = yield* Effect.promise(() => navigationFinished).pipe(Effect.exit);
+      renderRetired.resolve();
+      yield* Effect.promise(() => responseAborted.promise);
 
-      expect(Exit.isSuccess(exit)).toBe(true);
       expect(responseSignal?.aborted).toBe(true);
-      expect(navigation.traversals).toEqual([{ info: 'ersc-history-rollback', key: 'day-one' }]);
+      expect(navigation.traversals).toEqual([]);
     }),
   );
 });

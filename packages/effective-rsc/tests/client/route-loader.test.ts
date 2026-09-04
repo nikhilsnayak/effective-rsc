@@ -73,9 +73,6 @@ const makeNavigationApiLayer = (navigationHistory: TestNavigationHistory) =>
     reloadDocument: () => undefined,
     replaceDocument: () => undefined,
     subscribe: () => () => undefined,
-    traverseTo: () => {
-      throw new TypeError('Unexpected history traversal.');
-    },
   });
 
 const makeRouteLoader = Effect.fnUntraced(function* (

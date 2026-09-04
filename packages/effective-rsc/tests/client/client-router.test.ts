@@ -79,7 +79,6 @@ class TestNavigationApi {
     readonly options: { readonly history: 'push' | 'replace'; readonly info: unknown };
     readonly url: string;
   }> = [];
-  readonly traversals: Array<{ readonly info: unknown; readonly key: string }> = [];
 
   addEventListener(_type: 'navigate', listener: EventListener) {
     this.listener = listener;
@@ -99,14 +98,6 @@ class TestNavigationApi {
       options: { history: options.history, info: options.info },
       url: url.toString(),
     });
-    return {
-      committed: Promise.resolve(this.currentEntry),
-      finished: Promise.resolve(this.currentEntry),
-    };
-  }
-
-  traverseTo(key: string, options?: NavigationOptions): NavigationResult {
-    this.traversals.push({ key, info: options?.info });
     return {
       committed: Promise.resolve(this.currentEntry),
       finished: Promise.resolve(this.currentEntry),
@@ -226,23 +217,29 @@ const initialRouteTree: RouteTreeModel = {
   id: 'day-one',
 };
 
-const makeBrowserRenderer = (renders: Array<BrowserRenderRequest> = []) =>
-  BrowserRenderer.of({
+const makeBrowserRenderer = (renders: Array<BrowserRenderRequest> = []) => {
+  let visibleNavigation: PromiseWithResolvers<void> | null = null;
+  return BrowserRenderer.of({
     commit: () => undefined,
     initialize: () => undefined,
     navigate: (routeTree) => {
+      const previousNavigation = visibleNavigation;
+      visibleNavigation = Promise.withResolvers<void>();
       renders.push({ _tag: 'Navigation', routeTree });
       return {
-        committed: Promise.resolve(),
+        committed: Promise.resolve().then(() => previousNavigation?.resolve()),
         discard: () => Promise.resolve(),
-        retired: Promise.withResolvers<void>().promise,
+        retired: visibleNavigation.promise,
       };
     },
     refresh: (routeTree) => {
+      const previousNavigation = visibleNavigation;
+      visibleNavigation = null;
       renders.push({ _tag: 'ServerFunction', routeTree });
-      return Promise.resolve();
+      return Promise.resolve().then(() => previousNavigation?.resolve());
     },
   });
+};
 
 const makePrecommitController = (
   redirects: Array<{
@@ -315,7 +312,6 @@ const makeNavigationApiLayer = (
       navigation.addEventListener('navigate', listener as EventListener);
       return () => navigation.removeEventListener('navigate', listener as EventListener);
     },
-    traverseTo: (key, options) => navigation.traverseTo(key, options),
   });
 
 const listen = (
@@ -896,7 +892,6 @@ it.effect('cancels a streaming Flight response abandoned before React commits', 
 
       expect(Exit.isSuccess(exit)).toBe(true);
       expect(responseSignal?.aborted).toBe(true);
-      expect(navigation.traversals).toEqual([]);
     }),
   );
 });
@@ -1173,7 +1168,6 @@ it.effect('retains a committed Flight response until its render retires', () => 
       yield* Effect.promise(() => responseAborted.promise);
 
       expect(responseSignal?.aborted).toBe(true);
-      expect(navigation.traversals).toEqual([]);
     }),
   );
 });

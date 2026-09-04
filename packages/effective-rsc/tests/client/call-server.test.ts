@@ -111,9 +111,6 @@ it.effect('releases an incomplete Server Function response', () =>
         reloadDocument: () => undefined,
         replaceDocument: () => undefined,
         subscribe: () => () => undefined,
-        traverseTo: () => {
-          throw new TypeError('Unexpected traversal.');
-        },
       });
       const flightClientLayer = FlightClient.layerTest({
         load: () =>
@@ -192,9 +189,6 @@ const staleResponseScenario = (changeNavigation: (state: TestNavigationState) =>
         reloadDocument: () => undefined,
         replaceDocument: () => undefined,
         subscribe: () => () => undefined,
-        traverseTo: () => {
-          throw new TypeError('Unexpected traversal.');
-        },
       });
       const flightClientLayer = FlightClient.layerTest({
         load: () =>
@@ -293,9 +287,6 @@ it.effect('does not let an older invocation response overwrite a newer response'
         reloadDocument: () => undefined,
         replaceDocument: () => undefined,
         subscribe: () => () => undefined,
-        traverseTo: () => {
-          throw new TypeError('Unexpected traversal.');
-        },
       });
       const flightClientLayer = FlightClient.layerTest({
         load: (request) => {

@@ -79,9 +79,6 @@ const makeNavigationApiLayer = (navigation: TestNavigation) =>
       navigation.addEventListener('navigate', listener as EventListener);
       return () => navigation.removeEventListener('navigate', listener as EventListener);
     },
-    traverseTo: () => {
-      throw new TypeError('Unexpected history traversal.');
-    },
   });
 
 const testHttpClient = HttpClient.make(() => Effect.die('Unexpected HTTP request.'));

@@ -15,8 +15,6 @@ export class NavigationApi extends Context.Service<NavigationApi>()('ersc/client
       window.navigation.addEventListener('navigate', listener);
       return () => window.navigation.removeEventListener('navigate', listener);
     },
-    traverseTo: (key: string, options?: NavigationOptions) =>
-      window.navigation.traverseTo(key, options),
   }),
 }) {
   static readonly layer = Layer.effect(this, this.make);

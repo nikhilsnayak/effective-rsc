@@ -43,8 +43,8 @@ const activateClientNavigation = Effect.gen(function* () {
   const initialPayload = yield* routeLoader.loadInitial;
   yield* reactDOMRenderer.hydrate(document, initialPayload);
   yield* installClientRouter;
-  yield* installCallServer;
   yield* installRouteRefresh;
+  yield* installCallServer;
 });
 
 export const browserMain = Effect.scoped(

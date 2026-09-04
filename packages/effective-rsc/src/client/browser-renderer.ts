@@ -28,7 +28,6 @@ type BrowserRenderOwner =
 type BrowserRendererLifecycle = {
   active: BrowserRenderOwner;
   readonly phases: WeakMap<BrowserRenderNavigationState, BrowserRenderNavigationPhase>;
-  retiring: ReadonlyArray<BrowserRenderNavigationState>;
   stableRouteTree: RouteTreeModel;
   visible: BrowserRenderOwner;
 };
@@ -111,7 +110,6 @@ export class BrowserRenderer extends Context.Service<BrowserRenderer>()(
           lifecycle: {
             active: { _tag: 'Stable' },
             phases: new WeakMap<BrowserRenderNavigationState, BrowserRenderNavigationPhase>(),
-            retiring: [],
             stableRouteTree: initialRouteTree,
             visible: { _tag: 'Stable' },
           },
@@ -188,14 +186,6 @@ export class BrowserRenderer extends Context.Service<BrowserRenderer>()(
         ) {
           retireNavigation(lifecycle, previousVisible.navigation);
         }
-
-        lifecycle.retiring = lifecycle.retiring.filter((navigation) => {
-          if (visible._tag === 'Navigation' && visible.navigation === navigation) {
-            return true;
-          }
-          retireNavigation(lifecycle, navigation);
-          return false;
-        });
 
         switch (render._tag) {
           case 'Initial':

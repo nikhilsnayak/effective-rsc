@@ -133,14 +133,16 @@ export const installCallServer = Effect.gen(function* () {
 
     yield* routeRefresher.interruptCurrentRouteRefresh;
     const commitRefresh = routeLoader.prepareRefresh(resource.payload.routeTree);
-    const committed = Promise.withResolvers<void>();
-    startTransition(() => {
-      addTransitionType('server-function');
-      // Keep the commit Promise outside React's Transition Action. Returning it would make React
-      // wait for the commit that this Promise itself observes.
-      browserRenderer.refresh(resource.payload.routeTree).then(committed.resolve, committed.reject);
+    let renderCommitted!: Promise<void>;
+    yield* Effect.sync(() => {
+      startTransition(() => {
+        addTransitionType('server-function');
+        // Do not return the commit Promise from React's Transition Action. React cannot commit the
+        // render until that Action ends.
+        renderCommitted = browserRenderer.refresh(resource.payload.routeTree);
+      });
     });
-    yield* Effect.all([resource.completed, Effect.promise(() => committed.promise)], {
+    yield* Effect.all([resource.completed, Effect.promise(() => renderCommitted)], {
       concurrency: 'unbounded',
       discard: true,
     }).pipe(
@@ -153,7 +155,7 @@ export const installCallServer = Effect.gen(function* () {
   yield* Effect.sync(() => {
     setServerCallback((id, args) => {
       const invocationResult = Promise.withResolvers<unknown>();
-      run(callServer(id, args, invocationResult)).then(undefined, invocationResult.reject);
+      void run(callServer(id, args, invocationResult)).catch(invocationResult.reject);
       return invocationResult.promise;
     });
   });

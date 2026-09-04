@@ -110,12 +110,14 @@ export const installRouteRefresh = Effect.gen(function* () {
     }
 
     const commitRefresh = routeLoader.prepareRefresh(resource.routeTree);
-    const committed = Promise.withResolvers<void>();
-    startTransition(() => {
-      addTransitionType(transitionType);
-      browserRenderer.refresh(resource.routeTree).then(committed.resolve, committed.reject);
+    let renderCommitted!: Promise<void>;
+    yield* Effect.sync(() => {
+      startTransition(() => {
+        addTransitionType(transitionType);
+        renderCommitted = browserRenderer.refresh(resource.routeTree);
+      });
     });
-    yield* Effect.all([Effect.promise(() => committed.promise), resource.completed], {
+    yield* Effect.all([Effect.promise(() => renderCommitted), resource.completed], {
       concurrency: 'unbounded',
       discard: true,
     }).pipe(Effect.andThen(Effect.sync(commitRefresh)), Effect.ensuring(resource.release));

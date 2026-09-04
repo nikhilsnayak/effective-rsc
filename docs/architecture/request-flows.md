@@ -32,24 +32,24 @@ sequenceDiagram
   Navigation->>Client: navigate event with AbortSignal
   Client->>Server: GET Flight
   Server-->>Client: streamed route tree
-  Client->>React: startTransition and decode
-  React-->>Navigation: first visible commit
-  Note over Navigation,Client: URL and visible UI commit together
-  Client-->>Navigation: handler settles at Flight EOF
+  Client->>React: publish decoded route in a Transition
+  React-->>Client: destination Layout commits
+  Client-->>Navigation: settle precommit handler
+  Navigation->>Navigation: commit entry, focus, and default scroll
+  Server-->>Client: remaining Flight chunks / EOF
+  Note over Client,React: Client retains Flight until EOF or render retirement
 ```
 
-The precommit promise resolves at React's first visible commit, keeping URL and UI synchronized. The
-navigation handler remains pending until Flight EOF, so browser cancellation and supersession still
-interrupt the transport and server work.
+The precommit promise resolves at the destination Layout commit. The Navigation API can then commit
+the URL and history entry, apply focus and default scroll, and let React finish its View Transition
+without waiting for Flight EOF. Ownership of a still-streaming response transfers from the native
+event signal to the client router at that boundary.
 
 Back/forward navigation may reuse a settled route tree by navigation-entry key. Fresh push/replace
 navigations fetch new Flight even when their URL is cached. An unsettled superseded entry is not a
-completed cache hit. Cancellation rolls back URL and visible UI; supersession keeps the current UI
-until the replacement commits.
-
-This is the current implementation. [D-066](../DECISIONS.md) plans to finish native Navigation at
-the first Layout commit and transfer the remaining Flight lifetime to the client router. The target
-flow and its migration invariants are specified in [Client router](client-router.md).
+completed cache hit. A superseding candidate leaves the current route visible until its replacement
+commits. Cancellation before commit needs no rollback because neither URL nor UI has committed;
+postcommit Flight failures go through React's error handling rather than history rollback.
 
 ## Server Function
 

@@ -1,8 +1,6 @@
 # Client router
 
-Status: **Planned** by [D-066](../DECISIONS.md). This document specifies the target client-navigation
-architecture. Until D-066 is delivered and promoted to Current, [Request flows](request-flows.md)
-and [Lifetimes, failures, and protocols](lifetimes-and-protocols.md) describe the implementation.
+Status: **Current** under [D-066 and D-067](../DECISIONS.md).
 
 ## Purpose
 
@@ -309,10 +307,3 @@ The required cases are:
   their exact additive navigation types;
 - Server Function and HMR refresh publications carry their exact refresh type; and
 - nested Suspense content may reveal after native Navigation finishes.
-
-## Delivery
-
-D-066 replaces the existing lifecycle directly; there is no feature flag or parallel router. Work
-lands as reviewable slices. Each slice must preserve a working tree and pass the repository checks
-appropriate to its risk. The current decisions and architecture are promoted only when the target
-behavior is implemented and verified.

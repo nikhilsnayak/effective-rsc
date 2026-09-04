@@ -18,7 +18,7 @@ Read this index before changing framework behavior.
   - [Authoring and route model](architecture/authoring.md)
   - [Request flows](architecture/request-flows.md)
   - [Lifetimes, failures, and protocols](architecture/lifetimes-and-protocols.md)
-  - [Planned client-router lifecycle](architecture/client-router.md)
+  - [Client-router lifecycle](architecture/client-router.md)
 - [DECISIONS.md](DECISIONS.md): Accepted choices grouped by delivery state.
 - [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md): open and explicitly deferred questions with their evidence.
 

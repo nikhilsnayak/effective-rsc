@@ -40,7 +40,7 @@ Details:
 - [Authoring and route model](architecture/authoring.md)
 - [Request flows](architecture/request-flows.md)
 - [Lifetimes, failures, and protocols](architecture/lifetimes-and-protocols.md)
-- [Planned client-router lifecycle](architecture/client-router.md)
+- [Client-router lifecycle](architecture/client-router.md)
 
 ## Boundaries
 

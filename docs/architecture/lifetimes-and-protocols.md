@@ -13,20 +13,21 @@ Bun server scope
       └─ response stream finalizers
 ```
 
-| Work                            | Owner                           | Completion or interruption                       |
-| ------------------------------- | ------------------------------- | ------------------------------------------------ |
-| Application services            | Server scope                    | Server shutdown                                  |
-| HTTP and Server Function Effect | Request fiber                   | Response completion, disconnect, or interruption |
-| Authored render Effects         | Request render-runtime FiberSet | Flight completion or request interruption        |
-| Browser Flight decode           | Navigation handler              | Flight EOF, cancellation, or supersession        |
-| Retained navigation entry       | Browser route loader            | Replacement or disposal                          |
+| Work                               | Owner                           | Completion or interruption                       |
+| ---------------------------------- | ------------------------------- | ------------------------------------------------ |
+| Application services               | Server scope                    | Server shutdown                                  |
+| HTTP and Server Function Effect    | Request fiber                   | Response completion, disconnect, or interruption |
+| Authored render Effects            | Request render-runtime FiberSet | Flight completion or request interruption        |
+| Preparing browser navigation       | Client-router candidate         | Layout commit, native abort, or supersession      |
+| Visible navigation Flight stream   | Client-router generation        | Flight EOF or renderer-confirmed retirement       |
+| Completed history-entry route tree | Browser route cache             | Cache invalidation or history-entry disposal      |
 
 Effect interruption and Web Stream cancellation propagate across these boundaries. Work is not
 detached unless another explicit owner retains it.
 
-This table describes the current implementation. [D-066](../DECISIONS.md) plans to replace the
-Navigation handler as the postcommit owner with the client router. See
-[Client router](client-router.md) for the target ownership transfer and retirement rules.
+The native `NavigateEvent.signal` participates until Layout commit. The client router then becomes
+the explicit lifetime owner for any remaining Flight stream; this work is not detached without an
+owner. See [Client router](client-router.md) for ownership transfer and retirement rules.
 
 ## Protocol ownership
 

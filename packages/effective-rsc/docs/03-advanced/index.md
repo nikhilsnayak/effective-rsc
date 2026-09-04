@@ -1,8 +1,8 @@
 ## Advanced
 
-Runtime guarantees:
-
-[Current limitations](https://github.com/nikhilsnayak/effective-rsc/blob/main/docs/ARCHITECTURE.md#known-limitations)
+These guides describe ERSC's runtime guarantees. See the
+[current limitations](https://github.com/nikhilsnayak/effective-rsc/blob/main/docs/ARCHITECTURE.md#known-limitations)
+before adopting them.
 
 <!-- source-navigation -->
 

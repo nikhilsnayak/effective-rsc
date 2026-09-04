@@ -69,7 +69,7 @@ entry; read Git history for what it said.
 | D-063 | Skip hydration entirely when the Navigation API or `NavigationPrecommitController` is missing, leaving the streamed document as a plain multi-page application.                                                                                                   |
 | D-064 | Start development diagnostics independently of hydration; refresh by reloading the document until client navigation installs streamed current-route refresh.                                                                                                      |
 | D-065 | Let hydrated Server Functions execute concurrently; only the latest applicable response may render its embedded tree, while other completions refresh the current route and newer response trees interrupt older refreshes.                                       |
-| D-066 | Finish native Navigation at destination Layout commit. The client router retains Flight until EOF or render retirement, preserves visible UI while successors prepare, discards precommit renders before release, and uses React errors without history rollback. |
+| D-066 | Finish native Navigation at first UI commit. The client router retains Flight until EOF or render retirement, preserves visible UI while successors prepare, discards precommit renders before release, and uses React errors without history rollback.           |
 | D-067 | Keep React `<ViewTransition>` boundaries and styles application-owned. At publication, tag routes with additive kind, direction, and UA visual-transition types, and tag Server Function and HMR refreshes with dedicated types.                                  |
 
 ## Deferred

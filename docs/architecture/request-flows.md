@@ -33,23 +33,22 @@ sequenceDiagram
   Client->>Server: GET Flight
   Server-->>Client: streamed route tree
   Client->>React: publish decoded route in a Transition
-  React-->>Client: destination Layout commits
+  React-->>Client: destination UI commits
   Client-->>Navigation: settle precommit handler
   Navigation->>Navigation: commit entry, focus, and default scroll
   Server-->>Client: remaining Flight chunks / EOF
   Note over Client,React: Client retains Flight until EOF or render retirement
 ```
 
-The precommit promise resolves at the destination Layout commit. The Navigation API can then commit
-the URL and history entry, apply focus and default scroll, and let React finish its View Transition
-without waiting for Flight EOF. Ownership of a still-streaming response transfers from the native
-event signal to the client router at that boundary.
+The precommit promise resolves at the destination's first UI commit. The Navigation API can then
+commit the URL and history entry, apply focus and default scroll, and let React finish its View
+Transition without waiting for Flight EOF. Ownership of a still-streaming response transfers from
+the native event signal to the client router at that boundary.
 
-Back/forward navigation may reuse a settled route tree by navigation-entry key. Fresh push/replace
-navigations fetch new Flight even when their URL is cached. An unsettled superseded entry is not a
-completed cache hit. A superseding candidate leaves the current route visible until its replacement
-commits. Cancellation before commit needs no rollback because neither URL nor UI has committed;
-postcommit Flight failures go through React's error handling rather than history rollback.
+Only completed route trees are cached by navigation-entry key. Push, replace, and uncached traversal
+fetch new Flight. A candidate leaves the current route visible until its replacement commits;
+precommit abort discards it without history rollback, while postcommit Flight failures use React's
+error handling.
 
 ## Server Function
 

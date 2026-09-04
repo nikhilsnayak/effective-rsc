@@ -1,10 +1,10 @@
 <picture>
   <source
     media="(prefers-color-scheme: dark)"
-    srcset="https://github.com/nikhilsnayak/effective-rsc/blob/main/packages/effective-rsc/logo-dark.svg"
+    srcset="https://raw.githubusercontent.com/nikhilsnayak/effective-rsc/main/packages/effective-rsc/logo-dark.svg"
   />
   <img
-    src="https://github.com/nikhilsnayak/effective-rsc/blob/main/packages/effective-rsc/logo.svg"
+    src="https://raw.githubusercontent.com/nikhilsnayak/effective-rsc/main/packages/effective-rsc/logo.svg"
     alt=""
     width="72"
     height="72"
@@ -42,17 +42,19 @@ Run `bunx create-ersc-app` without a directory for the interactive flow.
 
 ## Why effective-rsc
 
-- **[Effect is the application runtime](https://github.com/nikhilsnayak/effective-rsc/blob/main/packages/effective-rsc/docs/03-advanced/01-request-runtime-and-lifetimes/index.md).**
-  Pages, Layouts, Components, and Server Functions retain inferred service requirements and run as
-  request-scoped Effects. Provide the application Layer once; native Effect HTTP routes, APIs, RPC,
-  and middleware share the same Bun server and lifetime.
-- **[Streamed navigation without native-navigation deadlock](https://github.com/nikhilsnayak/effective-rsc/blob/main/packages/effective-rsc/docs/03-advanced/02-client-navigation/index.md).**
-  Native Navigation completes when the destination Layout commits, allowing URL/history, focus,
-  scroll, and React View Transitions to proceed. The client router retains the remaining Flight
-  stream until EOF or render retirement and preserves the visible route while a successor prepares.
-- **Application-owned, router-aware View Transitions.** ERSC tags publication with additive
-  navigation kind, direction, UA visual-transition, Server Function, and HMR types. Applications
-  own every React `<ViewTransition>` boundary and animation style.
+effective-rsc is built around three deliberate constraints:
+
+- **Effect owns the application runtime.** Pages, Layouts, Components, and Server Functions retain
+  inferred service requirements and run as request-scoped Effects. One application Layer provides
+  services and native Effect HTTP; Effect scopes own resources, interruption, and shutdown.
+- **Routes and ownership are explicit.** One application-scoped ERSC identity composes an immutable
+  route graph in `src/application.tsx`. Concern identity, middleware reach, and service requirements
+  remain visible in that composition.
+- **Navigation is browser-native.** ERSC intercepts the Navigation API and settles it at the
+  destination's first UI commit, so URL/history, focus, scroll, and React View Transitions are not
+  blocked by Flight EOF. The router retains the remaining stream until EOF or render retirement,
+  and tags publication with navigation, direction, UA visual-transition, Server Function, and HMR
+  transition types while applications own the `<ViewTransition>` boundaries and CSS.
 
 ## Manual installation
 

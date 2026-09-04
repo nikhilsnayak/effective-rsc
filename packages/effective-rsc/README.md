@@ -68,14 +68,14 @@ bun add effective-rsc \
   effect@4.0.0-rc.112 \
   @effect/platform-browser@4.0.0-rc.112 \
   @effect/platform-bun@4.0.0-rc.112 \
-  react@19.3.0-canary-a1124489-20260826 \
-  react-dom@19.3.0-canary-a1124489-20260826 \
+  react@19.3.0-canary-8425b691-20260904 \
+  react-dom@19.3.0-canary-8425b691-20260904 \
   react-server-dom-rspack@0.1.0
 bun add --dev \
   typescript@7.0.2 \
   @types/bun@^1.4.0 \
   @types/react@19.2.18 \
-  @types/react-dom@19.2.5
+  @types/react-dom@19.2.7
 ```
 
 Add the framework commands to `package.json`:

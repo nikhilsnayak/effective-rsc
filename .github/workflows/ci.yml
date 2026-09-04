@@ -50,7 +50,7 @@ jobs:
         with:
           name: playwright-diagnostics
           path: |
-            examples/kitchen-sink/playwright-report
-            examples/kitchen-sink/test-results
+            fixtures/framework-e2e/playwright-report
+            fixtures/framework-e2e/test-results
           if-no-files-found: ignore
           retention-days: 7

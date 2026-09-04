@@ -72,3 +72,5 @@ bun publish --cwd packages/create-ersc-app
 
 git tag --annotate "$tag" --message "Release $version"
 git push origin "$tag"
+
+echo "Create the GitHub release for $tag: https://github.com/nikhilsnayak/effective-rsc/releases/new"

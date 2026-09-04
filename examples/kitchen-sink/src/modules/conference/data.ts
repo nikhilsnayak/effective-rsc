@@ -166,7 +166,7 @@ export const speakers: ReadonlyMap<
   [
     'jonah-kim',
     {
-      latency: '840 millis',
+      latency: '3 seconds',
       speaker: { id: 'jonah-kim', name: 'Jonah Kim', role: 'Web platform lead' },
     },
   ],

@@ -11,7 +11,15 @@ export default ERSC.Layout.make({
     const conference = yield* service.conference;
 
     return (
-      <ViewTransition>
+      <ViewTransition
+        default='none'
+        update={{
+          default: 'none',
+          'hmr-refresh': 'auto',
+          navigation: 'auto',
+          'server-function': 'auto',
+        }}
+      >
         <html
           lang='en'
           data-conference-completed-at={conference.completedAt}

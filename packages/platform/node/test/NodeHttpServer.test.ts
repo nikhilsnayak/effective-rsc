@@ -86,6 +86,22 @@ describe("HttpServer", () => {
       assert.strictEqual(response.status, 204)
     }).pipe(Effect.provide(NodeHttpServer.layerTest)))
 
+  it.effect.each(["Uploaded", ""] as const)("forwards status text %j", (statusText) =>
+    Effect.gen(function*() {
+      yield* HttpRouter.add(
+        "GET",
+        "/",
+        HttpServerResponse.empty({ status: 201, statusText })
+      ).pipe(
+        HttpRouter.serve,
+        Layer.build
+      )
+      const server = yield* HttpServer.HttpServer
+      const port = (server.address as HttpServer.TcpAddress).port
+
+      assert.strictEqual(yield* getStatusText(port), statusText)
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)))
+
   it.effect("formData", () =>
     Effect.gen(function*() {
       yield* HttpRouter.add(
@@ -863,7 +879,16 @@ describe("HttpServer", () => {
         Effect.gen(function*() {
           const request = yield* HttpServerRequest.HttpServerRequest
           const socket = yield* Effect.orDie(request.upgrade)
-          yield* Effect.orDie(socket.run(() => Effect.void))
+          yield* Effect.gen(function*() {
+            const { pull } = yield* socket.reader
+            while (true) {
+              yield* pull
+            }
+          }).pipe(
+            Effect.scoped,
+            Effect.catchTag("SocketError", () => Effect.void),
+            Effect.orDie
+          )
           return HttpServerResponse.empty()
         })
       ).pipe(
@@ -938,10 +963,10 @@ describe("HttpServer", () => {
         Effect.gen(function*() {
           const request = yield* HttpServerRequest.HttpServerRequest
           const socket = yield* Effect.orDie(request.upgrade)
-          yield* Effect.forkScoped(socket.runRaw(constVoid))
-          const write = yield* socket.writer
-          yield* write("refused")
-          yield* write(new Socket.CloseEvent(4400, "refused"))
+          yield* Effect.asVoid(socket.reader)
+          const writer = yield* socket.writer
+          yield* writer.write("refused")
+          yield* writer.write(new Socket.CloseEvent(4400, "refused"))
           return HttpServerResponse.empty()
         }).pipe(Effect.scoped)
       ).pipe(
@@ -988,6 +1013,16 @@ const layerTestWebsocket = HttpServer.layerTestClient.pipe(
     websocket: { perMessageDeflate: true }
   }))
 )
+
+const getStatusText = (port: number) =>
+  Effect.callback<string | undefined, Error>((resume) => {
+    const request = Http.get({ hostname: "127.0.0.1", port, agent: false }, (response) => {
+      response.resume()
+      response.on("end", () => resume(Effect.succeed(response.statusMessage)))
+    })
+    request.on("error", (error) => resume(Effect.fail(error)))
+    return Effect.sync(() => request.destroy())
+  })
 
 const tcpPort = (server: Http.Server): number => {
   const address = server.address()

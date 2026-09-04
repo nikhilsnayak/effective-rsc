@@ -20,7 +20,6 @@ import * as Predicate from "effect/Predicate"
 import * as Redactable from "effect/Redactable"
 import * as Schema from "effect/Schema"
 import * as SchemaAST from "effect/SchemaAST"
-import * as SchemaIssue from "effect/SchemaIssue"
 import * as Stream from "effect/Stream"
 import type { Span } from "effect/Tracer"
 import type { Mutable, Simplify } from "effect/Types"
@@ -39,8 +38,6 @@ import { addGenAIAnnotations } from "./AnthropicTelemetry.ts"
 import type { AnthropicTool } from "./AnthropicTool.ts"
 import type * as Generated from "./Generated.ts"
 import * as InternalUtilities from "./internal/utilities.ts"
-
-const formatIssue = SchemaIssue.makeFormatterDefault()
 
 /**
  * Known Anthropic Claude model identifiers exposed by the generated Anthropic schema.
@@ -892,7 +889,13 @@ const prepareMessages = Effect.fnUntraced(
 
                         const source = isUrlData(part.data)
                           ? { type: "url", url: getUrlString(part.data) } as const
-                          : { type: "base64", media_type: mediaType, data: Encoding.encodeBase64(part.data) } as const
+                          : {
+                            type: "base64",
+                            media_type: mediaType,
+                            data: typeof part.data === "string"
+                              ? part.data.replace(/^data:[^;]+;base64,/, "")
+                              : Encoding.encodeBase64(part.data)
+                          } as const
 
                         content.push({ type: "image", source, cache_control: cacheControl })
                       } else if (part.mediaType === "application/pdf" || part.mediaType === "text/plain") {
@@ -965,7 +968,7 @@ const prepareMessages = Effect.fnUntraced(
                   content.push({
                     type: "tool_result",
                     tool_use_id: part.id,
-                    content: JSON.stringify(part.result),
+                    content: typeof part.result === "string" ? part.result : JSON.stringify(part.result),
                     is_error: part.isFailure,
                     cache_control: cacheControl
                   })
@@ -3106,19 +3109,13 @@ const transformToolCallParams = Effect.fnUntraced(function*<Tools extends Readon
 
   const { codec } = yield* tryCodecTransform(tool.parametersSchema, "makeResponse")
 
-  const transform = Schema.decodeEffect(codec)
-
+  // Normalize valid parameters; leave invalid ones for Toolkit.
   return yield* (
-    transform(toolParams) as Effect.Effect<unknown, Schema.SchemaError>
-  ).pipe(Effect.mapError((error) =>
-    AiError.make({
-      module: "AnthropicLanguageModel",
-      method: "makeResponse",
-      reason: new AiError.ToolParameterValidationError({
-        toolName,
-        toolParams,
-        description: formatIssue(error.issue)
-      })
-    })
-  ))
+    Schema.decodeEffect(codec)(toolParams) as Effect.Effect<unknown, Schema.SchemaError>
+  ).pipe(
+    Effect.flatMap((decoded) =>
+      Schema.encodeUnknownEffect(tool.parametersSchema)(decoded) as Effect.Effect<unknown, Schema.SchemaError>
+    ),
+    Effect.orElseSucceed(() => toolParams)
+  )
 })

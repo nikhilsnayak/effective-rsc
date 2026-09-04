@@ -2,9 +2,9 @@
 
 # v3 to v4 Migration Reference
 
-Base: `origin/v3` (`20596061bd24dd7f18c5b5c839111310d730d6e9`)
+Base: `origin/v3` (`7c6e1e5d2ac9dfe00649a65fa80a61dcc14d55ae`)
 
-Head: `HEAD` (`bda7819a3ce2995d568bac5321811665d68a8448`)
+Head: `origin/main` (`a9d1ee3d4d51e97ea33440fe6100935d5fd5aada`)
 
 This file is generated from the API diff and `migration/annotations/*.yaml`.
 
@@ -31,7 +31,7 @@ effect/TReentrantLock -> effect/TxReentrantLock (barrel: effect)
 effect/TRef -> effect/TxRef (barrel: effect)
 effect/TSemaphore -> effect/TxSemaphore (barrel: effect)
 effect/TSubscriptionRef -> effect/TxSubscriptionRef (barrel: effect)
-effect/FastCheck -> effect/testing/FastCheck (barrel: effect/testing)
+effect/FastCheck -> fast-check
 effect/TestClock -> effect/testing/TestClock (barrel: effect/testing)
 @effect/cli/Args -> effect/unstable/cli/Argument (barrel: effect/unstable/cli)
 @effect/cli/ValidationError -> effect/unstable/cli/CliError (barrel: effect/unstable/cli)
@@ -84,7 +84,7 @@ effect/TestClock -> effect/testing/TestClock (barrel: effect/testing)
 @effect/experimental/DevTools/Client -> effect/unstable/devtools/DevToolsClient (barrel: effect/unstable/devtools)
 @effect/experimental/DevTools/Domain -> effect/unstable/devtools/DevToolsSchema (barrel: effect/unstable/devtools)
 @effect/experimental/DevTools/Server -> effect/unstable/devtools/DevToolsServer (barrel: effect/unstable/devtools)
-@effect/platform/MsgPack -> effect/unstable/encoding/Msgpack (barrel: effect/unstable/encoding)
+@effect/platform/MsgPack -> effect/unstable/encoding/SchemaBinary (barrel: effect/unstable/encoding)
 @effect/platform/Ndjson -> effect/unstable/encoding/Ndjson (barrel: effect/unstable/encoding)
 @effect/experimental/Sse -> effect/unstable/encoding/Sse (barrel: effect/unstable/encoding)
 @effect/ai/AiError -> effect/unstable/ai/AiError (barrel: effect/unstable/ai)
@@ -548,7 +548,7 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 - `@effect/platform/HttpServerResponse` -> `effect/unstable/http/HttpServerResponse`
 - `@effect/platform/HttpTraceContext` -> `effect/unstable/http/HttpTraceContext`
 - `@effect/platform/KeyValueStore` -> `effect/unstable/persistence/KeyValueStore`
-- `@effect/platform/MsgPack` -> `effect/unstable/encoding/Msgpack`
+- `@effect/platform/MsgPack` -> `effect/unstable/encoding/SchemaBinary`: MessagePack support was removed. Schema-aware encode, decode, and duplex now live on SchemaBinary. Untyped MessagePack of unknown values has no replacement.
 - `@effect/platform/Multipart` -> `effect/unstable/http/Multipart`
 - `@effect/platform/Ndjson` -> `effect/unstable/encoding/Ndjson`
 - `@effect/platform/OpenApi` -> `effect/unstable/httpapi/OpenApi`
@@ -682,14 +682,14 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 - `@effect/workflow/WorkflowEngine` -> `effect/unstable/workflow/WorkflowEngine`
 - `@effect/workflow/WorkflowProxy` -> `effect/unstable/workflow/WorkflowProxy`
 - `@effect/workflow/WorkflowProxyServer` -> `effect/unstable/workflow/WorkflowProxyServer`
-- `effect/Arbitrary`: No single module replacement; follow the curated per-API guidance below.
+- `effect/Arbitrary` -> `effect/unstable/arbitrary/Arbitrary`: Schema-derived generation moved to the native Arbitrary module. Effect no longer bridges to fast-check.
 - `effect/ChildExecutorDecision` -> `none`: Removed with the v3 channel executor and Channel.concatMapWithCustom. Choose Channel.flatMap, Channel.switchMap, or Channel.mergeAll instead; v4 exposes no child-executor decision ADT.
 - `effect/ConfigError`: No single module replacement; follow the curated per-API guidance below.
 - `effect/ConfigProviderPathPatch`: No single module replacement; follow the curated per-API guidance below.
 - `effect/DefaultServices`: No single module replacement; follow the curated per-API guidance below.
 - `effect/Either` -> `effect/Result`
 - `effect/ExecutionStrategy`: No single module replacement; follow the curated per-API guidance below.
-- `effect/FastCheck` -> `effect/testing/FastCheck`
+- `effect/FastCheck` -> `fast-check`: Effect no longer re-exports fast-check. Depend on the fast-check package and import it directly. For Schema-derived generation, use Arbitrary.schema from effect/unstable/arbitrary.
 - `effect/FiberId`: No single module replacement; follow the curated per-API guidance below.
 - `effect/FiberRef` -> `effect/References`
 - `effect/FiberRefs`: No single module replacement; follow the curated per-API guidance below.
@@ -5872,11 +5872,11 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `EventLogRemote.ProtocolRequest` -> `effect/unstable/eventlog/EventLogMessage#EventLogRemoteRpcs`: EventLogRemoteRpcs and generic RPC serialization replace the old protocol request union.
 
-- `EventLogRemote.ProtocolRequestMsgPack` -> `effect/unstable/rpc/RpcSerialization#layerMsgPack`: Use the generic MsgPack RPC serialization layer instead of a request-specific schema.
+- `EventLogRemote.ProtocolRequestMsgPack` -> `effect/unstable/rpc/RpcSerialization#layerSchemaBinary`: Use the generic SchemaBinary RPC serialization layer instead of a request-specific schema.
 
 - `EventLogRemote.ProtocolResponse` -> `effect/unstable/eventlog/EventLogMessage#EventLogRemoteRpcs`: EventLogRemoteRpcs and generic RPC serialization replace the old protocol response union.
 
-- `EventLogRemote.ProtocolResponseMsgPack` -> `effect/unstable/rpc/RpcSerialization#layerMsgPack`: Use the generic MsgPack RPC serialization layer instead of a response-specific schema.
+- `EventLogRemote.ProtocolResponseMsgPack` -> `effect/unstable/rpc/RpcSerialization#layerSchemaBinary`: Use the generic SchemaBinary RPC serialization layer instead of a response-specific schema.
 
 - `EventLogRemote.RemoteAdditions` -> `none`: This unused protocol model has no v4 counterpart.
 
@@ -5884,17 +5884,17 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `EventLogRemote.StopChanges` -> `none`: Interrupt the ChangesRpc stream instead of sending a StopChanges message.
 
-- `EventLogRemote.decodeRequest` -> `effect/unstable/eventlog/EventLogMessage#EventLogRemoteRpcs`: Generic RPC framing and RpcSerialization.layerMsgPack replace the module-specific request decoder.
+- `EventLogRemote.decodeRequest` -> `effect/unstable/eventlog/EventLogMessage#EventLogRemoteRpcs`: Generic RPC framing and RpcSerialization.layerSchemaBinary replace the module-specific request decoder.
 
-- `EventLogRemote.decodeResponse` -> `effect/unstable/eventlog/EventLogMessage#EventLogRemoteRpcs`: Generic RPC framing and RpcSerialization.layerMsgPack replace the module-specific response decoder.
+- `EventLogRemote.decodeResponse` -> `effect/unstable/eventlog/EventLogMessage#EventLogRemoteRpcs`: Generic RPC framing and RpcSerialization.layerSchemaBinary replace the module-specific response decoder.
 
-- `EventLogRemote.encodeRequest` -> `effect/unstable/eventlog/EventLogMessage#EventLogRemoteRpcs`: Generic RPC framing and RpcSerialization.layerMsgPack replace the module-specific request encoder.
+- `EventLogRemote.encodeRequest` -> `effect/unstable/eventlog/EventLogMessage#EventLogRemoteRpcs`: Generic RPC framing and RpcSerialization.layerSchemaBinary replace the module-specific request encoder.
 
-- `EventLogRemote.encodeResponse` -> `effect/unstable/eventlog/EventLogMessage#EventLogRemoteRpcs`: Generic RPC framing and RpcSerialization.layerMsgPack replace the module-specific response encoder.
+- `EventLogRemote.encodeResponse` -> `effect/unstable/eventlog/EventLogMessage#EventLogRemoteRpcs`: Generic RPC framing and RpcSerialization.layerSchemaBinary replace the module-specific response encoder.
 
 - `EventLogRemote.fromSocket` -> `effect/unstable/eventlog/EventLogRemote#makeEncrypted + effect/unstable/rpc/RpcClient#makeProtocolSocket`: Construct the encrypted remote separately from its generic RPC socket protocol.
 
-- `EventLogRemote.layerWebSocket` -> `effect/unstable/eventlog/EventLogRemote#layerEncrypted + effect/unstable/rpc/RpcClient#layerProtocolSocket`: Compose the encrypted remote with the generic socket protocol, MsgPack serialization, and a Socket provider.
+- `EventLogRemote.layerWebSocket` -> `effect/unstable/eventlog/EventLogRemote#layerEncrypted + effect/unstable/rpc/RpcClient#layerProtocolSocket`: Compose the encrypted remote with the generic socket protocol, SchemaBinary serialization, and a Socket provider.
 
 - `EventLogRemote.layerWebSocketBrowser` -> `effect/unstable/eventlog/EventLogRemote#layerEncrypted + effect/unstable/rpc/RpcClient#layerProtocolSocket + @effect/platform-browser/BrowserSocket#layerWebSocket`: Compose the encrypted remote and generic RPC socket protocol with the browser WebSocket layer.
 
@@ -5911,6 +5911,8 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 - `PersistedCache.make` -> `effect/unstable/persistence/PersistedCache#make`: Pass lookup as the first argument and options second; timeToLive now receives exit before request and the service is Persistence.Persistence.
 
 ### `@effect/experimental/PersistedQueue`
+
+- `PersistedQueue.ErrorTypeId` -> `effect/unstable/persistence/PersistedQueue#ErrorTypeId`: Retained as a string brand; the runtime marker now uses the persistence module path.
 
 - `PersistedQueue.TypeId` -> `effect/unstable/persistence/PersistedQueue#TypeId`: Import TypeId from the v4 unstable PersistedQueue module; it is now a string brand.
 
@@ -5973,6 +5975,8 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 - `Redis.make` -> `none`: V4 exposes Redis-backed layers over the Redis.Redis service, not a constructor that creates an ioredis client directly.
 
 ### `@effect/experimental/RateLimiter`
+
+- `RateLimiter.ErrorTypeId` -> `effect/unstable/persistence/RateLimiter#ErrorTypeId`: Retained as a string brand; the runtime marker now uses the persistence module path.
 
 - `RateLimiter.RateLimiterError` -> `effect/unstable/persistence/RateLimiter#RateLimiterError`: The retained name is now a wrapper error class whose reason is RateLimitExceeded or RateLimitStoreError.
 
@@ -6188,7 +6192,7 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 ### `@effect/platform-bun/BunStream`
 
-- `BunStream.FromReadableOptions` -> `Pick<Parameters<typeof BunStream.fromReadable>[0], "chunkSize" | "closeOnDone">`: The named interface was inlined into the constructor options; chunkSize is now a number and the full options also contain evaluate, onError, and bufferSize.
+- `BunStream.FromReadableOptions` -> `Pick<Parameters<typeof BunStream.fromReadable>[0], "chunkSize" | "closeOnDone">`: The named interface was inlined into the constructor options; chunkSize is now a number and the full options also contain evaluate and onError. The ignored bufferSize option was removed.
 
 - `BunStream.FromWritableOptions` -> `Pick<Parameters<typeof BunSink.fromWritable>[0], "endOnDone" | "encoding">`: The named interface was inlined into BunSink.fromWritable and duplex constructor options.
 
@@ -6524,9 +6528,9 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `Headers.remove` -> `Headers.remove / Headers.removeMany`: Use remove for one name or removeMany for an iterable; RegExp removal requires enumerating matching names.
 
-- `Headers.schema` -> `Headers.HeadersSchema`: The encoded-record and self schemas were consolidated into HeadersSchema.
+- `Headers.schema` -> `Schema.Headers`: The encoded-record and self schemas were consolidated and moved to effect/Schema as Schema.Headers.
 
-- `Headers.schemaFromSelf` -> `Headers.HeadersSchema`: The encoded-record and self schemas were consolidated into HeadersSchema.
+- `Headers.schemaFromSelf` -> `Schema.Headers`: The encoded-record and self schemas were consolidated and moved to effect/Schema as Schema.Headers.
 
 - `Headers.unsafeFromRecord` -> `Headers.fromRecordUnsafe`: Renamed to put Unsafe last; it still skips name normalization.
 
@@ -6553,6 +6557,8 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 - `HttpApiBuilder.Handlers.ValidateReturn` -> `effect/unstable/httpapi/HttpApiBuilder#Handlers.ValidateReturn`: The validator remains and now checks the endpoint map against handled identifiers.
 
 - `HttpApiBuilder.HandlersTypeId` -> `none`: The exported symbol was removed; do not inspect or construct the private Handlers marker.
+
+- `HttpApiBuilder.Middleware` -> `none`: The API-specific middleware service tag was removed. Declared HttpApiMiddleware services are applied while routes are built; use HttpRouter.middleware for additional global middleware.
 
 - `HttpApiBuilder.MiddlewareFn` -> `effect/unstable/http/HttpRouter#middleware.Fn`: HTTP apps are Effects in v4; use the router middleware function type or infer it through HttpRouter.middleware.
 
@@ -7214,21 +7220,23 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 ### `@effect/platform/MsgPack`
 
-- `MsgPack.ErrorTypeId` -> `Msgpack.MsgPackError`: The public error type-id alias was removed; use the MsgPackError class.
+- `MsgPack.ErrorTypeId` -> `Schema.SchemaError`: MsgPackError was removed with MessagePack. SchemaBinary channels fail with Schema.SchemaError.
 
-- `MsgPack.duplex` -> `Msgpack.duplex`: The API moved to effect/unstable/encoding/Msgpack.
+- `MsgPack.MsgPackError` -> `Schema.SchemaError`: MsgPackError was removed with MessagePack. SchemaBinary channels fail with Schema.SchemaError.
 
-- `MsgPack.duplexSchema` -> `Msgpack.duplexSchema`: The API moved to effect/unstable/encoding/Msgpack and uses v4 Schema constraints.
+- `MsgPack.duplex` -> `SchemaBinary.duplex`: MessagePack was removed. Wrap a byte channel with SchemaBinary.duplex and explicit input and output schemas.
 
-- `MsgPack.pack` -> `Msgpack.encode`: The MessagePack channel constructor was renamed from pack to encode.
+- `MsgPack.duplexSchema` -> `SchemaBinary.duplex`: MessagePack was removed. Use SchemaBinary.duplex with the v4 Schema model.
 
-- `MsgPack.packSchema` -> `Msgpack.encodeSchema`: The schema-aware pack channel was renamed to encodeSchema.
+- `MsgPack.pack` -> `SchemaBinary.encode`: MessagePack was removed. Encode schema values to binary frames with SchemaBinary.encode.
 
-- `MsgPack.schema` -> `Msgpack.schema`: The schema helper remains in the moved module and uses the v4 Schema model.
+- `MsgPack.packSchema` -> `SchemaBinary.encode`: MessagePack was removed. Use SchemaBinary.encode with the v4 Schema model.
 
-- `MsgPack.unpack` -> `Msgpack.decode`: The MessagePack channel constructor was renamed from unpack to decode.
+- `MsgPack.schema` -> `SchemaBinary.toCodec`: MessagePack was removed. Derive a binary codec from a Schema with SchemaBinary.toCodec.
 
-- `MsgPack.unpackSchema` -> `Msgpack.decodeSchema`: The schema-aware unpack channel was renamed to decodeSchema.
+- `MsgPack.unpack` -> `SchemaBinary.decode`: MessagePack was removed. Decode binary frames with SchemaBinary.decode.
+
+- `MsgPack.unpackSchema` -> `SchemaBinary.decode`: MessagePack was removed. Use SchemaBinary.decode with the v4 Schema model.
 
 ### `@effect/platform/Multipart`
 
@@ -7312,6 +7320,8 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `OpenApiJsonSchema.Array` -> `effect/JsonSchema#JsonSchema`: The narrow node interfaces were consolidated into the general object model.
 
+- `OpenApiJsonSchema.Boolean` -> `effect/JsonSchema#JsonSchema`: The narrow boolean interface was consolidated into the open, dialect-neutral JSON Schema object model.
+
 - `OpenApiJsonSchema.Empty` -> `effect/JsonSchema#JsonSchema`: The narrow node interfaces and special id shapes were removed.
 
 - `OpenApiJsonSchema.Enum` -> `effect/JsonSchema#JsonSchema`: The narrow node interfaces were consolidated into the general object model.
@@ -7322,6 +7332,10 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `OpenApiJsonSchema.JsonSchema` -> `effect/JsonSchema#JsonSchema`: Use the dialect-neutral open JSON Schema object model.
 
+- `OpenApiJsonSchema.Never` -> `effect/JsonSchema#JsonSchema`: The special never-schema interface was consolidated into the open JSON Schema object model; represent it with a not constraint.
+
+- `OpenApiJsonSchema.Number` -> `effect/JsonSchema#JsonSchema`: The narrow number interface was consolidated into the open, dialect-neutral JSON Schema object model.
+
 - `OpenApiJsonSchema.Numeric` -> `effect/JsonSchema#JsonSchema`: The narrow numeric interfaces were consolidated into the general object model.
 
 - `OpenApiJsonSchema.Object` -> `effect/JsonSchema#JsonSchema`: The narrow node interfaces were consolidated into the general object model.
@@ -7330,7 +7344,11 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `OpenApiJsonSchema.Root` -> `effect/JsonSchema#MultiDocument`: OpenAPI generation keeps roots in schemas and shared components in definitions; the inline-definitions root model is gone.
 
+- `OpenApiJsonSchema.String` -> `effect/JsonSchema#JsonSchema`: The narrow string interface was consolidated into the open, dialect-neutral JSON Schema object model.
+
 - `OpenApiJsonSchema.Unknown`: TODO: needs guidance
+
+- `OpenApiJsonSchema.Void` -> `effect/JsonSchema#JsonSchema`: The special void-schema interface was consolidated into the open JSON Schema object model.
 
 - `OpenApiJsonSchema.make` -> `effect/Schema#toJsonSchemaDocument + effect/JsonSchema#toMultiDocumentOpenApi3_1`: Generate Draft 2020-12, wrap the root in a multi-document, then convert references and definitions to OpenAPI 3.1.
 
@@ -7372,9 +7390,15 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `Socket.WebSocketConstructor` -> `Socket.WebSocketConstructor`: The service moved to effect/unstable/socket/Socket and is now a Context.Service class.
 
-- `Socket.currentSendQueueCapacity` -> `Socket.SendQueueCapacity`: The FiberRef was replaced by a defaulted Context.Reference.
+- `Socket.currentSendQueueCapacity` -> `none`: The send queue was removed. The v4 Socket is pull-based: acquire socket.reader in a scope and pull frame batches; writes apply the transport's native backpressure.
+
+- `Socket.defaultCloseCodeIsError` -> `none`: Sockets no longer classify close codes; every close fails the reader's pull with a SocketError wrapping SocketCloseError. Consumers that treat a close as normal catch the error.
+
+- `Socket.fromTransformStream` -> `Socket.fromTransformStream`: The constructor remains in effect/unstable/socket/Socket but drops closeCodeIsError; every close fails the reader's pull with a SocketError wrapping SocketCloseError.
 
 - `Socket.layerWebSocket` -> `Socket.layerWebSocket`: The constructor remains in effect/unstable/socket/Socket; its URL may now also be an Effect.
+
+- `Socket.toChannelMap` -> `none`: The v4 Socket read side is an Effect that never completes via Cause.Done; map frames by acquiring Socket.readerBytes or Socket.readerString, or Effect.map the reader from socket.reader, and use Socket.toChannel or Socket.toChannelString for duplex channels.
 
 ### `@effect/platform/SocketServer`
 
@@ -7412,19 +7436,21 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `UrlParams.Input` -> `UrlParams.Input`: Retained and broadened to include UrlParams itself.
 
+- `UrlParams.UrlParams` -> `UrlParams.UrlParams`: Import UrlParams from effect/unstable/http. It is now a branded iterable object with a params field rather than a ReadonlyArray; construct it with UrlParams.make or UrlParams.fromInput.
+
 - `UrlParams.makeUrl` -> `Url.make`: Moved to Url, returns Result, and takes string | undefined for the hash.
 
-- `UrlParams.schemaFromSelf` -> `UrlParams.UrlParamsSchema`: Renamed to the declaration schema for the v4 wrapper.
+- `UrlParams.schemaFromSelf` -> `Schema.UrlParams`: The declaration schema for the v4 wrapper moved to effect/Schema.
 
-- `UrlParams.schemaFromString` -> `Schema.String.pipe(Schema.decodeTo(UrlParams.UrlParamsSchema, { decode: SchemaGetter.transform((s) => UrlParams.fromInput(new URLSearchParams(s))), encode: SchemaGetter.transform(UrlParams.toString) }))`: No prebuilt string codec remains; recreate it by transforming between a query string and UrlParams.
+- `UrlParams.schemaFromString` -> `Schema.String.pipe(Schema.decodeTo(Schema.UrlParams, { decode: SchemaGetter.transform((s) => UrlParams.fromInput(new URLSearchParams(s))), encode: SchemaGetter.transform(UrlParams.toString) }))`: No prebuilt string codec remains; recreate it by transforming between a query string and UrlParams.
 
-- `UrlParams.schemaJson` -> `UrlParams.schemaJsonField(field).pipe(Schema.decodeTo(schema), Schema.decodeEffect)`: Compose the field codec with the target schema, then decode it.
+- `UrlParams.schemaJson` -> `Schema.JsonFromUrlParamsField(field).pipe(Schema.decodeTo(schema), Schema.decodeEffect)`: The field codec moved to effect/Schema. Compose it with the target schema, then decode it.
 
-- `UrlParams.schemaParse` -> `UrlParamsFromString.pipe(Schema.decodeTo(UrlParams.schemaRecord.pipe(Schema.decodeTo(schema))))`: Recreate the removed helper by composing the string, record, and target codecs.
+- `UrlParams.schemaParse` -> `UrlParamsFromString.pipe(Schema.decodeTo(Schema.RecordFromUrlParams.pipe(Schema.decodeTo(schema))))`: Recreate the removed helper by composing the string, record, and target codecs.
 
-- `UrlParams.schemaRecord` -> `UrlParams.schemaRecord.pipe(Schema.decodeTo(schema))`: schemaRecord is now a base codec value; compose it with the target schema.
+- `UrlParams.schemaRecord` -> `Schema.RecordFromUrlParams.pipe(Schema.decodeTo(schema))`: RecordFromUrlParams is a base codec in effect/Schema; compose it with the target schema.
 
-- `UrlParams.schemaStruct` -> `UrlParams.schemaRecord.pipe(Schema.decodeTo(schema), Schema.decodeEffect)`: Compose the record codec with the target schema and decode it.
+- `UrlParams.schemaStruct` -> `Schema.RecordFromUrlParams.pipe(Schema.decodeTo(schema), Schema.decodeEffect)`: Compose the record codec from effect/Schema with the target schema and decode it.
 
 - `UrlParams.toString` -> `UrlParams.toString`: Retained and broadened to accept any UrlParams.Input.
 
@@ -7650,7 +7676,15 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 ### `@effect/rpc/RpcSerialization`
 
-- `RpcSerialization.RpcSerializationError`: TODO: needs guidance
+- `RpcSerialization.RpcSerializationError` -> `effect/unstable/rpc/RpcSerialization#MaxBufferSizeExceeded`: Buffer-limit failures now use MaxBufferSizeExceeded. MessagePack-specific decode errors have no counterpart.
+
+- `RpcSerialization.layerMsgPack` -> `effect/unstable/rpc/RpcSerialization#layerSchemaBinary`: MessagePack RPC serialization was removed. Use SchemaBinary, or layerNdjson when you need newline-delimited JSON framing.
+
+- `RpcSerialization.layerMsgPackWith` -> `effect/unstable/rpc/RpcSerialization#layerSchemaBinary`: MessagePack RPC serialization was removed. Pass maxFrameSize to layerSchemaBinary; NDJSON buffer limits remain on layerNdjsonWith.
+
+- `RpcSerialization.makeMsgPack` -> `effect/unstable/rpc/RpcSerialization#layerSchemaBinary`: MessagePack RPC serialization was removed. Construct SchemaBinary serialization with layerSchemaBinary.
+
+- `RpcSerialization.msgPack` -> `effect/unstable/rpc/RpcSerialization#layerSchemaBinary`: The MessagePack RpcSerialization service value was removed. Provide layerSchemaBinary instead.
 
 ### `@effect/rpc/RpcServer`
 
@@ -7774,11 +7808,11 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `PgClient.PgClientConfig` -> `@effect/sql-pg/PgClient#PgClientConfig / PgPoolConfig`: Use PgClientConfig for base settings and PgPoolConfig for make/layer; pool sizing, idle timeout, and connection TTL moved to PgPoolConfig.
 
-- `PgClient.PgClientFromPoolOptions` -> `Parameters<typeof PgClient.fromPool>[0]`: The named type was removed; derive the inline fromPool option type. PgPoolConfig is for creating a managed pool and is not equivalent.
+- `PgClient.PgClientFromPoolOptions` -> `none`: The node-pg Pool wrapper options were removed with fromPool. Use PgClient.PgPoolConfig with PgClient.make or PgClient.layer.
 
-- `PgClient.fromPool`: TODO: needs guidance
+- `PgClient.fromPool` -> `none`: Wrapping an existing node-pg Pool was removed with the native protocol client. Use PgClient.make or PgClient.layer with connection settings.
 
-- `PgClient.layerFromPool` -> `PgClient.layerFrom(PgClient.fromPool(options))`: Compose fromPool with layerFrom; layerFrom now accepts an Effect acquiring a PgClient rather than pool options.
+- `PgClient.layerFromPool` -> `PgClient.layer`: Wrapping an existing node-pg Pool was removed. Provide connection settings to PgClient.layer instead.
 
 ### `@effect/sql-sqlite-bun/SqliteClient`
 
@@ -7910,6 +7944,10 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `Bounded.clamp` -> `Order.clamp(B.compare)`: Use the v4 Order combinator with { minimum: B.minBound, maximum: B.maxBound }; the Bounded dictionary itself was removed.
 
+- `Bounded.max` -> `Reducer.make(Combiner.max(B.compare).combine, B.minBound)`: V4 removed Bounded dictionaries. Build the maximum Reducer from the separately retained Order and minimum bound.
+
+- `Bounded.min` -> `Reducer.make(Combiner.min(B.compare).combine, B.maxBound)`: V4 removed Bounded dictionaries. Build the minimum Reducer from the separately retained Order and maximum bound.
+
 - `Bounded.reverse` -> `Order.flip(B.compare)`: Flip the Order and swap the separately stored minimum and maximum bounds; v4 has no bundled Bounded dictionary.
 
 ### `@effect/typeclass/Monoid`
@@ -7919,6 +7957,10 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 - `Monoid.array` -> `Array.makeReducerConcat`: Use the v4 array concatenation Reducer; Reducer replaces Monoid and names the identity initialValue.
 
 - `Monoid.fromSemigroup` -> `Reducer.make(S.combine, empty)`: Construct a v4 Reducer from the replacement Combiner operation and identity value.
+
+- `Monoid.max` -> `Reducer.make(Combiner.max(B.compare).combine, B.minBound)`: Reducer replaces Monoid. Build it from the v4 maximum Combiner and the bounded order's minimum value.
+
+- `Monoid.min` -> `Reducer.make(Combiner.min(B.compare).combine, B.maxBound)`: Reducer replaces Monoid. Build it from the v4 minimum Combiner and the bounded order's maximum value.
 
 - `Monoid.reverse` -> `Reducer.flip`: Use the v4 Reducer combinator; it preserves initialValue and reverses combine argument order.
 
@@ -7951,6 +7993,10 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 - `Semigroup.last` -> `Combiner.last`: Combiner replaces Semigroup in v4.
 
 - `Semigroup.make` -> `Combiner.make`: Combiner replaces Semigroup. V4 accepts only the binary combine function and has no combineMany override.
+
+- `Semigroup.max` -> `Combiner.max`: Combiner replaces Semigroup; pass the same Order to retain last-maximum tie behavior.
+
+- `Semigroup.min` -> `Combiner.min`: Combiner replaces Semigroup; pass the same Order to retain last-minimum tie behavior.
 
 - `Semigroup.reverse` -> `Combiner.flip`: Use the v4 Combiner combinator to reverse combine argument order.
 
@@ -8530,34 +8576,34 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 ### `effect/Arbitrary`
 
-- `Arbitrary.ArbitraryAnnotation` -> `Schema.Annotations.ToArbitrary.Declaration`: Arbitrary derivation annotations now live in Schema.Annotations and use the toArbitrary key.
+- `Arbitrary.ArbitraryAnnotation` -> `Schema.Annotations.ToArbitrary.Declaration`: Arbitrary derivation annotations now live in Schema.Annotations. Attach a toCodecArbitrary declaration callback that returns a Schema Link.
 
-- `Arbitrary.ArbitraryGenerationContext` -> `Schema.Annotations.ToArbitrary.Context`: Use the v4 arbitrary-derivation context type from Schema.Annotations.
+- `Arbitrary.ArbitraryGenerationContext` -> `Schema.Annotations.ToArbitrary.DeclarationInput`: Native arbitrary callbacks receive DeclarationInput with decoded type-parameter schemas and normalized constraints.
 
-- `Arbitrary.LazyArbitrary` -> `Schema.Arbitrary`: The arbitrary factory type moved onto Schema.
+- `Arbitrary.LazyArbitrary` -> `effect/unstable/arbitrary/Arbitrary#Arbitrary`: The generated-value description is now the native Arbitrary interface from effect/unstable/arbitrary.
 
 #### `Arbitrary.make`
 
-**Replacement:** `Schema.toArbitrary`
+**Replacement:** `effect/unstable/arbitrary/Arbitrary#schema`
 
-Arbitrary derivation is now exposed directly by Schema.
+Derive a native Arbitrary from a Schema. Effect no longer bridges to fast-check.
 
 **Example**
 
 ```ts
-Schema.toArbitrary(schema)(FastCheck)
+Arbitrary.schema(schema)
 ```
 
 #### `Arbitrary.makeLazy`
 
-**Replacement:** `Schema.toArbitrary`
+**Replacement:** `effect/unstable/arbitrary/Arbitrary#schema`
 
-Lazy arbitrary derivation is now exposed directly by Schema.
+Lazy and eager Schema derivation are the same native Arbitrary.schema constructor.
 
 **Example**
 
 ```ts
-Schema.toArbitrary(schema)
+Arbitrary.schema(schema)
 ```
 
 ### `effect/Array`
@@ -8966,9 +9012,9 @@ Schema.toArbitrary(schema)
 
 - `Channel.repeated` -> `Channel.forever`: Use forever for infinite repetition. Channel.repeat takes a Schedule and may terminate, so it is not equivalent.
 
-- `Channel.run` -> `Channel.runDone`: Renamed to runDone for an inputless, outputless channel. Use runDrain if emitted elements should be discarded.
+- `Channel.run` -> `Channel.runDrain`: Use runDrain to consume all emitted elements and return the channel's done value.
 
-- `Channel.runScoped` -> `Channel.toPull`: No direct scoped runner remains. Use toPull in the caller scope and recover Cause.Done; use runDone or runDrain when an internally managed scope is acceptable.
+- `Channel.runScoped` -> `Channel.toPull`: No direct scoped runner remains. Use toPull in the caller scope and recover Cause.Done; use runDrain when an internally managed scope is acceptable.
 
 - `Channel.scopedWith` -> `Channel.unwrap`: Use Channel.unwrap(Effect.map(Effect.scope, (scope) =\> Channel.fromEffect(f(scope)))) so the effect uses the active channel scope.
 
@@ -10200,7 +10246,7 @@ Schema.toArbitrary(schema)
 
 - `FastCheck.BigIntConstraints`: TODO: needs guidance
 
-- `FastCheck.BigUintConstraints` -> `FastCheck.BigIntConstraints`: Import FastCheck from effect/testing. Unsigned bigint constraints were consolidated into BigIntConstraints with min: 0n.
+- `FastCheck.BigUintConstraints` -> `FastCheck.BigIntConstraints`: Depend on fast-check and import it directly. Unsigned bigint constraints were consolidated into BigIntConstraints with min: 0n.
 
 - `FastCheck.CloneValue`: TODO: needs guidance
 
@@ -10346,7 +10392,7 @@ Schema.toArbitrary(schema)
 
 - `FastCheck.SubarrayConstraints`: TODO: needs guidance
 
-- `FastCheck.UnicodeJsonSharedConstraints` -> `FastCheck.JsonSharedConstraints`: Import FastCheck from effect/testing. Unicode JSON generation was consolidated into JsonSharedConstraints.stringUnit.
+- `FastCheck.UnicodeJsonSharedConstraints` -> `FastCheck.JsonSharedConstraints`: Depend on fast-check and import it directly. Unicode JSON generation was consolidated into JsonSharedConstraints.stringUnit.
 
 - `FastCheck.UniqueArrayConstraints`: TODO: needs guidance
 
@@ -10398,7 +10444,7 @@ Schema.toArbitrary(schema)
 
 **Replacement:** `FastCheck.string`
 
-Import FastCheck from effect/testing. fast-check v4 replaced character arbitraries with string units.
+Depend on fast-check and import it directly. fast-check v4 replaced character arbitraries with string units.
 
 **Example**
 
@@ -10410,7 +10456,7 @@ FastCheck.string({ unit: "binary-ascii", minLength: 1, maxLength: 1 })
 
 **Replacement:** `FastCheck.string`
 
-Import FastCheck from effect/testing. Use the binary-ascii string unit.
+Depend on fast-check and import it directly. Use the binary-ascii string unit.
 
 **Example**
 
@@ -10434,7 +10480,7 @@ FastCheck.string({ ...constraints, unit: "binary-ascii" })
 
 **Replacement:** `FastCheck.constantFrom`
 
-Import FastCheck from effect/testing. Generate one base64 alphabet character; base64String remains for complete encoded strings.
+Depend on fast-check and import it directly. Generate one base64 alphabet character; base64String remains for complete encoded strings.
 
 **Example**
 
@@ -10448,13 +10494,13 @@ FastCheck.constantFrom(..."abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0
 
 - `FastCheck.bigInt64Array`: TODO: needs guidance
 
-- `FastCheck.bigIntN` -> `FastCheck.bigInt`: Import FastCheck from effect/testing. Express the signed bit range with min and max constraints.
+- `FastCheck.bigIntN` -> `FastCheck.bigInt`: Depend on fast-check and import it directly. Express the signed bit range with min and max constraints.
 
 #### `FastCheck.bigUint`
 
 **Replacement:** `FastCheck.bigInt`
 
-Import FastCheck from effect/testing. Use a minimum of 0n and the previous maximum.
+Depend on fast-check and import it directly. Use a minimum of 0n and the previous maximum.
 
 **Example**
 
@@ -10468,7 +10514,7 @@ FastCheck.bigInt({ min: 0n, max })
 
 **Replacement:** `FastCheck.bigInt`
 
-Import FastCheck from effect/testing. Express the unsigned bit range with min and max constraints.
+Depend on fast-check and import it directly. Express the unsigned bit range with min and max constraints.
 
 **Example**
 
@@ -10482,7 +10528,7 @@ FastCheck.bigInt({ min: 0n, max: (1n << BigInt(n)) - 1n })
 
 **Replacement:** `FastCheck.string`
 
-Import FastCheck from effect/testing. Use a one-unit printable ASCII string.
+Depend on fast-check and import it directly. Use a one-unit printable ASCII string.
 
 **Example**
 
@@ -10494,7 +10540,7 @@ FastCheck.string({ unit: "grapheme-ascii", minLength: 1, maxLength: 1 })
 
 **Replacement:** `FastCheck.nat`
 
-Import FastCheck from effect/testing. Map a 16-bit natural number through String.fromCharCode.
+Depend on fast-check and import it directly. Map a 16-bit natural number through String.fromCharCode.
 
 **Example**
 
@@ -10502,7 +10548,7 @@ Import FastCheck from effect/testing. Map a 16-bit natural number through String
 FastCheck.nat({ max: 0xffff }).map(String.fromCharCode)
 ```
 
-- `FastCheck.check` -> `FastCheck.check`: Import FastCheck from effect/testing. The runner remains, but RunDetails.error was replaced by errorInstance in fast-check v4.
+- `FastCheck.check` -> `FastCheck.check`: Depend on fast-check and import it directly. The runner remains, but RunDetails.error was replaced by errorInstance in fast-check v4.
 
 - `FastCheck.clone`: TODO: needs guidance
 
@@ -10518,11 +10564,11 @@ FastCheck.nat({ max: 0xffff }).map(String.fromCharCode)
 
 - `FastCheck.configureGlobal`: TODO: needs guidance
 
-- `FastCheck.constant` -> `FastCheck.constant`: Import FastCheck from effect/testing. The API remains; v4 infers literal types by default.
+- `FastCheck.constant` -> `FastCheck.constant`: Depend on fast-check and import it directly. The API remains; v4 infers literal types by default.
 
 - `FastCheck.constantFrom`: TODO: needs guidance
 
-- `FastCheck.context` -> `FastCheck.context`: Import FastCheck from effect/testing. The API is otherwise unchanged.
+- `FastCheck.context` -> `FastCheck.context`: Depend on fast-check and import it directly. The API is otherwise unchanged.
 
 - `FastCheck.createDepthIdentifier`: TODO: needs guidance
 
@@ -10550,7 +10596,7 @@ FastCheck.nat({ max: 0xffff }).map(String.fromCharCode)
 
 **Replacement:** `FastCheck.string`
 
-Import FastCheck from effect/testing. Use a one-unit binary Unicode string.
+Depend on fast-check and import it directly. Use a one-unit binary Unicode string.
 
 **Example**
 
@@ -10562,7 +10608,7 @@ FastCheck.string({ unit: "binary", minLength: 1, maxLength: 1 })
 
 **Replacement:** `FastCheck.string`
 
-Import FastCheck from effect/testing. Use the binary string unit.
+Depend on fast-check and import it directly. Use the binary string unit.
 
 **Example**
 
@@ -10584,9 +10630,9 @@ FastCheck.string({ ...constraints, unit: "binary" })
 
 - `FastCheck.hash`: TODO: needs guidance
 
-- `FastCheck.hexa` -> `FastCheck.integer`: Import FastCheck from effect/testing. Map an integer from 0 through 15 to a hexadecimal character.
+- `FastCheck.hexa` -> `FastCheck.integer`: Depend on fast-check and import it directly. Map an integer from 0 through 15 to a hexadecimal character.
 
-- `FastCheck.hexaString` -> `FastCheck.string`: Import FastCheck from effect/testing. Pass a hexadecimal-character arbitrary as the string unit.
+- `FastCheck.hexaString` -> `FastCheck.string`: Depend on fast-check and import it directly. Pass a hexadecimal-character arbitrary as the string unit.
 
 - `FastCheck.infiniteStream`: TODO: needs guidance
 
@@ -10662,11 +10708,11 @@ FastCheck.string({ ...constraints, unit: "binary" })
 
 - `FastCheck.statistics`: TODO: needs guidance
 
-- `FastCheck.stream` -> `FastCheck.stream`: Import FastCheck from effect/testing. The API remains; update custom generator and Random implementations for fast-check v4 typings.
+- `FastCheck.stream` -> `FastCheck.stream`: Depend on fast-check and import it directly. The API remains; update custom generator and Random implementations for fast-check v4 typings.
 
 - `FastCheck.string`: TODO: needs guidance
 
-- `FastCheck.string16bits` -> `FastCheck.string`: Import FastCheck from effect/testing. Pass a char16bits-compatible arbitrary as the string unit.
+- `FastCheck.string16bits` -> `FastCheck.string`: Depend on fast-check and import it directly. Pass a char16bits-compatible arbitrary as the string unit.
 
 - `FastCheck.stringMatching`: TODO: needs guidance
 
@@ -10674,7 +10720,7 @@ FastCheck.string({ ...constraints, unit: "binary" })
 
 **Replacement:** `FastCheck.string`
 
-Import FastCheck from effect/testing. Pass the former character arbitrary as the unit constraint.
+Depend on fast-check and import it directly. Pass the former character arbitrary as the unit constraint.
 
 **Example**
 
@@ -10698,13 +10744,13 @@ FastCheck.string({ ...constraints, unit: arbitrary })
 
 - `FastCheck.ulid`: TODO: needs guidance
 
-- `FastCheck.unicode` -> `FastCheck.integer`: Import FastCheck from effect/testing. Map BMP code points while excluding surrogate code points; prefer the binary string unit for full Unicode.
+- `FastCheck.unicode` -> `FastCheck.integer`: Depend on fast-check and import it directly. Map BMP code points while excluding surrogate code points; prefer the binary string unit for full Unicode.
 
 #### `FastCheck.unicodeJson`
 
 **Replacement:** `FastCheck.json`
 
-Import FastCheck from effect/testing. Select binary or grapheme strings with stringUnit.
+Depend on fast-check and import it directly. Select binary or grapheme strings with stringUnit.
 
 **Example**
 
@@ -10716,7 +10762,7 @@ FastCheck.json({ stringUnit: "binary" })
 
 **Replacement:** `FastCheck.jsonValue`
 
-Import FastCheck from effect/testing. Select binary or grapheme strings with stringUnit.
+Depend on fast-check and import it directly. Select binary or grapheme strings with stringUnit.
 
 **Example**
 
@@ -10724,7 +10770,7 @@ Import FastCheck from effect/testing. Select binary or grapheme strings with str
 FastCheck.jsonValue({ stringUnit: "binary" })
 ```
 
-- `FastCheck.unicodeString` -> `FastCheck.string`: Import FastCheck from effect/testing. Pass a BMP-code-point arbitrary as the unit constraint; prefer unit: binary for full Unicode.
+- `FastCheck.unicodeString` -> `FastCheck.string`: Depend on fast-check and import it directly. Pass a BMP-code-point arbitrary as the unit constraint; prefer unit: binary for full Unicode.
 
 - `FastCheck.uniqueArray`: TODO: needs guidance
 
@@ -10734,7 +10780,7 @@ FastCheck.jsonValue({ stringUnit: "binary" })
 
 **Replacement:** `FastCheck.uuid`
 
-Import FastCheck from effect/testing. Specify the UUID version through constraints.
+Depend on fast-check and import it directly. Specify the UUID version through constraints.
 
 **Example**
 
@@ -11116,9 +11162,9 @@ FastCheck.uuid({ version: 4 })
 
 - `Graph.Graph` -> `Graph.Graph`: The immutable type remains, but storage is opaque; replace field access with Graph nodes, edges, count, lookup, neighbor, and acyclicity APIs.
 
-- `Graph.MutableGraph` -> `Graph.MutableGraph`: The mutable type remains but no longer extends Graph.Proto; obtain it through Graph.mutate or Graph.beginMutation and use public mutation/query functions.
+- `Graph.MutableGraph` -> `Graph.MutableGraph`: The mutable type remains but no longer shares a public base interface with immutable Graph; obtain it through Graph.mutate or Graph.beginMutation and use public mutation/query functions.
 
-- `Graph.Proto` -> `Graph.Proto`: The name remains as the opaque immutable graph protocol; it no longer exposes storage and is no longer the base of MutableGraph.
+- `Graph.Proto` -> `none`: The common graph protocol was removed. Use Graph.Graph or Graph.MutableGraph as appropriate and replace storage-field access with public graph query and mutation functions.
 
 - `Graph.SearchConfig` -> `Graph.SearchConfig`: The type remains; direction is now Graph.TraversalDirection and also accepts undirected, while radius limits traversal depth.
 
@@ -11641,7 +11687,7 @@ JsonSchema.toDocumentDraft07(Schema.toJsonSchemaDocument(schema))
 
 - `Logger.withMinimumLogLevel` -> `Effect.provideService(effect, References.MinimumLogLevel, level)`: Replace the FiberRef-local helper with reference provisioning.
 
-- `Logger.withSpanAnnotations` -> `custom Logger.make wrapper using options.fiber.currentSpan`: No transparent generic equivalent remains. Read span identity from options.fiber.currentSpan and add it to custom output as needed.
+- `Logger.withSpanAnnotations` -> `custom Logger.make wrapper using options.fiber.cache.span`: No transparent generic equivalent remains. Read span identity from options.fiber.cache.span and add it to custom output as needed.
 
 - `Logger.zip` -> `Logger.make(options => [left.log(options), right.log(options)])`: No named combinator remains; invoke both loggers and return their output tuple.
 
@@ -12629,6 +12675,8 @@ SchemaIssue.makeFormatterStandardSchemaV1()(error.issue).issues
 
 - `ParseResult.ArrayFormatterIssue` -> `StandardSchemaV1.FailureResult["issues"][number]`: Use the Standard Schema issue shape returned by makeFormatterStandardSchemaV1.
 
+- `ParseResult.Composite` -> `SchemaIssue.Composite`: Composite parse failures moved to SchemaIssue. The v4 constructor takes the failing AST and an array of nested issues; input is retained only when reportInput is enabled.
+
 - `ParseResult.DeclarationDecodeUnknown` -> `SchemaGetter.Getter`: Custom declaration decoding now uses SchemaGetter values and Schema.declare annotations.
 
 - `ParseResult.DecodeUnknown` -> `Schema.decodeUnknownEffect`: Use the function type returned by Schema.decodeUnknownEffect.
@@ -12645,9 +12693,13 @@ SchemaIssue.makeFormatterStandardSchemaV1()(error.issue).issues
 
 - `ParseResult.ParseResultFormatter` -> `SchemaIssue.Formatter`: Issue formatter types moved to SchemaIssue.
 
+- `ParseResult.Pointer` -> `SchemaIssue.Pointer`: Path-qualified failures moved to SchemaIssue. Construct them with the property path and nested issue; rejected input belongs to the nested issue when reportInput is enabled.
+
 - `ParseResult.Refinement` -> `SchemaIssue.Filter`: Refinement failures are represented as filter issues in v4.
 
 - `ParseResult.SingleOrNonEmpty` -> `ReadonlyArray`: This ParseResult helper type was removed; use an explicit value-or-non-empty-array type when still needed.
+
+- `ParseResult.Transformation` -> `SchemaIssue.Encoding`: Transformation-stage failures are Encoding issues in v4. They retain the failing AST and nested issue; the old Encoded, Transformation, and Type kind discriminator was removed.
 
 #### `ParseResult.TreeFormatter`
 
@@ -14751,11 +14803,11 @@ Schema.toFormatter(schema)
 
 - `SchemaAST.AST` -> `SchemaAST.AST`: The name remains, but its constructor and fields changed in the v4 Base/check/context/encoding model.
 
-- `SchemaAST.Annotated` -> `SchemaAST.Base`: All v4 AST nodes extend Base, which owns annotations, checks, encoding, and context.
+- `SchemaAST.Annotated` -> `SchemaAST.AST`: The public base type was removed. Use the AST union; every variant still exposes annotations, checks, encoding, and context.
 
 - `SchemaAST.AnyKeyword` -> `SchemaAST.Any`: The v4 SchemaAST redesign renamed this primitive, collection, or guard while preserving its role.
 
-- `SchemaAST.ArbitraryAnnotationId` -> `Schema.Annotations.ToArbitrary`: Symbol annotation IDs were removed; use the toArbitrary annotation key and its Schema.Annotations types.
+- `SchemaAST.ArbitraryAnnotationId` -> `Schema.Annotations.ToArbitrary`: Symbol annotation IDs were removed. Declarations use the toCodecArbitrary annotation; filters use arbitraryConstraint.
 
 - `SchemaAST.BatchingAnnotation` -> `none`: Per-schema batching annotations were removed; control asynchronous parsing with ParseOptions.concurrency.
 
@@ -15028,6 +15080,8 @@ Schema.toFormatter(schema)
 - `SchemaAST.omit` -> `Schema.mapFields + Struct.omit`: Object projection moved to schema field transforms.
 
 - `SchemaAST.partial` -> `Schema.mapFields + Struct.map(Schema.optional)`: Partial object transforms moved to schema field transforms.
+
+- `SchemaAST.pick` -> `none`: The low-level AST picker was removed. Keep field selection at the Schema.Struct level with mapFields and Struct.pick, or discriminate and rebuild custom AST nodes explicitly.
 
 - `SchemaAST.required` -> `Schema.mapFields + Struct.map(Schema.requiredKey)`: Required object transforms moved to schema field transforms.
 
@@ -15796,9 +15850,9 @@ switch (strategy) {
 
 ### `effect/SynchronizedRef`
 
-- `SynchronizedRef.SynchronizedRef` -> `SynchronizedRef.SynchronizedRef`: The model remains, now extends the v4 Ref model, and is read or updated through explicit SynchronizedRef operations.
+- `SynchronizedRef.SynchronizedRef` -> `SynchronizedRef.SynchronizedRef`: The model remains but no longer extends Ref; read and update it through explicit SynchronizedRef operations. The curried v4 modifySomeEffect takes only the callback, which returns an Effect of [result, Option\<newValue\>]; remove the v3 fallback and outer Option.
 
-- `SynchronizedRef.SynchronizedRef.Variance` -> `Ref.Ref.Variance`: SynchronizedRef now inherits Ref variance instead of declaring a separate public variance marker.
+- `SynchronizedRef.SynchronizedRef.Variance` -> `none`: The public nested variance marker was removed. SynchronizedRef uses an internal brand in v4, so do not refer to a variance interface directly.
 
 - `SynchronizedRef.SynchronizedRefTypeId` -> `none`: The SynchronizedRef type id is internal in v4; do not inspect or construct the brand directly.
 
@@ -16344,7 +16398,7 @@ Exit.isExit(take)
 
 ### `effect/TestConfig`
 
-- `TestConfig.TestConfig` -> `none`: There is no v4 TestConfig service. Move runner settings to Vitest and FastCheck options, or define an application-specific Context.Reference if runtime access is needed.
+- `TestConfig.TestConfig` -> `none`: There is no v4 TestConfig service. Move runner settings to Vitest and native Arbitrary check options, or define an application-specific Context.Reference if runtime access is needed.
 
 - `TestConfig.make` -> `{ repeats, retries, samples, shrinks }`: The v3 constructor only returned its parameter object. The TestConfig service was removed; keep a plain object only for application-owned configuration.
 
@@ -16392,9 +16446,9 @@ Exit.isExit(take)
 
 - `TestServices.retries` -> `Vitest TestOptions.retry`: Configure retry in Vitest test options. To retry an Effect inside a test, use Effect.retry.
 
-- `TestServices.samples` -> `{ fastCheck: { numRuns } }`: Pass the run count through @effect/vitest property-test options, for example it.effect.prop(..., { fastCheck: { numRuns: samples } }).
+- `TestServices.samples` -> `{ arbitrary: { runs } }`: Pass the run count through @effect/vitest property-test options, for example it.effect.prop(..., { arbitrary: { runs: samples } }).
 
-- `TestServices.shrinks` -> `none`: The legacy maximum-shrinks service setting was removed; @effect/vitest forwards FastCheck.Parameters, which has no equivalent service value.
+- `TestServices.shrinks` -> `{ arbitrary: { maxShrinks } }`: Pass maxShrinks through @effect/vitest property-test options, for example it.effect.prop(..., { arbitrary: { maxShrinks } }).
 
 - `TestServices.size` -> `CurrentSize`: Define a custom Context.Reference\<number\> and yield it to read the current size.
 
@@ -16406,11 +16460,11 @@ Exit.isExit(take)
 
 - `TestServices.supervisedFibers` -> `none`: The annotation service was removed. Use Vitest metadata/options for runner concerns, an ordinary Ref or Context.Reference for application-owned test state, and FiberSet for explicit fiber tracking.
 
-- `TestServices.testConfig` -> `none`: The runner no longer reads an Effect TestConfig service. Use Vitest TestOptions and property-test fastCheck options; model application state as a custom Context.Reference.
+- `TestServices.testConfig` -> `none`: The runner no longer reads an Effect TestConfig service. Use Vitest TestOptions and property-test arbitrary options; model application state as a custom Context.Reference.
 
-- `TestServices.testConfigLayer` -> `none`: The runner no longer reads an Effect TestConfig service. Use Vitest TestOptions and property-test fastCheck options; model application state as a custom Context.Reference.
+- `TestServices.testConfigLayer` -> `none`: The runner no longer reads an Effect TestConfig service. Use Vitest TestOptions and property-test arbitrary options; model application state as a custom Context.Reference.
 
-- `TestServices.testConfigWith` -> `none`: The runner no longer reads an Effect TestConfig service. Use Vitest TestOptions and property-test fastCheck options; model application state as a custom Context.Reference.
+- `TestServices.testConfigWith` -> `none`: The runner no longer reads an Effect TestConfig service. Use Vitest TestOptions and property-test arbitrary options; model application state as a custom Context.Reference.
 
 - `TestServices.withAnnotations` -> `none`: The annotation service was removed. Use Vitest metadata/options for runner concerns, an ordinary Ref or Context.Reference for application-owned test state, and FiberSet for explicit fiber tracking.
 
@@ -16424,9 +16478,9 @@ Exit.isExit(take)
 
 - `TestServices.withSizedScoped` -> `Effect.updateServiceScoped(CurrentSize, () => size)`: For a scope-bounded override use updateServiceScoped; otherwise prefer wrapping the workflow with Effect.provideService.
 
-- `TestServices.withTestConfig` -> `none`: The runner no longer reads an Effect TestConfig service. Use Vitest TestOptions and property-test fastCheck options; model application state as a custom Context.Reference.
+- `TestServices.withTestConfig` -> `none`: The runner no longer reads an Effect TestConfig service. Use Vitest TestOptions and property-test arbitrary options; model application state as a custom Context.Reference.
 
-- `TestServices.withTestConfigScoped` -> `none`: The runner no longer reads an Effect TestConfig service. Use Vitest TestOptions and property-test fastCheck options; model application state as a custom Context.Reference.
+- `TestServices.withTestConfigScoped` -> `none`: The runner no longer reads an Effect TestConfig service. Use Vitest TestOptions and property-test arbitrary options; model application state as a custom Context.Reference.
 
 ### `effect/TestSized`
 

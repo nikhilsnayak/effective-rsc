@@ -12,7 +12,6 @@ import * as ConfigProvider from "./ConfigProvider.ts"
 import * as Effect from "./Effect.ts"
 import * as Effectable from "./Effectable.ts"
 import { dual, memoize } from "./Function.ts"
-import * as InternalConfig from "./internal/config.ts"
 import * as InternalRecord from "./internal/record.ts"
 import * as LogLevel_ from "./LogLevel.ts"
 import * as Option from "./Option.ts"
@@ -1314,7 +1313,7 @@ export function Record<
  * @since 2.0.0
  */
 export function Boolean(name?: string) {
-  return schema(InternalConfig.boolean, name)
+  return schema(Schema.BooleanLiterals, name)
 }
 
 /**
@@ -1357,6 +1356,21 @@ export function Boolean(name?: string) {
  */
 export function Duration(name?: string) {
   return schema(Schema.DurationFromString, name)
+}
+
+/**
+ * Creates a config for an exact, human-readable byte-size value.
+ *
+ * **Details**
+ *
+ * Decimal symbols such as `kB` use powers of 1,000, while binary symbols such
+ * as `KiB` use powers of 1,024.
+ *
+ * @category constructors
+ * @since 4.0.0
+ */
+export function ByteSize(name?: string) {
+  return schema(Schema.ByteSize, name)
 }
 
 /**

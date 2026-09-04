@@ -273,7 +273,9 @@ const httpLayer = <Services, ApplicationError>(
     }),
   ).pipe(Layer.provide(RequestLayer));
 
-  return Layer.mergeAll(ApplicationRoutesLayer, StaticAssetsLayer, PublicAssetsLayer);
+  return Layer.mergeAll(StaticAssetsLayer, PublicAssetsLayer).pipe(
+    Layer.provideMerge(ApplicationRoutesLayer),
+  );
 };
 
 const serverLayer = <Services, ApplicationError>(

@@ -70,8 +70,14 @@ const makeHttpLayer = (counters: Harness['counters'], events: Harness['events'])
   const Outer = ERSC.Middleware.make((httpEffect) =>
     Effect.gen(function* () {
       const trace = yield* RequestTrace;
+      const request = yield* HttpServerRequest.HttpServerRequest;
       trace.events.push('outer:request');
-      const response = yield* httpEffect;
+      let response: HttpServerResponse.HttpServerResponse;
+      if (request.url === '/') {
+        response = HttpServerResponse.text('Root Page');
+      } else {
+        response = yield* httpEffect;
+      }
       trace.events.push('outer:response');
       const innerOrder = response.headers['x-middleware-order'];
       return HttpServerResponse.setHeader(
@@ -132,10 +138,16 @@ const makeHttpLayer = (counters: Harness['counters'], events: Harness['events'])
   });
   const RequestTraceLayer = Layer.effect(
     RequestTrace,
-    Effect.sync(() => {
-      counters.acquisitions += 1;
-      return RequestTrace.of({ events });
-    }),
+    // Keep application route registration observably slower than static fallbacks so route
+    // precedence cannot accidentally depend on Layer acquisition timing.
+    Effect.sleep('10 millis').pipe(
+      Effect.andThen(
+        Effect.sync(() => {
+          counters.acquisitions += 1;
+          return RequestTrace.of({ events });
+        }),
+      ),
+    ),
   );
   const GlobalMiddlewareLayer = HttpRouter.middleware(
     (httpEffect) =>
@@ -160,7 +172,9 @@ const makeHttpLayer = (counters: Harness['counters'], events: Harness['events'])
     layer: ApplicationLayer,
     routes: OuterScope.Routes.make({
       layout: RootLayout,
-    }).mount('/protected', InnerScope.Routes.make().page('/', Page)),
+    })
+      .page('/', Page)
+      .mount('/protected', InnerScope.Routes.make().page('/', Page)),
   });
 
   return ServerApplication.httpLayer(App).pipe(
@@ -217,6 +231,19 @@ const progressiveServerFnRequest = (body: FormData) =>
   });
 
 describe('ServerApplication.httpLayer', () => {
+  it.effect('prefers an application root Page over the public asset fallback', () =>
+    withHarness(({ call, events }) =>
+      Effect.gen(function* () {
+        const response = yield* call(new Request(`${Origin}/`));
+        const body = yield* Effect.promise(() => response.text());
+
+        expect(response.status).toBe(200);
+        expect(body).toBe('Root Page');
+        expect(events).toEqual(['outer:request', 'outer:response']);
+      }),
+    ),
+  );
+
   it.effect('runs inherited Routes middleware from ancestor to descendant around a Page GET', () =>
     withHarness(({ call, events }) =>
       Effect.gen(function* () {

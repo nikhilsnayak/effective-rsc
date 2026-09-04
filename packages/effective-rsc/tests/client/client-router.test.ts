@@ -26,7 +26,7 @@ import { BrowserRenderer } from '../../src/client/browser-renderer';
 import { installClientRouter } from '../../src/client/client-router';
 import { FlightClient } from '../../src/client/flight-client';
 import { NavigationApi } from '../../src/client/navigation-api';
-import { RouteLoader } from '../../src/client/route-loader';
+import { RouteLoader, type RouteLoad } from '../../src/client/route-loader';
 import type { RouteTreeModel } from '../../src/rsc/route-tree';
 
 type TestNavigateEvent = Event &
@@ -242,6 +242,43 @@ const invokePrecommitHandler = (
   handler: NavigationPrecommitHandler,
   controller: NavigationPrecommitController,
 ) => Promise.resolve(handler(controller));
+
+const prepareNavigation = Effect.fnUntraced(function* (navigation: TestNavigationApi, url: string) {
+  const pendingNavigation = makeNavigationEvent({ destination: { url } });
+  navigation.dispatch(pendingNavigation.event);
+  const precommitHandler = pendingNavigation.interception()?.precommitHandler;
+  if (precommitHandler === undefined) {
+    return yield* Effect.die('Expected a precommit handler.');
+  }
+  const handlers: Array<NavigationInterceptHandler> = [];
+  yield* Effect.promise(() =>
+    invokePrecommitHandler(precommitHandler, makePrecommitController([], handlers)),
+  );
+  const handler = handlers[0];
+  if (handler === undefined) {
+    return yield* Effect.die('Expected a post-commit handler.');
+  }
+  return handler;
+});
+
+const makeControlledRoute = Effect.fnUntraced(function* (url: string) {
+  const completed = yield* Deferred.make<void>();
+  const released = Promise.withResolvers<void>();
+  const cachedEntries: Array<NavigationHistoryEntry> = [];
+  return {
+    cachedEntries,
+    completed,
+    released,
+    resource: {
+      _tag: 'Route',
+      cache: (entry) => cachedEntries.push(entry),
+      completed: Deferred.await(completed),
+      release: Effect.sync(released.resolve),
+      resolvedUrl: new URL(url),
+      routeTree: { ...initialRouteTree, id: new URL(url).pathname },
+    } satisfies RouteLoad,
+  };
+});
 
 const makeNavigationApiLayer = (
   navigation: TestNavigationApi,
@@ -511,6 +548,82 @@ it.effect('does not reload a superseded non-cancelable traversal', () => {
     }),
   );
 });
+
+it.effect('coordinates cache identity across Flight and history commit ordering', () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const navigation = new TestNavigationApi();
+      const dayTwoUrl = 'https://effective-rsc.test/schedule/day-two';
+      const dayThreeUrl = 'https://effective-rsc.test/schedule/day-three';
+      const dayFourUrl = 'https://effective-rsc.test/schedule/day-four';
+      const dayFiveUrl = 'https://effective-rsc.test/schedule/day-five';
+      const dayTwo = yield* makeControlledRoute(dayTwoUrl);
+      const dayThree = yield* makeControlledRoute(dayThreeUrl);
+      const dayFour = yield* makeControlledRoute(dayFourUrl);
+      const dayFive = yield* makeControlledRoute(dayFiveUrl);
+      const routes = new Map([
+        [dayTwoUrl, dayTwo.resource],
+        [dayThreeUrl, dayThree.resource],
+        [dayFourUrl, dayFour.resource],
+        [dayFiveUrl, dayFive.resource],
+      ]);
+      const installed = yield* Deferred.make<void>();
+      const servicesLayer = Layer.mergeAll(
+        BrowserEffectRunner.layer,
+        BrowserRenderer.layerTest(makeBrowserRenderer()),
+        makeNavigationApiLayer(navigation),
+        RouteLoader.layerTest({
+          invalidate: () => undefined,
+          load: ({ destination }) => {
+            const resource = routes.get(destination.url);
+            return resource === undefined
+              ? Effect.die(new TypeError(`Unexpected route ${destination.url}.`))
+              : Effect.succeed(resource);
+          },
+          loadInitial: Effect.die(new TypeError('Unexpected initial route load.')),
+          prepareRefresh: () => () => undefined,
+        }),
+      ).pipe(Layer.provideMerge(Layer.succeed(HttpClient.HttpClient, makeHttpClient())));
+      const routerLayer = Layer.effectDiscard(
+        installClientRouter.pipe(Effect.andThen(Deferred.succeed(installed, undefined))),
+      ).pipe(Layer.provideMerge(servicesLayer));
+      const running = yield* Layer.launch(routerLayer).pipe(Effect.forkScoped);
+      yield* Effect.raceFirst(Deferred.await(installed), Fiber.join(running));
+
+      const dayTwoHistory = yield* prepareNavigation(navigation, dayTwoUrl);
+      yield* Deferred.succeed(dayTwo.completed, undefined);
+      yield* Effect.promise(() => dayTwo.released.promise);
+      expect(dayTwo.cachedEntries).toEqual([]);
+
+      const dayTwoEntry = makeNavigationEntry('day-two', dayTwoUrl);
+      navigation.currentEntry = dayTwoEntry;
+      yield* Effect.promise(() => invokeNavigationHandler(dayTwoHistory));
+      expect(dayTwo.cachedEntries).toEqual([dayTwoEntry]);
+
+      const dayThreeHistory = yield* prepareNavigation(navigation, dayThreeUrl);
+      const dayThreeEntry = makeNavigationEntry('day-three', dayThreeUrl);
+      navigation.currentEntry = dayThreeEntry;
+      yield* Effect.promise(() => invokeNavigationHandler(dayThreeHistory));
+      expect(dayThree.cachedEntries).toEqual([]);
+
+      navigation.currentEntry = makeNavigationEntry('unrelated', dayFiveUrl);
+      yield* Deferred.succeed(dayThree.completed, undefined);
+      yield* Effect.promise(() => dayThree.released.promise);
+      expect(dayThree.cachedEntries).toEqual([dayThreeEntry]);
+
+      const dayFourHistory = yield* prepareNavigation(navigation, dayFourUrl);
+      const dayFourEntry = makeNavigationEntry('day-four', dayFourUrl);
+      navigation.currentEntry = dayFourEntry;
+      yield* Effect.promise(() => invokeNavigationHandler(dayFourHistory));
+
+      yield* prepareNavigation(navigation, dayFiveUrl);
+      yield* Effect.promise(() => dayFour.released.promise);
+      yield* Deferred.succeed(dayFour.completed, undefined);
+      yield* Effect.yieldNow;
+      expect(dayFour.cachedEntries).toEqual([]);
+    }),
+  ),
+);
 
 it.effect('reuses completed route trees for back and forward traversals', () =>
   Effect.scoped(

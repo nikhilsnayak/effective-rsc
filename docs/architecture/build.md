@@ -33,7 +33,8 @@ replaces the active server application. Browser updates use the compiler's HMR p
 refresh the current route through the Navigation API. A streaming Effect RPC carries development
 updates over `/_ersc/dev`. Development-only branches are removed from production builds. On
 shutdown, the development channel closes active WebSockets before stopping the Bun HTTP server, so
-connected browser tabs cannot retain the process.
+connected browser tabs cannot retain the process. The channel accepts only WebSocket handshakes
+whose `Origin` matches the development server.
 
 Development diagnostics start independently of hydration. Current-route refresh initially reloads
 the document; successful client-navigation activation replaces it with streamed RSC refresh.

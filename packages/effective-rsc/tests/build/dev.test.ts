@@ -398,7 +398,8 @@ it.effect('streams updates and stops development through the Effect RPC channel'
   Effect.gen(function* () {
     const channel = yield* makeDevChannel;
     const server = yield* HttpServer.HttpServer;
-    const socketUrl = `${HttpServer.formatAddress(server.address).replace(/^http/, 'ws')}${DevChannelPath}`;
+    const serverUrl = HttpServer.formatAddress(server.address);
+    const socketUrl = `${serverUrl.replace(/^http/, 'ws')}${DevChannelPath}`;
     const application = {
       closeDevChannel: channel.close,
       httpEffect: channel.httpEffect,
@@ -409,7 +410,15 @@ it.effect('streams updates and stops development through the Effect RPC channel'
     );
     const ProtocolLayer = RpcClient.layerProtocolSocket({ retryTransientErrors: true }).pipe(
       Layer.provide(Socket.layerWebSocket(socketUrl)),
-      Layer.provide(Socket.layerWebSocketConstructorGlobal),
+      Layer.provide(
+        Layer.succeed(
+          Socket.WebSocketConstructor,
+          (url) =>
+            new WebSocket(url, {
+              headers: { origin: new URL(serverUrl).origin },
+            } as unknown as string | Array<string>),
+        ),
+      ),
       Layer.provide(RpcSerialization.layerJson),
     );
     const updates = yield* Effect.gen(function* () {

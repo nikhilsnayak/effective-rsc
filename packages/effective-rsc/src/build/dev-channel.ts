@@ -1,11 +1,24 @@
 import { Deferred, Effect, Layer, MutableRef, Stream, SubscriptionRef } from 'effect';
-import { HttpServerResponse } from 'effect/unstable/http';
+import { HttpServerRequest, HttpServerResponse } from 'effect/unstable/http';
 import { RpcSerialization, RpcServer } from 'effect/unstable/rpc';
 
 import { DevRpcs, type DevUpdate } from '../dev/channel';
 
 type DevChannelState = { readonly _tag: 'Initial' } | DevUpdate;
 type PendingDevUpdate = { readonly _tag: 'ClientUpdate' } | { readonly _tag: 'RscUpdate' };
+
+const hasSameOrigin = (request: HttpServerRequest.HttpServerRequest) => {
+  const origin = request.headers['origin'];
+  if (origin === undefined) {
+    return false;
+  }
+
+  try {
+    return new URL(origin).origin === new URL(request.originalUrl).origin;
+  } catch {
+    return false;
+  }
+};
 
 export const makeDevChannel = Effect.gen(function* () {
   const pending = MutableRef.make<PendingDevUpdate>({ _tag: 'ClientUpdate' });
@@ -28,9 +41,14 @@ export const makeDevChannel = Effect.gen(function* () {
   const rpcHttpEffect = yield* RpcServer.toHttpEffectWebsocket(DevRpcs).pipe(
     Effect.provide(Layer.merge(Handlers, RpcSerialization.layerJson)),
   );
+  const sameOriginRpcHttpEffect = HttpServerRequest.HttpServerRequest.use((request) =>
+    hasSameOrigin(request)
+      ? rpcHttpEffect
+      : Effect.succeed(HttpServerResponse.empty({ status: 403 })),
+  );
   const httpEffect = Effect.raceFirst(
     Deferred.await(shutdownSignal).pipe(Effect.as(HttpServerResponse.empty())),
-    rpcHttpEffect,
+    sameOriginRpcHttpEffect,
   );
 
   return {

@@ -1,5 +1,5 @@
 import { expect, it } from '@effect/vitest';
-import { Deferred, Effect } from 'effect';
+import { Deferred, Effect, Fiber, Layer } from 'effect';
 import { HttpClient } from 'effect/unstable/http';
 import { vi } from 'vitest';
 
@@ -77,7 +77,7 @@ it.effect('reloads the document until navigation installs streamed route refresh
   const streamedRefresh = vi.fn();
 
   return Effect.gen(function* () {
-    const routeRefresher = yield* RouteRefresher.make;
+    const routeRefresher = yield* RouteRefresher;
     yield* routeRefresher.refreshCurrentRoute;
     expect(navigation.reloadDocument).toHaveBeenCalledOnce();
 
@@ -88,7 +88,9 @@ it.effect('reloads the document until navigation installs streamed route refresh
     yield* routeRefresher.refreshCurrentRoute;
     expect(streamedRefresh).toHaveBeenCalledOnce();
     expect(navigation.reloadDocument).toHaveBeenCalledOnce();
-  }).pipe(Effect.provide(makeNavigationApiLayer(navigation)));
+  }).pipe(
+    Effect.provide(RouteRefresher.layer.pipe(Layer.provide(makeNavigationApiLayer(navigation)))),
+  );
 });
 
 const withBrowserRefresh = <A, E>(
@@ -99,22 +101,33 @@ const withBrowserRefresh = <A, E>(
 ) =>
   Effect.scoped(
     Effect.gen(function* () {
-      const run = yield* BrowserEffectRunner.make;
-      const routeRefresher = yield* RouteRefresher.make.pipe(
-        Effect.provide(makeNavigationApiLayer(navigation)),
-      );
-      yield* installRouteRefresh.pipe(
-        Effect.provide(makeNavigationApiLayer(navigation)),
-        Effect.provideService(BrowserEffectRunner, run),
-        Effect.provideService(BrowserRenderer, browserRenderer),
-        Effect.provideService(RouteLoader, routeLoader),
-        Effect.provideService(RouteRefresher, routeRefresher),
+      const initialized = yield* Deferred.make<RouteRefresher['Service']>();
+      const navigationApiLayer = makeNavigationApiLayer(navigation);
+      const routeRefresherLayer = RouteRefresher.layer.pipe(Layer.provide(navigationApiLayer));
+      const servicesLayer = Layer.mergeAll(
+        BrowserEffectRunner.layer,
+        BrowserRenderer.layerTest(browserRenderer),
+        navigationApiLayer,
+        RouteLoader.layerTest(routeLoader),
+        routeRefresherLayer,
+      ).pipe(Layer.provideMerge(Layer.succeed(HttpClient.HttpClient, testHttpClient)));
+      const browserRefreshLayer = Layer.effectDiscard(
+        Effect.gen(function* () {
+          yield* installRouteRefresh;
+          const routeRefresher = yield* RouteRefresher;
+          yield* Deferred.succeed(initialized, routeRefresher);
+        }),
+      ).pipe(Layer.provideMerge(servicesLayer));
+      const running = yield* Layer.launch(browserRefreshLayer).pipe(Effect.forkScoped);
+      const routeRefresher = yield* Effect.raceFirst(
+        Deferred.await(initialized),
+        Fiber.join(running),
       );
       return yield* test(
         routeRefresher.refreshCurrentRoute,
         routeRefresher.interruptCurrentRouteRefresh,
       );
-    }).pipe(Effect.provideService(HttpClient.HttpClient, testHttpClient)),
+    }),
   );
 
 it.effect('waits for the active NavigationTransition before refreshing the current entry', () =>

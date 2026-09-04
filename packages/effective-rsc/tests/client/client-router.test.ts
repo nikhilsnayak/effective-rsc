@@ -1,5 +1,5 @@
-import { afterEach, expect, it } from '@effect/vitest';
-import { Effect, Exit, Scope } from 'effect';
+import { expect, it } from '@effect/vitest';
+import { Deferred, Effect, Exit, Fiber, Layer, Scope } from 'effect';
 import { HttpClient, HttpClientResponse } from 'effect/unstable/http';
 import { vi } from 'vitest';
 
@@ -49,11 +49,13 @@ const makeNavigationEntry = (key: string, url: string, id = key) =>
     id,
     index: 0,
     key,
+    ondispose: null,
+    sameDocument: true,
     url,
-  });
+  }) satisfies NavigationHistoryEntry;
 
 class TestNavigationApi {
-  private listener: ((event: TestNavigateEvent) => void) | null = null;
+  private listener: EventListener | null = null;
   readonly initialEntry = makeNavigationEntry(
     'day-one',
     'https://effective-rsc.test/schedule/day-one',
@@ -65,24 +67,36 @@ class TestNavigationApi {
   }> = [];
   readonly traversals: Array<{ readonly info: unknown; readonly key: string }> = [];
 
-  addEventListener(_type: 'navigate', listener: (event: TestNavigateEvent) => void) {
+  addEventListener(_type: 'navigate', listener: EventListener) {
     this.listener = listener;
   }
 
-  removeEventListener(_type: 'navigate', listener: (event: TestNavigateEvent) => void) {
+  removeEventListener(_type: 'navigate', listener: EventListener) {
     if (this.listener === listener) {
       this.listener = null;
     }
   }
 
-  navigate(url: string, options: { readonly history: 'push' | 'replace'; readonly info: unknown }) {
-    this.nativeNavigations.push({ options, url });
-    return { finished: Promise.resolve() };
+  navigate(url: string | URL, options?: NavigationNavigateOptions): NavigationResult {
+    if (options?.history !== 'push' && options?.history !== 'replace') {
+      throw new TypeError('Expected an explicit push or replace navigation.');
+    }
+    this.nativeNavigations.push({
+      options: { history: options.history, info: options.info },
+      url: url.toString(),
+    });
+    return {
+      committed: Promise.resolve(this.currentEntry),
+      finished: Promise.resolve(this.currentEntry),
+    };
   }
 
-  traverseTo(key: string, options: { readonly info: unknown }) {
-    this.traversals.push({ key, ...options });
-    return { finished: Promise.resolve() };
+  traverseTo(key: string, options?: NavigationOptions): NavigationResult {
+    this.traversals.push({ key, info: options?.info });
+    return {
+      committed: Promise.resolve(this.currentEntry),
+      finished: Promise.resolve(this.currentEntry),
+    };
   }
 
   dispatch(event: TestNavigateEvent) {
@@ -229,30 +243,44 @@ const invokePrecommitHandler = (
   controller: NavigationPrecommitController,
 ) => Promise.resolve(handler(controller));
 
+const makeNavigationApiLayer = (
+  navigation: TestNavigationApi,
+  documentReplacements: Array<string> = [],
+  reloadDocument: () => void = () => undefined,
+) =>
+  NavigationApi.layerTest({
+    getCurrentEntry: () => navigation.currentEntry,
+    getCurrentUrl: () => navigation.currentEntry.url,
+    getTransition: () => null,
+    navigate: (url, options) => navigation.navigate(url, options),
+    reloadDocument,
+    replaceDocument: (url) => documentReplacements.push(url),
+    subscribe: (listener) => {
+      navigation.addEventListener('navigate', listener as EventListener);
+      return () => navigation.removeEventListener('navigate', listener as EventListener);
+    },
+    traverseTo: (key, options) => navigation.traverseTo(key, options),
+  });
+
 const listen = (
   navigation: TestNavigationApi,
   browserRenderer: BrowserRenderer['Service'] = makeBrowserRenderer(),
   httpClient = makeHttpClient(),
   documentReplacements: Array<string> = [],
   reloadDocument: () => void = () => undefined,
-) => {
-  vi.stubGlobal('window', {
-    NavigationPrecommitController: class {},
-    location: {
-      href: 'https://effective-rsc.test/schedule/day-one',
-      reload: reloadDocument,
-      replace: (url: string) => documentReplacements.push(url),
-    },
-    navigation,
-  });
-  return Effect.gen(function* () {
-    const run = yield* BrowserEffectRunner.make;
-    const navigationApi = yield* NavigationApi.make;
-    const flightClient = yield* FlightClient.make;
-    const routeLoader = yield* RouteLoader.make.pipe(
-      Effect.provideService(
-        FlightClient,
-        FlightClient.of({
+) =>
+  Effect.gen(function* () {
+    const installed = yield* Deferred.make<void>();
+    const navigationApiLayer = makeNavigationApiLayer(
+      navigation,
+      documentReplacements,
+      reloadDocument,
+    );
+    const flightClientLayer = Layer.effect(
+      FlightClient,
+      Effect.gen(function* () {
+        const flightClient = yield* FlightClient;
+        return FlightClient.of({
           ...flightClient,
           loadInitial: Effect.succeed({
             completed: Effect.void,
@@ -262,23 +290,31 @@ const listen = (
               serverFnResult: null,
             },
           }),
-        }),
-      ),
-      Effect.provideService(NavigationApi, navigationApi),
+        });
+      }),
+    ).pipe(Layer.provide(FlightClient.layer));
+    const routeLoaderLayer = RouteLoader.layer.pipe(
+      Layer.provide(flightClientLayer),
+      Layer.provide(navigationApiLayer),
     );
-    yield* routeLoader.loadInitial;
-    return yield* installClientRouter.pipe(
-      Effect.provideService(BrowserEffectRunner, run),
-      Effect.provideService(BrowserRenderer, browserRenderer),
-      Effect.provideService(NavigationApi, navigationApi),
-      Effect.provideService(RouteLoader, routeLoader),
-    );
-  }).pipe(Effect.provideService(HttpClient.HttpClient, httpClient));
-};
+    const servicesLayer = Layer.mergeAll(
+      BrowserEffectRunner.layer,
+      BrowserRenderer.layerTest(browserRenderer),
+      navigationApiLayer,
+      routeLoaderLayer,
+    ).pipe(Layer.provideMerge(Layer.succeed(HttpClient.HttpClient, httpClient)));
+    const routerLayer = Layer.effectDiscard(
+      Effect.gen(function* () {
+        const routeLoader = yield* RouteLoader;
+        yield* routeLoader.loadInitial;
+        yield* installClientRouter;
+        yield* Deferred.succeed(installed, undefined);
+      }),
+    ).pipe(Layer.provideMerge(servicesLayer));
 
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
+    const running = yield* Layer.launch(routerLayer).pipe(Effect.forkScoped);
+    yield* Effect.raceFirst(Deferred.await(installed), Fiber.join(running));
+  });
 
 it.effect('splits a cancelable navigation between React commit and Flight completion', () =>
   Effect.gen(function* () {

@@ -1,5 +1,5 @@
 import { beforeEach, expect, it } from '@effect/vitest';
-import { Deferred, Effect, Exit, Layer, MutableRef } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Layer, MutableRef } from 'effect';
 import { HttpClient } from 'effect/unstable/http';
 import { vi } from 'vitest';
 
@@ -67,6 +67,25 @@ beforeEach(() => {
   reactClient.serverCallback = undefined;
 });
 
+type CallServerDependencies =
+  | BrowserEffectRunner
+  | BrowserRenderer
+  | FlightClient
+  | NavigationApi
+  | RouteLoader
+  | RouteRefresher;
+
+const listen = Effect.fnUntraced(function* (
+  dependencies: Layer.Layer<CallServerDependencies, never, HttpClient.HttpClient>,
+) {
+  const installed = yield* Deferred.make<void>();
+  const callServerLayer = Layer.effectDiscard(
+    installCallServer.pipe(Effect.andThen(Deferred.succeed(installed, undefined))),
+  ).pipe(Layer.provideMerge(dependencies));
+  const running = yield* Layer.launch(callServerLayer).pipe(Effect.forkScoped);
+  yield* Effect.raceFirst(Deferred.await(installed), Fiber.join(running));
+});
+
 it.effect('releases an incomplete Server Function response', () =>
   Effect.scoped(
     Effect.gen(function* () {
@@ -100,28 +119,24 @@ it.effect('releases an incomplete Server Function response', () =>
           }),
         loadInitial: Effect.die('Unexpected initial Flight load.'),
       });
-      const run = yield* BrowserEffectRunner.make;
-
-      yield* installCallServer.pipe(
-        Effect.provide(
-          Layer.mergeAll(
-            Layer.succeed(BrowserEffectRunner, run),
-            BrowserRenderer.layerTest({
-              commit: () => undefined,
-              initialize: () => undefined,
-              navigate: () => {
-                throw new TypeError('Unexpected navigation render.');
-              },
-              refresh: () => Promise.reject(new TypeError('Unexpected route refresh.')),
-            }),
-            flightClientLayer,
-            navigationApiLayer,
-            RouteLoader.layerTest({
-              invalidate: () => undefined,
-              prepareRefresh: () => () => undefined,
-            }),
-            RouteRefresher.layerTest({}),
-          ),
+      yield* listen(
+        Layer.mergeAll(
+          BrowserEffectRunner.layer,
+          BrowserRenderer.layerTest({
+            commit: () => undefined,
+            initialize: () => undefined,
+            navigate: () => {
+              throw new TypeError('Unexpected navigation render.');
+            },
+            refresh: () => Promise.reject(new TypeError('Unexpected route refresh.')),
+          }),
+          flightClientLayer,
+          navigationApiLayer,
+          RouteLoader.layerTest({
+            invalidate: () => undefined,
+            prepareRefresh: () => () => undefined,
+          }),
+          RouteRefresher.layerTest({}),
         ),
       );
 
@@ -195,18 +210,14 @@ const staleResponseScenario = (changeNavigation: (state: TestNavigationState) =>
         refreshCurrentRoute: Deferred.succeed(currentRouteRefresh, undefined),
         replace: () => Effect.void,
       });
-      const run = yield* BrowserEffectRunner.make;
-
-      yield* installCallServer.pipe(
-        Effect.provide(
-          Layer.mergeAll(
-            Layer.succeed(BrowserEffectRunner, run),
-            browserRendererLayer,
-            flightClientLayer,
-            navigationApiLayer,
-            routeLoaderLayer,
-            routeRefresherLayer,
-          ),
+      yield* listen(
+        Layer.mergeAll(
+          BrowserEffectRunner.layer,
+          browserRendererLayer,
+          flightClientLayer,
+          navigationApiLayer,
+          routeLoaderLayer,
+          routeRefresherLayer,
         ),
       );
 
@@ -308,18 +319,14 @@ it.effect('does not let an older invocation response overwrite a newer response'
         refreshCurrentRoute: Deferred.succeed(currentRouteRefresh, undefined),
         replace: () => Effect.void,
       });
-      const run = yield* BrowserEffectRunner.make;
-
-      yield* installCallServer.pipe(
-        Effect.provide(
-          Layer.mergeAll(
-            Layer.succeed(BrowserEffectRunner, run),
-            browserRendererLayer,
-            flightClientLayer,
-            navigationApiLayer,
-            routeLoaderLayer,
-            routeRefresherLayer,
-          ),
+      yield* listen(
+        Layer.mergeAll(
+          BrowserEffectRunner.layer,
+          browserRendererLayer,
+          flightClientLayer,
+          navigationApiLayer,
+          routeLoaderLayer,
+          routeRefresherLayer,
         ),
       );
 

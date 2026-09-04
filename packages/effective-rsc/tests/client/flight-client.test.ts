@@ -37,9 +37,9 @@ const { FlightClient, FlightLoadError } = await import('../../src/client/flight-
 type FlightRequest = import('../../src/client/flight-client').FlightRequest;
 
 const loadFlight = Effect.fnUntraced(function* (request: FlightRequest) {
-  const client = yield* FlightClient.make;
+  const client = yield* FlightClient;
   return yield* client.load(request);
-});
+}, Effect.provide(FlightClient.layer));
 
 beforeEach(() => {
   decodeFlight.mockReset();
@@ -77,12 +77,7 @@ it.effect('loads the embedded initial Flight without waiting for stream completi
         return decodedPayload;
       });
     });
-    const client = yield* FlightClient.make.pipe(
-      Effect.provideService(
-        HttpClient.HttpClient,
-        HttpClient.make(() => Effect.die('Unexpected HTTP request.')),
-      ),
-    );
+    const client = yield* FlightClient;
     const loading = yield* client.loadInitial.pipe(Effect.forkChild);
     if (initialFlightController === undefined) {
       return yield* Effect.die('Expected the embedded Flight stream.');
@@ -98,7 +93,13 @@ it.effect('loads the embedded initial Flight without waiting for stream completi
 
     initialFlightController.close();
     yield* Fiber.join(completion);
-  }),
+  }).pipe(
+    Effect.provide(FlightClient.layer),
+    Effect.provideService(
+      HttpClient.HttpClient,
+      HttpClient.make(() => Effect.die('Unexpected HTTP request.')),
+    ),
+  ),
 );
 
 it.effect('requests and decodes a whole-tree Flight response', () =>

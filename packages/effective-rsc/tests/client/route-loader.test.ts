@@ -1,5 +1,5 @@
 import { expect, it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Deferred, Effect, Fiber, Layer } from 'effect';
 import { HttpClient, HttpClientResponse } from 'effect/unstable/http';
 import { vi } from 'vitest';
 
@@ -62,8 +62,8 @@ const makeHttpClient = (requestedUrls: Array<string>) =>
     }),
   );
 
-const makeNavigationApi = (navigationHistory: TestNavigationHistory) =>
-  NavigationApi.of({
+const makeNavigationApiLayer = (navigationHistory: TestNavigationHistory) =>
+  NavigationApi.layerTest({
     getCurrentEntry: () => navigationHistory.currentEntry,
     getCurrentUrl: () => navigationHistory.currentEntry.url,
     getTransition: () => null,
@@ -83,11 +83,12 @@ const makeRouteLoader = Effect.fnUntraced(function* (
   initialRouteTree: RouteTreeModel,
   initialFlightCompleted: Effect.Effect<void> = Effect.void,
 ) {
-  const flightClient = yield* FlightClient;
-  const routeLoader = yield* RouteLoader.make.pipe(
-    Effect.provideService(
-      FlightClient,
-      FlightClient.of({
+  const initialized = yield* Deferred.make<RouteLoader['Service']>();
+  const flightClientLayer = Layer.effect(
+    FlightClient,
+    Effect.gen(function* () {
+      const flightClient = yield* FlightClient;
+      return FlightClient.of({
         ...flightClient,
         loadInitial: Effect.succeed({
           completed: initialFlightCompleted,
@@ -97,12 +98,22 @@ const makeRouteLoader = Effect.fnUntraced(function* (
             serverFnResult: null,
           },
         }),
-      }),
-    ),
-    Effect.provideService(NavigationApi, makeNavigationApi(navigationHistory)),
+      });
+    }),
+  ).pipe(Layer.provide(FlightClient.layer));
+  const routeLoaderLayer = RouteLoader.layer.pipe(
+    Layer.provide(flightClientLayer),
+    Layer.provide(makeNavigationApiLayer(navigationHistory)),
   );
-  yield* routeLoader.loadInitial;
-  return routeLoader;
+  const initializedRouteLoaderLayer = Layer.effectDiscard(
+    Effect.gen(function* () {
+      const routeLoader = yield* RouteLoader;
+      yield* routeLoader.loadInitial;
+      yield* Deferred.succeed(initialized, routeLoader);
+    }),
+  ).pipe(Layer.provideMerge(routeLoaderLayer));
+  const running = yield* Layer.launch(initializedRouteLoaderLayer).pipe(Effect.forkScoped);
+  return yield* Effect.raceFirst(Deferred.await(initialized), Fiber.join(running));
 });
 
 const load = (
@@ -141,10 +152,7 @@ it.effect('does not let initial Flight completion overwrite a refreshed cache ge
         expect(resource.routeTree.id).toBe('refreshed');
       }
       expect(requestedUrls).toEqual([]);
-    }).pipe(
-      Effect.provide(FlightClient.layer),
-      Effect.provideService(HttpClient.HttpClient, makeHttpClient(requestedUrls)),
-    ),
+    }).pipe(Effect.provideService(HttpClient.HttpClient, makeHttpClient(requestedUrls))),
   );
 });
 
@@ -172,10 +180,7 @@ it.effect('invalidates cached history entries before a development refresh', () 
 
       expect(resource._tag === 'Route' && resource.routeTree.id).toBe('reloaded');
       expect(requestedUrls).toEqual([initialEntry.url]);
-    }).pipe(
-      Effect.provide(FlightClient.layer),
-      Effect.provideService(HttpClient.HttpClient, makeHttpClient(requestedUrls)),
-    ),
+    }).pipe(Effect.provideService(HttpClient.HttpClient, makeHttpClient(requestedUrls))),
   );
 });
 
@@ -210,10 +215,7 @@ it.effect('fences an in-flight navigation cache write when a refresh invalidates
         expect(cached.routeTree.id).toBe('refreshed');
       }
       expect(requestedUrls).toEqual([initialEntry.url]);
-    }).pipe(
-      Effect.provide(FlightClient.layer),
-      Effect.provideService(HttpClient.HttpClient, makeHttpClient(requestedUrls)),
-    ),
+    }).pipe(Effect.provideService(HttpClient.HttpClient, makeHttpClient(requestedUrls))),
   );
 });
 
@@ -242,10 +244,7 @@ it.effect('attributes a refresh to the history entry where it started', () => {
 
       expect(firstCached._tag === 'Route' && firstCached.routeTree.id).toBe('refreshed');
       expect(requestedUrls).toEqual([]);
-    }).pipe(
-      Effect.provide(FlightClient.layer),
-      Effect.provideService(HttpClient.HttpClient, makeHttpClient(requestedUrls)),
-    ),
+    }).pipe(Effect.provideService(HttpClient.HttpClient, makeHttpClient(requestedUrls))),
   );
 });
 
@@ -293,9 +292,6 @@ it.effect('caches the supplied entry and evicts it on disposal', () => {
 
       expect(reloaded._tag === 'Route' && reloaded.routeTree.id).toBe('second-reloaded');
       expect(requestedUrls).toEqual([secondEntry.url, secondEntry.url]);
-    }).pipe(
-      Effect.provide(FlightClient.layer),
-      Effect.provideService(HttpClient.HttpClient, makeHttpClient(requestedUrls)),
-    ),
+    }).pipe(Effect.provideService(HttpClient.HttpClient, makeHttpClient(requestedUrls))),
   );
 });

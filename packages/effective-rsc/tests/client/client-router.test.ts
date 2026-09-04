@@ -1042,6 +1042,23 @@ it.effect('retains a committed Flight response until its render retires', () => 
       let responseSignal: AbortSignal | undefined;
       const httpClient = HttpClient.make((request, _url, signal) =>
         Effect.sync(() => {
+          if (new URL(request.url).pathname === '/schedule/day-three') {
+            return HttpClientResponse.fromWeb(
+              request,
+              new Response(
+                new ReadableStream<Uint8Array>({
+                  start(controller) {
+                    controller.error(new Error('Failed to load the successor.'));
+                  },
+                }),
+                {
+                  headers: {
+                    'content-type': 'text/x-component',
+                  },
+                },
+              ),
+            );
+          }
           responseSignal = signal;
           return HttpClientResponse.fromWeb(
             request,
@@ -1108,6 +1125,23 @@ it.effect('retains a committed Flight response until its render retires', () => 
       navigationAbort.abort();
       yield* Effect.yieldNow;
 
+      expect(responseSignal?.aborted).toBe(false);
+
+      const failedNavigation = makeNavigationEvent({
+        destination: { url: 'https://effective-rsc.test/schedule/day-three' },
+      });
+      navigation.dispatch(failedNavigation.event);
+      const failedPrecommitHandler = failedNavigation.interception()?.precommitHandler;
+      if (failedPrecommitHandler === undefined) {
+        return yield* Effect.die('Expected a precommit handler for the failed successor.');
+      }
+      const failed = yield* Effect.exit(
+        Effect.promise(() =>
+          invokePrecommitHandler(failedPrecommitHandler, makePrecommitController()),
+        ),
+      );
+
+      expect(Exit.isFailure(failed)).toBe(true);
       expect(responseSignal?.aborted).toBe(false);
 
       renderRetired.resolve();

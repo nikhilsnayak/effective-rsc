@@ -9,6 +9,7 @@ vi.mock('react-server-dom-rspack/client.browser', () => ({
 
 import { BrowserEffectRunner } from '../../src/client/browser-effect-runner';
 import { BrowserRenderer } from '../../src/client/browser-renderer';
+import { FlightLoadError } from '../../src/client/flight-client';
 import { NavigationApi } from '../../src/client/navigation-api';
 import { RouteLoader } from '../../src/client/route-loader';
 import { installRouteRefresh, RouteRefresher } from '../../src/client/route-refresh';
@@ -187,6 +188,41 @@ it.effect('waits for the active NavigationTransition before refreshing the curre
         expect(navigation.navigate).not.toHaveBeenCalled();
         yield* Effect.yieldNow;
         expect(cached).toHaveBeenCalledOnce();
+      }),
+    );
+  }),
+);
+
+it.effect('leaves the current render untouched when refresh loading fails', () =>
+  Effect.gen(function* () {
+    const navigation = new TestNavigation();
+    const loadFinished = yield* Deferred.make<void>();
+    const renderRefresh = vi.fn(() => Promise.resolve());
+    const routeLoader = RouteLoader.of({
+      invalidate: vi.fn(),
+      load: () =>
+        Effect.fail(
+          new FlightLoadError({ cause: new Error('Refresh failed.'), reason: 'RequestFailed' }),
+        ).pipe(Effect.ensuring(Deferred.succeed(loadFinished, undefined))),
+      loadInitial: Effect.die('Unexpected initial route load.'),
+      prepareRefresh: () => () => undefined,
+    });
+    const browserRenderer = BrowserRenderer.of({
+      commit: () => undefined,
+      initialize: () => undefined,
+      navigate: () => {
+        throw new TypeError('Unexpected navigation render.');
+      },
+      refresh: renderRefresh,
+    });
+
+    yield* withBrowserRefresh(navigation, browserRenderer, routeLoader, (refresh) =>
+      Effect.gen(function* () {
+        yield* refresh;
+        yield* Deferred.await(loadFinished);
+        yield* Effect.yieldNow;
+
+        expect(renderRefresh).not.toHaveBeenCalled();
       }),
     );
   }),

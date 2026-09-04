@@ -57,6 +57,7 @@ class ApplicationDefinitionImpl<Services, ApplicationError> implements Applicati
     this[ERSCIdentityTypeId] = identity;
     this.layer = layer;
     this.routes = routes;
+    Object.freeze(this);
   }
 }
 

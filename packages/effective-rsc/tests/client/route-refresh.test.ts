@@ -151,7 +151,7 @@ const withBrowserRefresh = <A, E>(
     }),
   );
 
-it.effect('waits for the active NavigationTransition before refreshing the current entry', () =>
+it.effect('applies the HMR transition type after the active navigation settles', () =>
   Effect.gen(function* () {
     const navigation = new TestNavigation();
     const transition = Promise.withResolvers<void>();
@@ -195,7 +195,7 @@ it.effect('waits for the active NavigationTransition before refreshing the curre
 
     yield* withBrowserRefresh(navigation, browserRenderer, routeLoader, (refresh) =>
       Effect.gen(function* () {
-        yield* refresh('server-function');
+        yield* refresh('hmr-refresh');
         yield* Effect.yieldNow;
         expect(Deferred.isDoneUnsafe(loaded)).toBe(false);
         expect(react.transitionTypes).toEqual([]);
@@ -205,7 +205,7 @@ it.effect('waits for the active NavigationTransition before refreshing the curre
         const nextRouteTree = yield* Effect.promise(() => rendered.promise);
 
         expect(nextRouteTree.id).toBe('refreshed');
-        expect(react.transitionTypes).toEqual(['server-function']);
+        expect(react.transitionTypes).toEqual(['hmr-refresh']);
         expect(invalidated).toHaveBeenCalledOnce();
         expect(navigation.navigate).not.toHaveBeenCalled();
         yield* Effect.yieldNow;

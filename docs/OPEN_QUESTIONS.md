@@ -47,7 +47,10 @@ IDs are append-only and never reused, including after a question is resolved.
   client reference typing.
 - **Evidence:** `Schema.fromFormData(...)` provides a sound one-argument `FormData` contract but
   cannot describe React's two-argument action signature without loosening inference or adding an
-  explicit API shape.
+  explicit API shape. The event-platform checkout needs decoded `FormData` plus a typed result for
+  inline payment, inventory, and idempotency feedback; it currently calls the one-input Server
+  Function from a client transition and stores that result locally instead of using
+  `useActionState`.
 - **Related:** D-009, D-036, D-040, OQ-006.
 - **Resolution:** Unresolved.
 - **Status:** Open.

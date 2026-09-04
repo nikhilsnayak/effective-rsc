@@ -163,7 +163,7 @@ const httpLayer = <Services, ApplicationError>(
       temporaryReferences,
     });
 
-    if (request.headers['accept']?.includes(FlightMediaType)) {
+    if (request.headers['accept'] === FlightMediaType) {
       return HttpServerResponse.stream(
         fromWebStream(flight.stream, { releaseLockOnEnd: true }).pipe(
           Stream.ensuring(flight.release),

@@ -1,5 +1,5 @@
 {
-  "name": "@effective-rsc/framework-e2e",
+  "name": "@effective-rsc/example-event-platform",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -20,6 +20,7 @@
     "effect": "catalog:",
     "effective-rsc": "workspace:*",
     "lucide-react": "catalog:",
+    "qrcode": "^1.5.4",
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-server-dom-rspack": "catalog:",
@@ -29,6 +30,7 @@
     "@effect/vitest": "catalog:",
     "@playwright/test": "catalog:",
     "@types/bun": "catalog:",
+    "@types/qrcode": "^1.5.5",
     "@types/react": "catalog:",
     "tailwindcss": "catalog:",
     "typescript": "catalog:",

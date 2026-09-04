@@ -34,7 +34,7 @@ import type { Duplex } from "node:stream"
 import * as Tls from "node:tls"
 import type { ConnectionOptions } from "node:tls"
 import { type ConnectionInternals, internalsKey } from "./internal/connection.ts"
-import { classifySqlState } from "./internal/sqlError.ts"
+import { classifySqlState, validateChannelName } from "./internal/sqlError.ts"
 import * as PgAuth from "./PgAuth.ts"
 import * as PgProtocol from "./PgProtocol.ts"
 import * as PgTypes from "./PgTypes.ts"
@@ -94,6 +94,8 @@ export interface Config {
   readonly multiplex?: boolean | undefined
   readonly prepare?: boolean | undefined
   readonly preparedStatementCacheSize?: number | undefined
+  /** Maximum backend message size in bytes. Defaults to 16 MiB. */
+  readonly maxMessageSize?: number | undefined
 }
 
 /**
@@ -1769,6 +1771,8 @@ const listenChannel = (
 ): Effect.Effect<Queue.Dequeue<Notification>, SqlError, Scope.Scope> =>
   Effect.uninterruptibleMask((restore) =>
     Effect.gen(function*() {
+      const channelError = validateChannelName(channel, "listen")
+      if (channelError !== undefined) return yield* Effect.fail(channelError)
       const parentScope = yield* Scope.Scope
       const scope = yield* Scope.fork(parentScope)
       return yield* restore(Effect.gen(function*() {
@@ -2010,7 +2014,7 @@ const connect = (config: ResolvedConfig): Effect.Effect<Session, SqlError> =>
     }
 
     const startup = (): void => {
-      parser = PgProtocol.makeParser<unknown>()
+      parser = PgProtocol.makeParser<unknown>({ maxMessageSize: config.maxMessageSize })
       socket.on("data", onData)
       socket.write(PgProtocol.encodeStartupMessage({
         user: config.username,
@@ -2022,7 +2026,7 @@ const connect = (config: ResolvedConfig): Effect.Effect<Session, SqlError> =>
     const onSslResponse = (chunk: Uint8Array): void => {
       if (done) return
       if (sslErrorParser !== undefined || chunk[0] === 0x45) {
-        sslErrorParser ??= PgProtocol.makeParser()
+        sslErrorParser ??= PgProtocol.makeParser({ maxMessageSize: config.maxMessageSize })
         let messages: ReadonlyArray<PgProtocol.BackendMessage>
         try {
           messages = sslErrorParser.push(chunk)
@@ -2117,6 +2121,7 @@ interface ResolvedConfig {
   readonly connectTimeout: Duration.Duration
   readonly applicationName: string
   readonly stream: (() => Duplex) | undefined
+  readonly maxMessageSize: number | undefined
 }
 
 const configError = (message: string, cause?: unknown): SqlError =>
@@ -2131,7 +2136,7 @@ const configError = (message: string, cause?: unknown): SqlError =>
 const resolveConfig = (options: Config): Effect.Effect<ResolvedConfig, SqlError> =>
   Effect.suspend(() => {
     const parsed: EffectResult.Result<UrlConfig, SqlError> = options.url !== undefined
-      ? parseUrl(Redacted.value(options.url))
+      ? parseUrl(Redacted.value(options.url), options.ssl !== undefined)
       : EffectResult.succeed({})
     if (EffectResult.isFailure(parsed)) return Effect.fail(parsed.failure)
     const url = parsed.success
@@ -2151,7 +2156,8 @@ const resolveConfig = (options: Config): Effect.Effect<ResolvedConfig, SqlError>
       password: options.password !== undefined ? Redacted.value(options.password) : url.password,
       connectTimeout: Duration.fromInputUnsafe(options.connectTimeout ?? url.connectTimeout ?? Duration.seconds(5)),
       applicationName: options.applicationName ?? url.applicationName ?? "@effect/sql-pg",
-      stream: options.stream
+      stream: options.stream,
+      maxMessageSize: options.maxMessageSize
     })
   })
 
@@ -2181,7 +2187,7 @@ const parsePort = (value: string, what: string): EffectResult.Result<number, Sql
     : EffectResult.succeed(port)
 }
 
-const parseUrl = (raw: string): EffectResult.Result<UrlConfig, SqlError> => {
+const parseUrl = (raw: string, hasExplicitSsl: boolean): EffectResult.Result<UrlConfig, SqlError> => {
   let url: URL
   try {
     url = new URL(raw)
@@ -2264,6 +2270,7 @@ const parseUrl = (raw: string): EffectResult.Result<UrlConfig, SqlError> => {
             break
           case "prefer":
           case "allow":
+            if (hasExplicitSsl) break
             return EffectResult.fail(
               configError(`sslmode "${value}" is not supported: set ssl explicitly to true or false`)
             )

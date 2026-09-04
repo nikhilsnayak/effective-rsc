@@ -71,6 +71,8 @@ export interface PgliteClient extends Client.SqlClient {
   /**
    * Subscribes to a PGlite notification channel.
    *
+   * **Details**
+   *
    * The effect completes after the listener is installed. Notifications are
    * buffered in the returned dequeue, and the subscription remains active
    * until the required scope closes.
@@ -427,13 +429,12 @@ export const makeCompiler = (
     onCustom(type, placeholder, withoutTransform) {
       switch (type.kind) {
         case "PgJson": {
+          const value = withoutTransform || transformValue === undefined
+            ? type.paramA
+            : transformValue(type.paramA)
           return [
             placeholder(undefined),
-            [
-              withoutTransform || transformValue === undefined
-                ? type.paramA
-                : transformValue(type.paramA)
-            ]
+            [typeof value === "string" ? JSON.stringify(value) : value]
           ]
         }
       }

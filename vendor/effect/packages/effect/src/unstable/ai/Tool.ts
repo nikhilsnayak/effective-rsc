@@ -933,6 +933,19 @@ export type ResultDecodingServices<T> = T extends Tool<
   : never
 
 /**
+ * Extracts the services required to encode tool parameters.
+ *
+ * @category utility types
+ * @since 4.0.0
+ */
+export type ParametersEncodingServices<T> = T extends Tool<
+  infer _Name,
+  infer _Config,
+  infer _Requirements
+> ? _Config["parameters"]["EncodingServices"]
+  : never
+
+/**
  * Represents an `Tool` that has been implemented within the application.
  *
  * @category models
@@ -1051,7 +1064,7 @@ const Proto = {
     return clone(this)
   },
   setParameters(this: Any, parametersSchema: Schema.Constraint) {
-    return clone(this, { parametersSchema })
+    return clone(this, { parametersSchema, jsonSchema: undefined })
   },
   setSuccess(this: Any, successSchema: Schema.Constraint) {
     return clone(this, { successSchema })

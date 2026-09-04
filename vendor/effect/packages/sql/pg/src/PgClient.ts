@@ -21,6 +21,7 @@ import type { Custom, Fragment } from "effect/unstable/sql/Statement"
 import * as Statement from "effect/unstable/sql/Statement"
 import type { Duplex } from "node:stream"
 import type { ConnectionOptions } from "node:tls"
+import { validateChannelName } from "./internal/sqlError.ts"
 import * as PgConnection from "./PgConnection.ts"
 import * as PgPool from "./PgPool.ts"
 import * as PgTypes from "./PgTypes.ts"
@@ -105,11 +106,9 @@ export interface PgClientConfig {
   readonly multiplex?: boolean | undefined
   /**
    * How many statements may share one connection when `multiplex` is on.
-   *
-   * Higher trades tail latency for throughput: the statements sharing a
-   * connection are pipelined into one write, and they also queue behind the
-   * slowest of them. The default suits a server that is a cheap round trip
-   * away; one reached across a virtual or real network is worth more.
+   * Defaults to `32`. Higher values trade tail latency for throughput: the
+   * statements sharing a connection are pipelined into one write, and they
+   * also queue behind the slowest of them.
    */
   readonly multiplexConcurrency?: number | undefined
   /**
@@ -119,6 +118,8 @@ export interface PgClientConfig {
   readonly prepare?: boolean | undefined
   /** How many statements a connection keeps prepared. Defaults to `100`. */
   readonly preparedStatementCacheSize?: number | undefined
+  /** Maximum backend message size in bytes. Defaults to 16 MiB. */
+  readonly maxMessageSize?: number | undefined
 }
 
 /**
@@ -228,11 +229,15 @@ const makeImpl = Effect.fnUntraced(function*(
       config,
       json: (_: unknown) => Statement.fragment([PgJson(_)]),
       listen,
-      notify: (channel: string, payload: string) =>
-        Effect.asVoid(Effect.scoped(Effect.flatMap(
-          options.acquirer,
-          (conn) => conn.executeRaw(`SELECT pg_notify($1, $2)`, [channel, payload])
-        )))
+      notify: (channel: string, payload: string) => {
+        const channelError = validateChannelName(channel, "notify")
+        return channelError !== undefined ?
+          Effect.fail(channelError) :
+          Effect.asVoid(Effect.scoped(Effect.flatMap(
+            options.acquirer,
+            (conn) => conn.executeRaw(`SELECT pg_notify($1, $2)`, [channel, payload])
+          )))
+      }
     }
   )
 })

@@ -660,7 +660,7 @@ export type OpenFlag =
  * @category services
  * @since 4.0.0
  */
-export const FileSystem: Context.Service<FileSystem, FileSystem> = Context.Service("effect/platform/FileSystem")
+export const FileSystem: Context.Service<FileSystem, FileSystem> = Context.Service("effect/FileSystem")
 
 /**
  * Creates a FileSystem implementation from a partial implementation.
@@ -741,7 +741,7 @@ export const make = (
     }, Stream.unwrap),
     sink: (path, options) =>
       pipe(
-        impl.open(path, { flag: "w", ...options }),
+        impl.open(path, { ...options, flag: options?.flag ?? "w" }),
         Effect.map((file) => Sink.forEach((_: Uint8Array) => file.writeAll(_))),
         Sink.unwrap
       ),
@@ -1296,4 +1296,4 @@ export class WatchBackend extends Context.Service<WatchBackend, {
     stat: File.Info,
     options?: WatchOptions
   ) => Option.Option<Stream.Stream<WatchEvent, PlatformError>>
-}>()("effect/platform/FileSystem/WatchBackend") {}
+}>()("effect/FileSystem/WatchBackend") {}

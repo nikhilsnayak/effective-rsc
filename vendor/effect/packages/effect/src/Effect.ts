@@ -1777,6 +1777,26 @@ export const withFiber: <A, E = never, R = never>(
   evaluate: (fiber: Fiber<unknown, unknown>) => Effect<A, E, R>
 ) => Effect<A, E, R> = core.withFiber
 
+/**
+ * Accesses the current fiber to compute a successful value.
+ *
+ * **Example** (Computing a value from the current fiber)
+ *
+ * ```ts import.meta.vitest
+ * import { Effect } from "effect"
+ *
+ * const program = Effect.withFiberSucceed((fiber) => typeof fiber.id)
+ *
+ * Effect.runSync(program) // => "number"
+ * ```
+ *
+ * @category constructors
+ * @since 4.0.0
+ */
+export const withFiberSucceed: <A, R = never>(
+  evaluate: (fiber: Fiber<unknown, unknown>) => A
+) => Effect<A, never, R> = core.withFiberSucceed
+
 // -----------------------------------------------------------------------------
 // Conversions
 // -----------------------------------------------------------------------------
@@ -3922,7 +3942,7 @@ export const tapCauseFilter: {
  * @since 2.0.0
  */
 export const tapDefect: {
-  <E, B, E2, R2>(f: (defect: unknown) => Effect<B, E2, R2>): <A, R>(self: Effect<A, E, R>) => Effect<A, E | E2, R | R2>
+  <B, E2, R2>(f: (defect: unknown) => Effect<B, E2, R2>): <A, E, R>(self: Effect<A, E, R>) => Effect<A, E | E2, R | R2>
   <A, E, R, B, E2, R2>(self: Effect<A, E, R>, f: (defect: unknown) => Effect<B, E2, R2>): Effect<A, E | E2, R | R2>
 } = internal.tapDefect
 
@@ -4399,8 +4419,8 @@ export const withErrorReporting: <
 >(
   effectOrOptions: Arg,
   options?: { readonly defectsOnly?: boolean | undefined } | undefined
-) => [Arg] extends [Effect<infer _A, infer _E, infer _R>] ? Arg : <A, E, R>(self: Effect<A, E, R>) => Effect<A, E, R> =
-  internal.withErrorReporting
+) => [Arg] extends [Effect<infer A, infer E, infer R>] ? Effect<A, E, R>
+  : <A, E, R>(self: Effect<A, E, R>) => Effect<A, E, R> = internal.withErrorReporting
 
 // -----------------------------------------------------------------------------
 // Fallback
@@ -6947,6 +6967,8 @@ export const onExitPrimitive: <A, E, R, XE = never, XR = never>(
 /**
  * Ensures that a cleanup function runs whether this effect succeeds, fails, or
  * is interrupted.
+ *
+ * **Details**
  *
  * If both the effect and the cleanup function fail, the two causes are merged.
  *

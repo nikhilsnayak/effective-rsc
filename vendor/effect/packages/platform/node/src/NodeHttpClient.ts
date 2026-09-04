@@ -36,7 +36,7 @@ import { pipeline } from "node:stream/promises"
 import { NodeHttpIncomingMessage } from "./NodeHttpIncomingMessage.ts"
 import * as NodeSink from "./NodeSink.ts"
 import * as NodeStream from "./NodeStream.ts"
-import * as Undici from "./Undici.ts"
+import type * as Undici from "./Undici.ts"
 
 // -----------------------------------------------------------------------------
 // Fetch
@@ -90,6 +90,8 @@ export class Dispatcher extends Context.Service<Dispatcher, Undici.Dispatcher>()
   "@effect/platform-node/NodeHttpClient/Dispatcher"
 ) {}
 
+const loadUndici = Effect.promise(() => import("./Undici.ts"))
+
 /**
  * Acquires a new Undici `Agent` dispatcher and destroys it when the enclosing
  * scope is finalized.
@@ -98,9 +100,7 @@ export class Dispatcher extends Context.Service<Dispatcher, Undici.Dispatcher>()
  * @since 4.0.0
  */
 export const makeDispatcher: Effect.Effect<Undici.Dispatcher, never, Scope.Scope> = Effect.acquireRelease(
-  // oxlint cannot resolve values re-exported through the local Undici facade.
-  // oxlint-disable-next-line import/namespace
-  Effect.sync(() => new Undici.Agent()),
+  Effect.map(loadUndici, (_) => new _.Agent()),
   (dispatcher) => Effect.promise(() => dispatcher.destroy())
 )
 
@@ -119,9 +119,9 @@ export const layerDispatcher: Layer.Layer<Dispatcher> = Layer.effect(Dispatcher)
  * @category layers
  * @since 4.0.0
  */
-// oxlint cannot resolve values re-exported through the local Undici facade.
-// oxlint-disable-next-line import/namespace
-export const dispatcherLayerGlobal: Layer.Layer<Dispatcher> = Layer.sync(Dispatcher)(() => Undici.getGlobalDispatcher())
+export const dispatcherLayerGlobal: Layer.Layer<Dispatcher> = Layer.effect(Dispatcher)(
+  Effect.map(loadUndici, (_) => _.getGlobalDispatcher())
+)
 
 /**
  * Fiber reference containing default Undici request options applied to requests
@@ -275,18 +275,7 @@ class UndiciResponse extends Inspectable.Class implements HttpClientResponse, Pi
     if (this.textBody) {
       return this.textBody
     }
-    this.textBody = Effect.tryPromise({
-      try: () => this.source.body.text(),
-      catch: (cause) =>
-        new Error.HttpClientError({
-          reason: new Error.DecodeError({
-            request: this.request,
-            response: this,
-            cause
-          })
-        })
-    }).pipe(Effect.cached, Effect.runSync)
-    this.arrayBufferBody = Effect.map(this.textBody, (_) => new TextEncoder().encode(_).buffer)
+    this.textBody = Effect.map(this.arrayBuffer, (_) => new TextDecoder().decode(_))
     return this.textBody
   }
 
@@ -307,17 +296,18 @@ class UndiciResponse extends Inspectable.Class implements HttpClientResponse, Pi
 
   private formDataBody?: Effect.Effect<FormData, Error.HttpClientError>
   get formData(): Effect.Effect<FormData, Error.HttpClientError> {
-    return this.formDataBody ??= Effect.tryPromise({
-      try: () => this.source.body.formData() as Promise<FormData>,
-      catch: (cause) =>
-        new Error.HttpClientError({
-          reason: new Error.DecodeError({
-            request: this.request,
-            response: this,
-            cause
+    return this.formDataBody ??= Effect.flatMap(this.arrayBuffer, (body) =>
+      Effect.tryPromise({
+        try: () => new globalThis.Response(body, { headers: this.headers }).formData(),
+        catch: (cause) =>
+          new Error.HttpClientError({
+            reason: new Error.DecodeError({
+              request: this.request,
+              response: this,
+              cause
+            })
           })
-        })
-    }).pipe(Effect.cached, Effect.runSync)
+      })).pipe(Effect.cached, Effect.runSync)
   }
 
   private arrayBufferBody?: Effect.Effect<ArrayBuffer, Error.HttpClientError>

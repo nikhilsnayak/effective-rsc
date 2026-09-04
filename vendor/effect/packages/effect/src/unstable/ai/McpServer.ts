@@ -104,6 +104,15 @@ type ServerNotificationRequest<
 
 const BroadcastServerNotificationRpcs = ServerNotificationRpcs.omit("notifications/elicitation/complete")
 
+/**
+ * MCP models `structuredContent` as a JSON object, so a `null` or array
+ * encoded result must be omitted rather than sent through as-is.
+ */
+const toStructuredContent = (value: unknown): Schema.JsonObject | undefined =>
+  typeof value === "object" && value !== null && !Array.isArray(value)
+    ? value as Schema.JsonObject
+    : undefined
+
 const validateStructuredContent = (
   toolName: string,
   value: unknown
@@ -1570,7 +1579,7 @@ export const registerToolkit: <Tools extends Record<string, Tool.Any>>(
           Effect.map((result) =>
             new CallToolResult({
               isError: false,
-              structuredContent: typeof result.encodedResult === "object" ? result.encodedResult : undefined,
+              structuredContent: toStructuredContent(result.encodedResult),
               content: result.encodedResult === undefined ? [] : [{
                 type: "text",
                 text: JSON.stringify(result.encodedResult)
@@ -1930,7 +1939,7 @@ export const registerPrompt = <
     readonly [K in keyof Params]?: (
       input: string,
       context: CompletionContext
-    ) => Effect.Effect<Array<Params[K]>, any, any>
+    ) => Effect.Effect<Array<Params[K]["Type"]>, any, any>
   } = {}
 >(
   options: {
@@ -1938,7 +1947,9 @@ export const registerPrompt = <
     readonly description?: string | undefined
     readonly parameters?: Params | undefined
     readonly completion?: ValidateCompletions<Completions, Extract<keyof Params, string>> | undefined
-    readonly content: (params: Params) => Effect.Effect<Array<typeof PromptMessage.Type> | string, E, R>
+    readonly content: (
+      params: Schema.Struct.Type<Params>
+    ) => Effect.Effect<Array<typeof PromptMessage.Type> | string, E, R>
     readonly annotations?: Context.Context<never> | undefined
   }
 ): Effect.Effect<void, never, Exclude<Schema.Struct.DecodingServices<Params> | R, McpServerClient> | McpServer> => {
@@ -2140,9 +2151,9 @@ const makeUriMatcher = <A>() => {
     caseSensitive: true
   })
   const add = (uri: string, value: A) => {
-    router.on("GET", uri as any, value)
+    router.on("GET", `/${uri}`, value)
   }
-  const find = (uri: string) => router.find("GET", uri)
+  const find = (uri: string) => router.find("GET", `/${uri}`)
 
   return { add, find } as const
 }

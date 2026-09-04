@@ -2,6 +2,7 @@ import { AnthropicClient, AnthropicLanguageModel, AnthropicTool } from "@effect/
 import { assert, describe, it } from "@effect/vitest"
 import { Effect, Layer, Redacted, Schema, Stream } from "effect"
 import {
+  type AiError,
   AnthropicStructuredOutput,
   LanguageModel,
   Prompt,
@@ -117,6 +118,113 @@ describe("AnthropicLanguageModel", () => {
 
         assert.strictEqual(toolCall.name, "GlobTool")
         assert.deepStrictEqual(toolCall.params, toolParams)
+      }))
+
+    it.effect("routes invalid tool call params through failureMode: return without failing the stream", () =>
+      Effect.gen(function*() {
+        const layer = AnthropicClient.layer({ apiKey: Redacted.make("sk-test-key") }).pipe(
+          Layer.provide(Layer.succeed(
+            HttpClient.HttpClient,
+            makeHttpClient((request) =>
+              Effect.succeed(sseResponse(request, [
+                {
+                  type: "message_start",
+                  message: {
+                    id: "msg_test_1",
+                    type: "message",
+                    role: "assistant",
+                    model: "claude-sonnet-4-20250514",
+                    content: [],
+                    stop_reason: null,
+                    stop_sequence: null,
+                    usage: {
+                      cache_creation: null,
+                      cache_creation_input_tokens: null,
+                      cache_read_input_tokens: null,
+                      inference_geo: null,
+                      input_tokens: 10,
+                      output_tokens: 0,
+                      service_tier: null
+                    }
+                  }
+                },
+                {
+                  type: "content_block_start",
+                  index: 0,
+                  content_block: {
+                    type: "tool_use",
+                    id: "toolu_test_1",
+                    name: "GlobTool",
+                    input: {}
+                  }
+                },
+                {
+                  type: "content_block_delta",
+                  index: 0,
+                  delta: {
+                    type: "input_json_delta",
+                    partial_json: JSON.stringify({ pattern: 123 })
+                  }
+                },
+                {
+                  type: "content_block_stop",
+                  index: 0
+                },
+                {
+                  type: "message_delta",
+                  delta: {
+                    stop_reason: "tool_use",
+                    stop_sequence: null
+                  },
+                  usage: {
+                    cache_creation_input_tokens: null,
+                    cache_read_input_tokens: null,
+                    input_tokens: null,
+                    output_tokens: 5
+                  }
+                },
+                {
+                  type: "message_stop"
+                }
+              ]))
+            )
+          ))
+        )
+
+        const GlobTool = Tool.make("GlobTool", {
+          description: "Search for files",
+          failureMode: "return",
+          parameters: Schema.Struct({ pattern: Schema.String }),
+          success: Schema.String,
+          failure: Schema.String
+        })
+
+        const toolkit = Toolkit.make(GlobTool)
+        const toolkitLayer = toolkit.toLayer({
+          GlobTool: () => Effect.succeed("found.ts")
+        })
+
+        const partsChunk = yield* LanguageModel.streamText({
+          prompt: "find ts files",
+          toolkit
+        }).pipe(
+          Stream.runCollect,
+          Effect.provide(AnthropicLanguageModel.model("claude-sonnet-4-20250514")),
+          Effect.provide(toolkitLayer),
+          Effect.provide(layer)
+        )
+
+        const parts = globalThis.Array.from(partsChunk)
+        const toolResult = parts.find((part) => part.type === "tool-result")
+        assert.isDefined(toolResult)
+        if (toolResult?.type !== "tool-result") {
+          return
+        }
+
+        assert.strictEqual(toolResult.isFailure, true)
+        const failure = toolResult.result as AiError.AiError
+        assert.strictEqual(failure._tag, "AiError")
+        assert.strictEqual(failure.reason._tag, "ToolParameterValidationError")
       }))
 
     const codeExecutionCases = [
@@ -329,6 +437,124 @@ describe("AnthropicLanguageModel", () => {
   })
 
   describe("generateText", () => {
+    it.effect("preserves string tool results", () =>
+      Effect.gen(function*() {
+        let capturedRequest: HttpClientRequest.HttpClientRequest | undefined = undefined
+        const layer = AnthropicClient.layer({ apiKey: Redacted.make("sk-test-key") }).pipe(
+          Layer.provide(Layer.succeed(
+            HttpClient.HttpClient,
+            makeHttpClient((request) => {
+              capturedRequest = request
+              return Effect.succeed(jsonResponse(request, {
+                id: "msg_test_1",
+                type: "message",
+                role: "assistant",
+                model: "claude-sonnet-4-20250514",
+                content: [{ type: "text", text: "Done" }],
+                stop_reason: "end_turn",
+                stop_sequence: null,
+                usage: {
+                  cache_creation: null,
+                  cache_creation_input_tokens: null,
+                  cache_read_input_tokens: null,
+                  inference_geo: null,
+                  input_tokens: 10,
+                  output_tokens: 5,
+                  service_tier: null
+                }
+              }))
+            })
+          ))
+        )
+
+        yield* LanguageModel.generateText({
+          prompt: Prompt.make([
+            { role: "user", content: "Use the tool" },
+            {
+              role: "assistant",
+              content: [Prompt.toolCallPart({
+                id: "call_text",
+                name: "text_tool",
+                params: {},
+                providerExecuted: false
+              })]
+            },
+            {
+              role: "tool",
+              content: [Prompt.toolResultPart({
+                id: "call_text",
+                name: "text_tool",
+                result: "PLAIN_TEXT_SENTINEL\n",
+                isFailure: false,
+                providerExecuted: false
+              })]
+            }
+          ]),
+          disableToolCallResolution: true
+        }).pipe(
+          Effect.provide(AnthropicLanguageModel.model("claude-sonnet-4-20250514")),
+          Effect.provide(layer)
+        )
+
+        assert.isDefined(capturedRequest)
+        if (capturedRequest === undefined) {
+          return
+        }
+
+        const body = yield* getRequestBody(capturedRequest)
+        const toolResult = body.messages
+          .flatMap((message: any) => Array.isArray(message.content) ? message.content : [])
+          .find((block: any) => block.type === "tool_result")
+
+        assert.isDefined(toolResult)
+        assert.strictEqual(toolResult.content, "PLAIN_TEXT_SENTINEL\n")
+      }))
+
+    it.effect("preserves base64 image string payloads", () =>
+      Effect.gen(function*() {
+        const base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGP4DwQACfsD/fteaysAAAAASUVORK5CYII="
+        let capturedRequest: HttpClientRequest.HttpClientRequest | undefined = undefined
+        const layer = AnthropicClient.layer({ apiKey: Redacted.make("sk-test-key") }).pipe(
+          Layer.provide(Layer.succeed(
+            HttpClient.HttpClient,
+            makeHttpClient((request) => {
+              capturedRequest = request
+              return Effect.succeed(jsonResponse(request, {
+                id: "msg_test_1",
+                type: "message",
+                role: "assistant",
+                model: "claude-sonnet-4-20250514",
+                content: [{ type: "text", text: "Done" }],
+                stop_reason: "end_turn",
+                stop_sequence: null,
+                usage: {
+                  cache_creation: null,
+                  cache_creation_input_tokens: null,
+                  cache_read_input_tokens: null,
+                  inference_geo: null,
+                  input_tokens: 1,
+                  output_tokens: 1,
+                  service_tier: null
+                }
+              }))
+            })
+          ))
+        )
+
+        yield* LanguageModel.generateText({
+          prompt: Prompt.make([Prompt.userMessage({
+            content: [Prompt.filePart({ mediaType: "image/png", data: base64 })]
+          })])
+        }).pipe(
+          Effect.provide(AnthropicLanguageModel.model("claude-sonnet-4-20250514")),
+          Effect.provide(layer)
+        )
+
+        assert.isDefined(capturedRequest)
+        const body = yield* getRequestBody(capturedRequest)
+        assert.strictEqual(body.messages[0].content[0].source.data, base64)
+      }))
+
     it.effect("encodes dynamic tools", () =>
       Effect.gen(function*() {
         let capturedRequest: HttpClientRequest.HttpClientRequest | undefined = undefined

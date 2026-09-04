@@ -1,12 +1,17 @@
 import * as BunHttpServer from "@effect/platform-bun/BunHttpServer"
 import { assert, describe, it } from "@effect/vitest"
+import * as Deferred from "effect/Deferred"
 import * as Effect from "effect/Effect"
 import * as Exit from "effect/Exit"
+import * as Fiber from "effect/Fiber"
 import * as Scope from "effect/Scope"
 import * as HttpServer from "effect/unstable/http/HttpServer"
 import * as HttpServerRequest from "effect/unstable/http/HttpServerRequest"
 import * as HttpServerResponse from "effect/unstable/http/HttpServerResponse"
+import { mkdtemp, rm } from "node:fs/promises"
 import * as Net from "node:net"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 
 const fetchText = (url: string) =>
   Effect.promise(() => fetch(url, { headers: { connection: "close" } }).then((response) => response.text()))
@@ -87,19 +92,37 @@ const makeWebSocketServer = Effect.fnUntraced(function*(payload: string, compres
   yield* server.serve(Effect.gen(function*() {
     const request = yield* HttpServerRequest.HttpServerRequest
     const socket = yield* request.upgrade
-    const write = yield* socket.writer
-    yield* socket.runRaw(() => undefined, {
-      onOpen: Effect.gen(function*() {
-        yield* Effect.orDie(write(payload))
-        yield* Effect.orDie(write(new TextEncoder().encode(payload)))
-      })
-    })
+    yield* Effect.gen(function*() {
+      const { pull } = yield* socket.reader
+      const writer = yield* socket.writer
+      yield* Effect.orDie(writer.write(payload))
+      yield* Effect.orDie(writer.write(new TextEncoder().encode(payload)))
+      while (true) {
+        yield* pull
+      }
+    }).pipe(
+      Effect.scoped,
+      Effect.catchTag("SocketError", () => Effect.void),
+      Effect.orDie
+    )
     return HttpServerResponse.empty()
   }))
   return server
 })
 
 describe("BunHttpServer", () => {
+  it.effect("formats Unix socket addresses", () =>
+    Effect.gen(function*() {
+      const directory = yield* Effect.acquireRelease(
+        Effect.promise(() => mkdtemp(join(tmpdir(), "bun-http-"))),
+        (directory) => Effect.promise(() => rm(directory, { recursive: true, force: true }))
+      )
+      const path = join(directory, "server.sock")
+      const server = yield* BunHttpServer.make({ unix: path })
+
+      assert.strictEqual(HttpServer.formatAddress(server.address), `unix://${path}`)
+    }))
+
   it.effect("closing an older serve scope keeps the newer handler active", () =>
     Effect.gen(function*() {
       const ownerScope = yield* Effect.scope
@@ -136,6 +159,31 @@ describe("BunHttpServer", () => {
       assert.strictEqual(yield* fetchText(url), "second")
       yield* Scope.close(secondScope, Exit.void)
       assert.strictEqual(yield* fetchText(url), "first")
+    }))
+
+  it.effect("preserves configured routes while changing handlers", () =>
+    Effect.gen(function*() {
+      const ownerScope = yield* Effect.scope
+      const server = yield* BunHttpServer.make({
+        hostname: "127.0.0.1",
+        port: 0,
+        routes: { "/static": new Response("static") }
+      })
+      const firstScope = yield* Scope.fork(ownerScope)
+      const secondScope = yield* Scope.fork(ownerScope)
+      const url = HttpServer.formatAddress(server.address)
+
+      yield* server.serve(Effect.succeed(HttpServerResponse.text("first"))).pipe(Scope.provide(firstScope))
+      assert.strictEqual(yield* fetchText(`${url}/static`), "static")
+      assert.strictEqual(yield* fetchText(`${url}/fallback`), "first")
+
+      yield* server.serve(Effect.succeed(HttpServerResponse.text("second"))).pipe(Scope.provide(secondScope))
+      assert.strictEqual(yield* fetchText(`${url}/static`), "static")
+      assert.strictEqual(yield* fetchText(`${url}/fallback`), "second")
+
+      yield* Scope.close(secondScope, Exit.void)
+      assert.strictEqual(yield* fetchText(`${url}/static`), "static")
+      assert.strictEqual(yield* fetchText(`${url}/fallback`), "first")
     }))
 
   it.effect("compresses outgoing WebSocket messages when per-message deflate is negotiated", () =>
@@ -188,5 +236,42 @@ describe("BunHttpServer", () => {
       assert.isFalse(frames.some((frame) => frame.rsv1))
       assert.isTrue(frames.every((frame) => frame.payloadLength === payload.length))
       assert.deepStrictEqual(frames.map((frame) => new TextDecoder().decode(frame.payload)), [payload, payload])
+    }))
+
+  it.effect("fails a concurrent reader waiting behind a closed reader", () =>
+    Effect.gen(function*() {
+      const secondReaderFailed = yield* Deferred.make<boolean>()
+      const server = yield* BunHttpServer.make({
+        hostname: "127.0.0.1",
+        port: 0
+      })
+      yield* server.serve(Effect.gen(function*() {
+        const request = yield* HttpServerRequest.HttpServerRequest
+        const socket = yield* request.upgrade
+        const ownerScope = yield* Effect.scope
+        const firstScope = yield* Scope.fork(ownerScope)
+        const secondScope = yield* Scope.fork(ownerScope)
+
+        const { pull } = yield* socket.reader.pipe(Scope.provide(firstScope))
+        const writer = yield* socket.writer
+        const secondReader = yield* socket.reader.pipe(
+          Scope.provide(secondScope),
+          Effect.exit,
+          Effect.forkChild({ startImmediately: true })
+        )
+        yield* writer.write("first")
+        yield* writer.write("second")
+        yield* Effect.exit(pull)
+        yield* Scope.close(firstScope, Exit.void)
+        const secondExit = yield* Fiber.join(secondReader)
+        yield* Scope.close(secondScope, Exit.void)
+        yield* Deferred.succeed(secondReaderFailed, Exit.isFailure(secondExit))
+        return HttpServerResponse.empty()
+      }))
+
+      const port = (server.address as HttpServer.TcpAddress).port
+      yield* readWebSocketFrames(port, false)
+      const failed = yield* Deferred.await(secondReaderFailed)
+      assert.isTrue(failed)
     }))
 })

@@ -6,6 +6,7 @@ import {
   Data,
   Effect,
   type ExecutionPlan,
+  Exit,
   Fiber,
   HashMap,
   type Layer,
@@ -706,6 +707,13 @@ describe("Effect.acquireRelease", () => {
   })
 })
 
+describe("Effect.tapDefect", () => {
+  it("saved operator preserves the source error type", () => {
+    const observe = Effect.tapDefect(() => Effect.void)
+    expect(observe(Effect.fail("boom"))).type.toBe<Effect.Effect<never, string>>()
+  })
+})
+
 describe("Effect.tapErrorTag", () => {
   it("narrows tagged errors", () => {
     const result = pipe(
@@ -1285,5 +1293,11 @@ describe("Effect.withExecutionPlan", () => {
   it("without options the requirements are unchanged", () => {
     const result = Effect.withExecutionPlan(self, plan)
     expect(result).type.toBe<Effect.Effect<number, string, "other-dep" | "plan-dep">>()
+  })
+})
+
+describe("Effect.withErrorReporting", () => {
+  it("returns an Effect for an Exit input", () => {
+    expect(Effect.withErrorReporting(Exit.succeed(1))).type.toBe<Effect.Effect<number>>()
   })
 })

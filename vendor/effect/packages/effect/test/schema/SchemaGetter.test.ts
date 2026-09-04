@@ -47,6 +47,17 @@ describe("SchemaGetter", () => {
   })
 
   describe("makeTreeRecord", () => {
+    it("preserves array-valued leaves at duplicate paths", () => {
+      deepStrictEqual(
+        SchemaGetter.makeTreeRecord([
+          ["permissions", ["read"]],
+          ["permissions", ["write"]],
+          ["permissions", ["share"]]
+        ]),
+        { permissions: [["read"], ["write"], ["share"]] }
+      )
+    })
+
     it("replaces conflicting leaf values with containers", () => {
       deepStrictEqual(
         SchemaGetter.makeTreeRecord([
@@ -105,6 +116,19 @@ describe("SchemaGetter", () => {
           ["a[0][b]", 1]
         ]),
         { a: [{ b: 1 }] }
+      )
+    })
+
+    it("preserves invalid array index segments as object keys", () => {
+      assert.deepStrictEqual(
+        SchemaGetter.makeTreeRecord([
+          ["leading[01]", "a"],
+          ["overflow[4294967295]", "b"]
+        ]),
+        {
+          leading: { "01": "a" },
+          overflow: { "4294967295": "b" }
+        }
       )
     })
   })

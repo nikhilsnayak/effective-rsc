@@ -87,3 +87,21 @@ IDs are append-only and never reused, including after a question is resolved.
 - **Resolution:** Future exploration; use the first run to define assertions and a result schema
   without embedding its solution.
 - **Status:** Deferred until the baseline framework feature set is ready.
+
+### OQ-009 — Stream-aware history scroll restoration
+
+- **Question:** When and how should the client router capture and restore scroll positions for
+  history entries whose route trees continue streaming after their first Layout commit?
+- **Why:** D-066 must finish native navigation at the first Layout commit. The browser can therefore
+  remember a position against an intermediate Suspense fallback rather than the subsequently
+  revealed route, making native history restoration an unstable model for streamed UI.
+- **Affected:** Back/Forward traversal, exact history-entry identity, hash navigation, focus, and
+  the point at which the router considers a restored position safe to apply.
+- **Evidence:** The browser's default forward-navigation reset works at the D-066 commit boundary,
+  while the visible Flight stream intentionally remains alive beyond that boundary. The skipped
+  kitchen-sink contract test reproduces a Back traversal clamping the saved offset against the
+  Suspense fallback and retaining that incorrect offset after the complete route streams in.
+- **Related:** D-066.
+- **Resolution:** Keep native behavior initially. Design router-owned, history-entry-keyed scroll
+  restoration as a future capability without delaying the navigation lifecycle rewrite.
+- **Status:** Deferred until the lifecycle rewrite is complete.

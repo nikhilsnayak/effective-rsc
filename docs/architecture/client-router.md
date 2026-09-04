@@ -40,7 +40,7 @@ sequenceDiagram
   Router->>React: publish in a Transition
   React-->>Router: destination Layout commits
   Router-->>Navigation: settle precommit handler
-  Navigation->>Navigation: commit entry, focus, and scroll
+  Navigation->>Navigation: commit entry, focus, and default scroll
   Navigation-->>React: native transition finishes
   Server-->>Router: remaining Flight chunks / EOF
   Note over Router,React: Router retains the stream until EOF or render retirement
@@ -52,6 +52,12 @@ own nested `startTransition`. The Action ends after scheduling publication; the 
 the renderer's `committed` promise outside the Action. The root Layout effect resolves that promise,
 allowing URL/history commit, browser focus and scroll, and React's View Transition to proceed
 without waiting for Flight EOF.
+
+The browser currently owns the default forward-navigation scroll reset. This is not a complete
+scroll-restoration design: a history entry can observe the intermediate Suspense fallback even
+though its route continues streaming after native navigation finishes. Router-owned history scroll
+restoration is therefore deferred in [OQ-009](../OPEN_QUESTIONS.md); D-066 does not treat the
+browser's remembered position as a stable streamed-route position.
 
 The `NavigateEvent.signal` owns interruption only until the destination render commits. At that
 point ownership transfers exactly once to an ERSC Effect scope. Browser Stop therefore cannot
@@ -266,7 +272,8 @@ The required cases are:
 - partial B with a pending chunk followed by delayed C, proving B abort occurs only after C's
   Layout commit and never reaches the sticky root error fallback;
 - a discarded B render never becomes visible;
-- native transition, focus, scroll, and View Transition finish at Layout commit rather than EOF;
+- native transition, focus, default forward-navigation scroll, and View Transition finish at Layout
+  commit rather than EOF;
   and
 - nested Suspense content may reveal after native Navigation finishes.
 

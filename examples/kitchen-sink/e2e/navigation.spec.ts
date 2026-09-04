@@ -23,13 +23,21 @@ test('moves between conference days through the composed schedule', async ({ pag
   await conferenceNavigation.evaluate((element) =>
     Reflect.set(element, '__ersc_segment_marker__', true),
   );
+  const sundayNavigation = conferenceNavigation.getByRole('link', { name: 'Sunday 23 Aug' });
   const flightRequest = page.waitForRequest(
     (request) =>
       new URL(request.url()).pathname === '/schedule/sunday' && isNavigationFlightRequest(request),
   );
-  await page
-    .getByRole('link', { name: 'See Sunday' })
-    .evaluate((element: HTMLAnchorElement) => element.click());
+  const navigationStartedAtScrollY = await sundayNavigation.evaluate(
+    (element: HTMLAnchorElement) => {
+      window.scrollTo(0, document.documentElement.scrollHeight);
+      element.focus({ preventScroll: true });
+      const scrollY = window.scrollY;
+      element.click();
+      return scrollY;
+    },
+  );
+  expect(navigationStartedAtScrollY).toBeGreaterThan(0);
   // The destination page deliberately takes two seconds. Loading must commit from the streamed
   // route shell rather than appearing only after the page row has resolved.
   await expect(page.getByRole('main', { name: 'Loading schedule' })).toBeVisible({
@@ -39,6 +47,9 @@ test('moves between conference days through the composed schedule', async ({ pag
   await expect(page.getByRole('heading', { level: 1, name: 'Saturday schedule' })).toBeHidden();
   await expect(page.getByRole('heading', { level: 1, name: 'Sunday schedule' })).toBeHidden();
   await page.waitForFunction(() => window.navigation.transition === null);
+  await expect(page.locator('body')).toBeFocused();
+  // This covers the current forward-navigation reset, not history restoration for streamed UI.
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
   expect(navigationFlightFinished).toBe(false);
   await flightRequest;
 
@@ -76,6 +87,60 @@ test('reuses completed route trees for back and forward navigation', async ({ pa
   await expect(page.getByRole('heading', { level: 1, name: 'Sunday schedule' })).toBeVisible();
 
   expect(flightRequests).toEqual(['/schedule/sunday']);
+  expect(browserErrors).toEqual([]);
+});
+
+// OQ-009: native restoration clamps the saved offset against the shorter Suspense fallback and
+// does not recover it when the complete route expands the document.
+test.skip('restores a streamed history entry to its saved scroll position', async ({ page }) => {
+  const browserErrors = observeBrowserErrors(page);
+  const sundayFlightRequests: Array<Request> = [];
+  page.on('request', (request) => {
+    if (
+      new URL(request.url()).pathname === '/schedule/sunday' &&
+      isNavigationFlightRequest(request)
+    ) {
+      sundayFlightRequests.push(request);
+    }
+  });
+
+  await page.goto('/schedule/saturday');
+  const conferenceNavigation = page.getByRole('navigation', { name: 'Conference schedule' });
+  await conferenceNavigation
+    .getByRole('link', { name: 'Sunday 23 Aug' })
+    .evaluate((element: HTMLAnchorElement) => element.click());
+  await expect(page.getByRole('heading', { level: 1, name: 'Sunday schedule' })).toBeVisible();
+  await page.waitForFunction(() => window.navigation.transition === null);
+  await expect(page.locator('[data-speaker-id="jonah-kim"]')).toBeHidden();
+
+  const savedScrollY = await page.evaluate(() => {
+    window.scrollTo(0, document.documentElement.scrollHeight);
+    return window.scrollY;
+  });
+  expect(savedScrollY).toBeGreaterThan(0);
+  await conferenceNavigation
+    .getByRole('link', { name: 'Saturday 22 Aug' })
+    .evaluate((element: HTMLAnchorElement) => {
+      element.focus({ preventScroll: true });
+      element.click();
+    });
+  await expect(page.getByRole('heading', { level: 1, name: 'Saturday schedule' })).toBeVisible();
+  await page.waitForFunction(() => window.navigation.transition === null);
+
+  await page.evaluate(() => {
+    void window.navigation.back();
+  });
+  await expect(page.getByRole('main', { name: 'Loading schedule' })).toBeVisible({
+    timeout: 1_500,
+  });
+  await expect(page).toHaveURL('/schedule/sunday');
+  await page.waitForFunction(() => window.navigation.transition === null);
+  expect(sundayFlightRequests).toHaveLength(2);
+  expect(await page.evaluate(() => window.scrollY)).toBeLessThan(savedScrollY);
+
+  await expect(page.getByRole('heading', { level: 1, name: 'Sunday schedule' })).toBeVisible();
+  await expect(page.locator('[data-speaker-id="jonah-kim"]')).toBeVisible();
+  expect(await page.evaluate(() => window.scrollY)).toBe(savedScrollY);
   expect(browserErrors).toEqual([]);
 });
 

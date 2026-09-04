@@ -5,6 +5,7 @@
   "license": "MIT",
   "workspaces": [
     "examples/*",
+    "fixtures/*",
     "packages/*"
   ],
   "type": "module",

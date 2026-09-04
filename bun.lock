@@ -15,8 +15,8 @@
         "vitest": "catalog:",
       },
     },
-    "examples/kitchen-sink": {
-      "name": "@effective-rsc/example-kitchen-sink",
+    "fixtures/framework-e2e": {
+      "name": "@effective-rsc/framework-e2e",
       "version": "0.0.0",
       "dependencies": {
         "@base-ui/react": "catalog:",
@@ -179,7 +179,7 @@
 
     "@effect/vitest": ["@effect/vitest@4.0.0-rc.112", "", { "peerDependencies": { "effect": "^4.0.0-rc.112", "vitest": ">=4.1.0 <5.0.0" } }, "sha512-mEKh/FI64mt8JK1/v9mpOrJYdnp+UFZdRUBMEdZMiKz7klg6NPqVgg/oeAGH6wOOQc2iAPcfc2H9BbAv1KyzMQ=="],
 
-    "@effective-rsc/example-kitchen-sink": ["@effective-rsc/example-kitchen-sink@workspace:examples/kitchen-sink"],
+    "@effective-rsc/framework-e2e": ["@effective-rsc/framework-e2e@workspace:fixtures/framework-e2e"],
 
     "@emnapi/core": ["@emnapi/core@1.11.3", "", { "dependencies": { "@emnapi/wasi-threads": "1.2.3", "tslib": "^2.4.0" } }, "sha512-zLpS5asjEb7lq8jYLq37N6XKaE41DIexlY1rF/z4/tIl3wo13Sqm28fRyfIsKZD+NZ8mM5RoKkpW/rBcuoSZSg=="],
 

@@ -67,7 +67,8 @@ Details:
   Client Component does not progressively enhance without JavaScript because the upstream React
   protocol does not serialize that client-created binding.
 
-## Integration fixture
+## Examples and integration fixture
 
-[`examples/kitchen-sink`](../examples/kitchen-sink) is the real-world conference application and
-primary integration fixture.
+[`examples/event-platform`](../examples/event-platform) is the real-world product example.
+[`fixtures/framework-e2e`](../fixtures/framework-e2e) is the neutral framework integration fixture;
+its routes, data, artificial latency, and UI exist to expose protocol and lifecycle behavior.

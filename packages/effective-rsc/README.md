@@ -201,7 +201,7 @@ runtime, including a Client Component, throws immediately.
 
 ## Example and documentation
 
-The [kitchen-sink conference](https://github.com/nikhilsnayak/effective-rsc/tree/main/examples/kitchen-sink)
+The [event platform](https://github.com/nikhilsnayak/effective-rsc/tree/main/examples/event-platform)
 is the complete application example.
 
 - [Getting started](https://github.com/nikhilsnayak/effective-rsc/blob/main/packages/effective-rsc/docs/01-getting-started/index.md)

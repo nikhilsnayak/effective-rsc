@@ -32,7 +32,7 @@ IDs are append-only and never reused, including after a question is resolved.
 - **Question:** How should a Server Function handler's typed failure reach its caller?
 - **Why:** Effect owns the application runtime, but a handler's error type is the one part of its signature the client contract does not carry.
 - **Affected:** `ERSC.ServerFn.make` typing, Flight payloads, client call sites, and error boundaries.
-- **Evidence:** `ServerFnOperationError` stores the failure as `Schema.Defect` and `serverFnOutcome` squashes it, so `ServerFunction<Input, Output, Services>` resolves `Promise<Output>` and delivers failures as `unknown`. The kitchen-sink encodes its own `AgendaMutationState` result in `Output` to work around this.
+- **Evidence:** `ServerFnOperationError` stores the failure as `Schema.Defect` and `serverFnOutcome` squashes it, so `ServerFunction<Input, Output, Services>` resolves `Promise<Output>` and delivers failures as `unknown`. The framework E2E fixture encodes its own `SelectionMutationState` result in `Output` to work around this.
 - **Related:** D-009, D-036, D-040.
 - **Resolution:** Unresolved.
 - **Status:** Open.
@@ -99,7 +99,7 @@ IDs are append-only and never reused, including after a question is resolved.
   the point at which the router considers a restored position safe to apply.
 - **Evidence:** The browser's default forward-navigation reset works at the D-066 commit boundary,
   while the visible Flight stream intentionally remains alive beyond that boundary. The skipped
-  kitchen-sink contract test reproduces a Back traversal clamping the saved offset against the
+  framework E2E contract test reproduces a Back traversal clamping the saved offset against the
   Suspense fallback and retaining that incorrect offset after the complete route streams in.
 - **Related:** D-066.
 - **Resolution:** Keep native behavior initially. A future design must key positions by history

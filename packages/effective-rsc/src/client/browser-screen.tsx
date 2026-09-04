@@ -27,25 +27,6 @@ const BrowserFailureStyles = `
     width: min(100%, 520px);
   }
 
-  .ersc-browser-failure__brand {
-    display: flex;
-    gap: 9px;
-    align-items: center;
-    margin: 0 0 48px;
-    color: #6e6b65;
-    font: 600 11px/1 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
-    letter-spacing: .08em;
-    text-transform: uppercase;
-  }
-
-  .ersc-browser-failure__brand-mark {
-    width: 7px;
-    height: 7px;
-    background: #df3f38;
-    border-radius: 2px;
-    transform: rotate(45deg);
-  }
-
   .ersc-browser-failure__icon {
     display: grid;
     width: 44px;
@@ -88,12 +69,6 @@ const BrowserFailureStyles = `
     border: 0;
   }
 
-  .ersc-browser-failure__actions {
-    display: flex;
-    gap: 16px;
-    align-items: center;
-  }
-
   .ersc-browser-failure__reload {
     display: inline-flex;
     min-height: 40px;
@@ -127,12 +102,6 @@ const BrowserFailureStyles = `
     transform: scale(.97);
   }
 
-  .ersc-browser-failure__hint {
-    margin: 0;
-    color: #89867f;
-    font: 500 11px/1.5 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
-  }
-
   @media (hover: hover) and (pointer: fine) {
     .ersc-browser-failure__reload:hover {
       background: #3a3936;
@@ -148,15 +117,6 @@ const BrowserFailureStyles = `
     .ersc-browser-failure__content {
       margin-top: max(32px, 10vh);
     }
-
-    .ersc-browser-failure__brand {
-      margin-bottom: 36px;
-    }
-
-    .ersc-browser-failure__actions {
-      align-items: flex-start;
-      flex-direction: column;
-    }
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -171,10 +131,6 @@ export function BrowserFailureScreen() {
     <main aria-labelledby='ersc-browser-failure-title' className='ersc-browser-failure'>
       <style>{BrowserFailureStyles}</style>
       <div className='ersc-browser-failure__content'>
-        <p className='ersc-browser-failure__brand'>
-          <span aria-hidden='true' className='ersc-browser-failure__brand-mark' />
-          effective-rsc
-        </p>
         <div aria-hidden='true' className='ersc-browser-failure__icon'>
           <svg fill='none' viewBox='0 0 22 22'>
             <path d='M11 6.25v5.5' stroke='currentColor' strokeLinecap='round' strokeWidth='1.7' />
@@ -188,31 +144,25 @@ export function BrowserFailureScreen() {
         </div>
         <h1 id='ersc-browser-failure-title'>Something went wrong</h1>
         <p className='ersc-browser-failure__message'>
-          A client-side error stopped this page from rendering. Reloading usually gets things back
-          on track.
+          This page couldn’t be displayed. Try reloading it.
         </p>
         <hr className='ersc-browser-failure__rule' />
-        <div className='ersc-browser-failure__actions'>
-          <button
-            className='ersc-browser-failure__reload'
-            type='button'
-            onClick={() => window.location.reload()}
-          >
-            <svg aria-hidden='true' fill='none' viewBox='0 0 16 16'>
-              <path
-                d='M13 5.5A5.5 5.5 0 1 0 13.15 10M13 2.75V5.5h-2.75'
-                stroke='currentColor'
-                strokeLinecap='round'
-                strokeLinejoin='round'
-                strokeWidth='1.4'
-              />
-            </svg>
-            Reload page
-          </button>
-          <p className='ersc-browser-failure__hint'>
-            If this keeps happening, contact the site owner.
-          </p>
-        </div>
+        <button
+          className='ersc-browser-failure__reload'
+          type='button'
+          onClick={() => window.location.reload()}
+        >
+          <svg aria-hidden='true' fill='none' viewBox='0 0 16 16'>
+            <path
+              d='M13 5.5A5.5 5.5 0 1 0 13.15 10M13 2.75V5.5h-2.75'
+              stroke='currentColor'
+              strokeLinecap='round'
+              strokeLinejoin='round'
+              strokeWidth='1.4'
+            />
+          </svg>
+          Reload page
+        </button>
       </div>
     </main>
   );

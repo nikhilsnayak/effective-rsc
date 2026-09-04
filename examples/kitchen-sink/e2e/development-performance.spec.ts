@@ -73,13 +73,13 @@ test('emits React Server Components performance tracks across navigation', async
   await startTracing(session);
   await page.goto('/schedule/saturday');
   await expect(page.getByRole('heading', { level: 1, name: 'Saturday schedule' })).toBeVisible();
-  await page.waitForTimeout(1_000);
+  await expect(page.locator('[data-speaker-id="leena-shah"]')).toBeVisible();
   const initialSpans = await stopTracingAndCollectServerComponentSpans(session);
 
   await startTracing(session);
   await page.getByRole('link', { name: 'See Sunday' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Sunday schedule' })).toBeVisible();
-  await page.waitForTimeout(1_000);
+  await expect(page.locator('[data-speaker-id="jonah-kim"]')).toBeVisible();
   const navigationSpans = await stopTracingAndCollectServerComponentSpans(session);
 
   expect(initialSpans.length).toBeGreaterThan(0);

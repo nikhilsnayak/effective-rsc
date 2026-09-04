@@ -57,7 +57,11 @@ class ApplicationDefinitionImpl<Services, ApplicationError> implements Applicati
     this[ERSCIdentityTypeId] = identity;
     this.layer = layer;
     this.routes = routes;
-    Object.freeze(this);
+    Object.defineProperties(this, {
+      [ERSCIdentityTypeId]: { configurable: false, writable: false },
+      layer: { configurable: false, writable: false },
+      routes: { configurable: false, writable: false },
+    });
   }
 }
 

@@ -105,7 +105,11 @@ describe('ERSC.make', () => {
     expect(asElement(root.props.children).type).toBe(RouteOutlet);
     expect(asElement(pageNode.content).type).toBe(pageComponent(HomePage));
     expect(applicationRoutes(App).map(({ pattern }) => pattern)).toEqual(['/']);
-    expect(Object.isFrozen(App)).toBe(true);
+    expect(Object.getOwnPropertyDescriptor(App, 'routes')).toMatchObject({
+      configurable: false,
+      writable: false,
+    });
+    expect(Object.isExtensible(App)).toBe(true);
   });
 
   it('renders a dynamic route pattern with its concrete pathname and captured params', () => {

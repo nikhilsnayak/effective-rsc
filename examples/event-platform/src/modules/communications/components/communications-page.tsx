@@ -62,11 +62,7 @@ export const CommunicationsPage = OrganizerERSC.Page.make({
     const service = yield* CommunicationsService;
     const workspace = yield* service
       .workspace(userId, params.eventId)
-      .pipe(
-        Effect.catch((error) =>
-          Schema.is(CommunicationsAccessDenied)(error) ? Effect.succeed(null) : Effect.fail(error),
-        ),
-      );
+      .pipe(Effect.catchIf(Schema.is(CommunicationsAccessDenied), () => Effect.succeed(null)));
     if (workspace === null) {
       return <AccessDenied />;
     }

@@ -28,11 +28,7 @@ export const RegistrationSettingsPage = OrganizerERSC.Page.make({
     const workspace = yield* service
       .workspace(userId, params.eventId)
       .pipe(
-        Effect.catch((error) =>
-          Schema.is(RegistrationSettingsAccessDenied)(error)
-            ? Effect.succeed(null)
-            : Effect.fail(error),
-        ),
+        Effect.catchIf(Schema.is(RegistrationSettingsAccessDenied), () => Effect.succeed(null)),
       );
     if (workspace === null) {
       return (

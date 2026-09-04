@@ -44,11 +44,7 @@ export const CheckInConsolePage = OrganizerERSC.Page.make({
     const service = yield* CheckInService;
     const checkIn = yield* service
       .console(userId, params.eventId)
-      .pipe(
-        Effect.catch((error) =>
-          Schema.is(CheckInAccessDenied)(error) ? Effect.succeed(null) : Effect.fail(error),
-        ),
-      );
+      .pipe(Effect.catchIf(Schema.is(CheckInAccessDenied), () => Effect.succeed(null)));
 
     if (checkIn === null) {
       return <AccessDenied />;

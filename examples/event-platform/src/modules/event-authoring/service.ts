@@ -38,9 +38,7 @@ const zonedInstant = (value: string, timezone: string, field: string) => {
     timeZone: zone.value,
   });
 
-  return Option.isNone(instant)
-    ? Effect.fail(new EventScheduleInvalid({ field }))
-    : Effect.succeed(instant.value);
+  return Effect.fromOption(instant, () => new EventScheduleInvalid({ field }));
 };
 
 const normalizeRange = Effect.fnUntraced(function* (

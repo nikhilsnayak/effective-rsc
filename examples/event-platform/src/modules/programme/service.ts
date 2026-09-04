@@ -41,9 +41,7 @@ const localInstant = (value: string, timezone: string, field: string) => {
     timeZone: zone.value,
   });
 
-  return Option.isNone(instant)
-    ? Effect.fail(new ProgrammeScheduleInvalid({ field }))
-    : Effect.succeed(instant.value);
+  return Effect.fromOption(instant, () => new ProgrammeScheduleInvalid({ field }));
 };
 
 const normalizedSession = Effect.fnUntraced(function* (

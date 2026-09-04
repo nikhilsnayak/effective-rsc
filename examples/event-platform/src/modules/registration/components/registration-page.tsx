@@ -22,11 +22,7 @@ export const RegistrationPage = ERSC.Page.make({
     const registration = yield* RegistrationService;
     const event = yield* events
       .getPublished(params.organizationSlug, params.eventSlug)
-      .pipe(
-        Effect.catch((error) =>
-          Schema.is(PublishedEventNotFound)(error) ? Effect.succeed(null) : Effect.fail(error),
-        ),
-      );
+      .pipe(Effect.catchIf(Schema.is(PublishedEventNotFound), () => Effect.succeed(null)));
     if (event === null) {
       return (
         <NavigationTransition key='registration-missing'>

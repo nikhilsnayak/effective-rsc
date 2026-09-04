@@ -206,11 +206,7 @@ export const OrganizerDashboardPage = OrganizerERSC.Page.make({
     const service = yield* OrganizerService;
     const dashboard = yield* service
       .dashboard(userId)
-      .pipe(
-        Effect.catch((error) =>
-          Schema.is(OrganizerAccessDenied)(error) ? Effect.succeed(null) : Effect.fail(error),
-        ),
-      );
+      .pipe(Effect.catchIf(Schema.is(OrganizerAccessDenied), () => Effect.succeed(null)));
 
     if (dashboard === null) {
       return <AccessDenied />;

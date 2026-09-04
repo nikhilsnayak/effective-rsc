@@ -34,11 +34,7 @@ export const OrdersPage = OrganizerERSC.Page.make({
     const service = yield* OrdersService;
     const workspace = yield* service
       .workspace(userId, params.eventId)
-      .pipe(
-        Effect.catch((error) =>
-          Schema.is(OrdersAccessDenied)(error) ? Effect.succeed(null) : Effect.fail(error),
-        ),
-      );
+      .pipe(Effect.catchIf(Schema.is(OrdersAccessDenied), () => Effect.succeed(null)));
     if (workspace === null) {
       return (
         <NavigationTransition>

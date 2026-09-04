@@ -122,11 +122,7 @@ export const ProgrammeEditorPage = OrganizerERSC.Page.make({
     const service = yield* ProgrammeService;
     const editor = yield* service
       .editor(userId, params.eventId)
-      .pipe(
-        Effect.catch((error) =>
-          Schema.is(ProgrammeAccessDenied)(error) ? Effect.succeed(null) : Effect.fail(error),
-        ),
-      );
+      .pipe(Effect.catchIf(Schema.is(ProgrammeAccessDenied), () => Effect.succeed(null)));
     if (editor === null) {
       return <AccessDenied />;
     }
@@ -320,11 +316,7 @@ export const PublicProgrammePage = ERSC.Page.make({
     const service = yield* ProgrammeService;
     const programme = yield* service
       .publicProgramme(params.organizationSlug, params.eventSlug)
-      .pipe(
-        Effect.catch((error) =>
-          Schema.is(PublicProgrammeNotFound)(error) ? Effect.succeed(null) : Effect.fail(error),
-        ),
-      );
+      .pipe(Effect.catchIf(Schema.is(PublicProgrammeNotFound), () => Effect.succeed(null)));
     if (programme === null) {
       return <PublicProgrammeMissing />;
     }

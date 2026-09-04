@@ -45,11 +45,7 @@ export const AttendeeTicketPage = AttendeeHubERSC.Page.make({
     const service = yield* AttendeeService;
     const ticket = yield* service
       .ticket(token, params.ticketCode)
-      .pipe(
-        Effect.catch((error) =>
-          Schema.is(AttendeeTicketNotFound)(error) ? Effect.succeed(null) : Effect.fail(error),
-        ),
-      );
+      .pipe(Effect.catchIf(Schema.is(AttendeeTicketNotFound), () => Effect.succeed(null)));
 
     if (ticket === null) {
       return <TicketNotFound />;

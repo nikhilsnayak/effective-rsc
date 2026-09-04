@@ -92,11 +92,7 @@ export const EventReportPage = OrganizerERSC.Page.make({
     const service = yield* ReportingService;
     const report = yield* service
       .eventReport(userId, params.eventId)
-      .pipe(
-        Effect.catch((error) =>
-          Schema.is(ReportingAccessDenied)(error) ? Effect.succeed(null) : Effect.fail(error),
-        ),
-      );
+      .pipe(Effect.catchIf(Schema.is(ReportingAccessDenied), () => Effect.succeed(null)));
     if (report === null) {
       return <AccessDenied />;
     }

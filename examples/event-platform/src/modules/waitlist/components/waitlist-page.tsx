@@ -31,11 +31,7 @@ export const WaitlistPage = OrganizerERSC.Page.make({
     const service = yield* WaitlistService;
     const workspace = yield* service
       .workspace(userId, params.eventId)
-      .pipe(
-        Effect.catch((error) =>
-          Schema.is(WaitlistAccessDenied)(error) ? Effect.succeed(null) : Effect.fail(error),
-        ),
-      );
+      .pipe(Effect.catchIf(Schema.is(WaitlistAccessDenied), () => Effect.succeed(null)));
     if (workspace === null) {
       return (
         <NavigationTransition>

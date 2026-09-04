@@ -47,11 +47,7 @@ export const CreateEventPage = OrganizerERSC.Page.make({
     const service = yield* EventAuthoringService;
     const organization = yield* service
       .createTarget(userId, params.organizationId)
-      .pipe(
-        Effect.catch((error) =>
-          Schema.is(EventAuthoringAccessDenied)(error) ? Effect.succeed(null) : Effect.fail(error),
-        ),
-      );
+      .pipe(Effect.catchIf(Schema.is(EventAuthoringAccessDenied), () => Effect.succeed(null)));
     if (organization === null) {
       return <AccessDenied />;
     }
@@ -95,11 +91,7 @@ export const EditEventPage = OrganizerERSC.Page.make({
     const service = yield* EventAuthoringService;
     const editor = yield* service
       .editor(userId, params.eventId)
-      .pipe(
-        Effect.catch((error) =>
-          Schema.is(EventAuthoringAccessDenied)(error) ? Effect.succeed(null) : Effect.fail(error),
-        ),
-      );
+      .pipe(Effect.catchIf(Schema.is(EventAuthoringAccessDenied), () => Effect.succeed(null)));
     if (editor === null) {
       return <AccessDenied />;
     }

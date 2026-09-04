@@ -94,11 +94,7 @@ export const EventDetailPage = ERSC.Page.make({
     const service = yield* EventService;
     const event = yield* service
       .getPublished(params.organizationSlug, params.eventSlug)
-      .pipe(
-        Effect.catch((error) =>
-          Schema.is(PublishedEventNotFound)(error) ? Effect.succeed(null) : Effect.fail(error),
-        ),
-      );
+      .pipe(Effect.catchIf(Schema.is(PublishedEventNotFound), () => Effect.succeed(null)));
 
     return (
       <NavigationTransition key={`event-${event?.eventId ?? 'missing'}`}>

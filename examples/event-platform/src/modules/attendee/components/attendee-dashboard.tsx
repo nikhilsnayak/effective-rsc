@@ -46,11 +46,7 @@ export const AttendeeDashboardPage = AttendeeHubERSC.Page.make({
     const service = yield* AttendeeService;
     const dashboard = yield* service
       .dashboard(token)
-      .pipe(
-        Effect.catch((error) =>
-          Schema.is(AttendeeAccessDenied)(error) ? Effect.succeed(null) : Effect.fail(error),
-        ),
-      );
+      .pipe(Effect.catchIf(Schema.is(AttendeeAccessDenied), () => Effect.succeed(null)));
 
     if (dashboard === null) {
       return <AccessDenied />;

@@ -1,7 +1,7 @@
 {
   "name": "rsbuild-plugin-rsc",
   "version": "0.1.1",
-  "packageManager": "pnpm@11.9.0",
+  "packageManager": "pnpm@11.24.0",
   "description": "React Server Components plugin for Rsbuild",
   "repository": {
     "type": "git",
@@ -23,27 +23,26 @@
     "dist"
   ],
   "scripts": {
-    "build": "rslib",
-    "dev": "rslib -w",
-    "typecheck": "pnpm -r exec tsc --noEmit --pretty false",
-    "lint": "rslint && prettier -c .",
-    "lint:write": "rslint --fix && prettier -w .",
-    "test": "cd ./e2e && pnpm test:all"
+    "build": "rs lib",
+    "check": "rs check",
+    "dev": "rs lib -w",
+    "format": "rs fmt",
+    "lint": "rs lint",
+    "prepare": "rs hooks",
+    "test": "cd ./e2e && pnpm test:all",
+    "typecheck": "pnpm -r exec tsc --noEmit --pretty false"
   },
   "devDependencies": {
-    "@rsbuild/core": "^2.1.2",
-    "@rslib/core": "^0.23.1",
-    "@rslint/core": "^0.8.0",
-    "@rstest/core": "^0.11.1",
-    "@rstest/playwright": "^0.11.1",
+    "@rsbuild/core": "^2.2.1",
+    "@rstest/playwright": "^0.11.11",
     "@types/fs-extra": "^11.0.4",
-    "@types/node": "^25.9.4",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
-    "fs-extra": "^11.3.6",
-    "playwright": "^1.61.1",
-    "prettier": "^3.9.4",
+    "@types/node": "^25.9.5",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "fs-extra": "^11.4.0",
+    "playwright": "^1.62.1",
     "react-server-dom-rspack": "0.1.0",
+    "rstack": "^0.7.2",
     "typescript": "^7.0.2"
   },
   "peerDependencies": {

@@ -4,25 +4,25 @@
   "type": "module",
   "version": "1.0.0",
   "scripts": {
-    "test": "cross-env NODE_OPTIONS=--experimental-vm-modules rstest",
+    "test": "cross-env NODE_OPTIONS=--experimental-vm-modules rs test",
     "test-dev": "cross-env TEST_MODE=dev pnpm test development integration",
     "test-build": "cross-env TEST_MODE=build pnpm test integration",
-    "test:headed": "cross-env NODE_OPTIONS=--experimental-vm-modules PWDEBUG=1 rstest",
+    "test:headed": "cross-env NODE_OPTIONS=--experimental-vm-modules PWDEBUG=1 rs test",
     "test:all": "pnpm run test-dev && pnpm run test-build"
   },
   "devDependencies": {
     "@e2e/helper": "workspace:*",
-    "@rsbuild/core": "^2.1.2",
+    "@rsbuild/core": "^2.2.1",
     "@rsbuild/plugin-react": "^2.1.0",
     "@types/express": "^5.0.6",
     "@types/webpack-env": "^1.18.8",
     "cross-env": "^10.1.0",
     "express": "^5.2.1",
     "rsbuild-plugin-rsc": "workspace:*",
-    "srvx": "^0.11.18"
+    "srvx": "^0.12.7"
   },
   "dependencies": {
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   }
 }

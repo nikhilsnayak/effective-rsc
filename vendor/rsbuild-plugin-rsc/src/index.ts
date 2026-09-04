@@ -42,6 +42,14 @@ export const pluginRSC = (
     api.modifyRsbuildConfig((config, { mergeRsbuildConfig }) => {
       const rscEnvironmentsConfig: RsbuildConfig = {
         tools: {
+          rspack: {
+            experiments: {
+              // Rspack's RSC ClientPlugin uses a function for
+              // `watchOptions.ignored`, which NativeWatcher does not support
+              // and causes the development server to crash.
+              nativeWatcher: false,
+            },
+          },
           swc: {
             rspackExperiments: {
               reactServerComponents: true,

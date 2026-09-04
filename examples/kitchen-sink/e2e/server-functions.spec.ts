@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 
 import { observeBrowserErrors } from './support/browser-errors';
 import { sessionCard, setAgendaSelection } from './support/conference-page';
+import { observeViewTransitions, waitForViewTransition } from './support/view-transitions';
 
 const observeScheduleFallback = (page: Parameters<typeof observeBrowserErrors>[0]) =>
   page.evaluate(() => {
@@ -39,6 +40,7 @@ test.describe('Server Functions', () => {
       .addCookies([
         { domain: 'localhost', name: 'conference-attendee', path: '/', value: 'Nikhil' },
       ]);
+    await observeViewTransitions(page);
     await page.goto('/schedule/saturday');
     await expect(page.getByText('Personalized for Nikhil')).toBeVisible();
     await setAgendaSelection(page, title, false);
@@ -50,6 +52,7 @@ test.describe('Server Functions', () => {
 
       await expect(session.getByText("Added to Nikhil's agenda.")).toBeVisible();
       await expect(session.getByRole('button', { name: 'Remove from the agenda' })).toBeVisible();
+      await waitForViewTransition(page, ['server-function']);
       const agenda = page.locator('section[aria-labelledby="conference-agenda-heading"]');
       await expect(agenda).not.toContainText(title);
       await expect(agenda).toContainText(title);

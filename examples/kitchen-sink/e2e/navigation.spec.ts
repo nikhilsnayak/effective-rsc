@@ -110,6 +110,20 @@ test('moves between conference days through the composed schedule', async ({ pag
   expect(browserErrors).toEqual([]);
 });
 
+test('types a replace navigation without inventing a direction', async ({ page }) => {
+  const browserErrors = observeBrowserErrors(page);
+  await observeViewTransitions(page);
+  await page.goto('/schedule/saturday');
+
+  await page.evaluate(
+    () => window.navigation.navigate('/schedule/sunday', { history: 'replace' }).finished,
+  );
+
+  await expect(page).toHaveURL('/schedule/sunday');
+  await waitForViewTransition(page, ['navigation', 'navigation-replace']);
+  expect(browserErrors).toEqual([]);
+});
+
 test('reuses completed route trees for back and forward navigation', async ({ page }) => {
   const browserErrors = observeBrowserErrors(page);
   const flightRequests: Array<string> = [];
@@ -133,6 +147,7 @@ test('reuses completed route trees for back and forward navigation', async ({ pa
 
   await page.evaluate(() => window.navigation.forward().finished);
   await expect(page.getByRole('heading', { level: 1, name: 'Sunday schedule' })).toBeVisible();
+  await waitForViewTransition(page, ['navigation', 'navigation-traverse', 'navigation-forward']);
 
   expect(flightRequests).toEqual(['/schedule/sunday']);
   expect(browserErrors).toEqual([]);

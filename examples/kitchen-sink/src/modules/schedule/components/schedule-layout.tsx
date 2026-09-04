@@ -1,5 +1,4 @@
 import { Effect } from 'effect';
-import { ViewTransition } from 'react';
 
 import { ERSC } from '@/ersc';
 import ConferenceAgenda from '@/modules/agenda/components/conference-agenda';
@@ -12,17 +11,15 @@ export default ERSC.Layout.make({
     const agenda = yield* service.agenda;
 
     return (
-      <ViewTransition name='schedule-layout'>
-        <div className='mx-auto grid max-w-7xl px-5 sm:px-8 lg:grid-cols-[11rem_minmax(0,1fr)_17rem] lg:gap-8'>
-          <aside className='border-b py-5 lg:border-r lg:border-b-0 lg:py-10 lg:pr-8'>
-            <ConferenceNavigation />
-          </aside>
-          {children}
-          <aside className='border-t py-7 lg:border-t-0 lg:border-l lg:py-10 lg:pl-8'>
-            <ConferenceAgenda agenda={agenda} />
-          </aside>
-        </div>
-      </ViewTransition>
+      <div className='mx-auto grid max-w-7xl px-5 sm:px-8 lg:grid-cols-[11rem_minmax(0,1fr)_17rem] lg:gap-8'>
+        <aside className='border-b py-5 lg:border-r lg:border-b-0 lg:py-10 lg:pr-8'>
+          <ConferenceNavigation />
+        </aside>
+        {children}
+        <aside className='border-t py-7 lg:border-t-0 lg:border-l lg:py-10 lg:pl-8'>
+          <ConferenceAgenda agenda={agenda} />
+        </aside>
+      </div>
     );
   }),
 });

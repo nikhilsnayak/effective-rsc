@@ -71,8 +71,27 @@
   }
 }
 
+html:active-view-transition-type(
+    hmr-refresh, navigation-ua-visual-transition
+  )::view-transition-old(*),
+html:active-view-transition-type(
+    hmr-refresh, navigation-ua-visual-transition
+  )::view-transition-new(*),
+html:active-view-transition-type(
+    hmr-refresh, navigation-ua-visual-transition
+  )::view-transition-group(*) {
+  animation: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-pulse {
     animation: none;
+  }
+
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-delay: 0s !important;
+    animation-duration: 0s !important;
   }
 }

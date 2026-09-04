@@ -368,29 +368,29 @@ describe('ServerApplication.httpLayer', () => {
         );
         expect(crossOrigin.status).toBe(403);
 
-        const wrongForwardedOrigin = yield* call(
-          serverFnRequest('wrong-forwarded-origin', {
+        const forwardedOnlyOrigin = yield* call(
+          serverFnRequest('forwarded-only-origin', {
             headers: {
               host: 'internal-proxy.test',
-              origin: 'https://internal-proxy.test',
+              origin: 'https://public.example',
               'x-forwarded-host': 'public.example, internal-proxy.test',
             },
           }),
         );
-        expect(wrongForwardedOrigin.status).toBe(403);
+        expect(forwardedOnlyOrigin.status).toBe(403);
         expect(decodeReply).not.toHaveBeenCalled();
       }),
     ),
   );
 
-  it.effect('accepts a Server Function POST matching the first forwarded host', () =>
+  it.effect('ignores X-Forwarded-Host when the Server Function Origin matches Host', () =>
     withHarness(({ call }) =>
       Effect.gen(function* () {
         const response = yield* call(
           serverFnRequest('forwarded-origin', {
             headers: {
               host: 'internal-proxy.test',
-              origin: 'https://public.example',
+              origin: 'https://internal-proxy.test',
               'x-forwarded-host': 'public.example, internal-proxy.test',
             },
           }),

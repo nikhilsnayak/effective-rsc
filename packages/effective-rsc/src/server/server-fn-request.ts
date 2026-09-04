@@ -66,8 +66,7 @@ const validateOrigin = (request: HttpServerRequest.HttpServerRequest) =>
         throw new Error('The Origin header is missing.');
       }
 
-      const forwardedHost = request.headers['x-forwarded-host']?.split(',')[0]?.trim();
-      const expectedHost = forwardedHost ?? request.headers['host'];
+      const expectedHost = request.headers['host'];
       if (expectedHost === undefined || new URL(origin).host !== expectedHost.toLowerCase()) {
         throw new Error(`Origin "${origin}" does not match host "${expectedHost ?? ''}".`);
       }

@@ -53,10 +53,11 @@ rules.
 ## HTTP policy
 
 Page requests vary on the headers used for Flight and HTML negotiation. Server Function browser
-requests must carry an Origin whose host matches the application host. Bun rejects any request body
-larger than 10 MiB before it reaches framework routing, so Server Function input is bounded before
-React decodes it. Public assets use Effect `HttpStaticServer`; application HTTP routes, APIs, RPC,
-and global middleware share the same router and Layer.
+requests must carry an Origin whose host matches the request `Host`; forwarded host headers are not
+trusted. Bun rejects any request body larger than 10 MiB before it reaches framework routing, so
+Server Function input is bounded before React decodes it. Public assets use Effect
+`HttpStaticServer`; application HTTP routes, APIs, RPC, and global middleware share the same router
+and Layer.
 
 `serverLayer` binds Bun explicitly rather than through `NODE_ENV`: contextual error pages stay off,
 so a failure escaping the router cannot answer with its message and source stack, and the idle

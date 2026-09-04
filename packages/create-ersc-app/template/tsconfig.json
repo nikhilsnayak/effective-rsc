@@ -10,7 +10,7 @@
     "exactOptionalPropertyTypes": true,
     "noUncheckedIndexedAccess": true,
     "noUncheckedSideEffectImports": true,
-    "types": ["bun", "react", "react-dom"],
+    "types": ["bun", "react", "react-dom", "react/canary"],
     "lib": ["ESNext", "DOM", "DOM.Iterable"]
   },
   "include": ["src"]

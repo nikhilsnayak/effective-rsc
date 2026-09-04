@@ -1,7 +1,7 @@
 {
   "extends": "../../../../tsconfig.json",
   "compilerOptions": {
-    "types": ["bun", "@rspack/core/module"]
+    "types": ["bun", "@rspack/core/module", "react/canary"]
   },
   "include": ["./**/*.ts", "./**/*.tsx"]
 }

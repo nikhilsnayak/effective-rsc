@@ -1,14 +1,59 @@
 // oxlint-disable effecttsgo/async-function -- Playwright owns this Promise-based browser-test boundary.
-import { expect, test, type Request } from '@playwright/test';
+import { expect, test, type Page, type Request } from '@playwright/test';
 
 import { observeBrowserErrors } from './support/browser-errors';
 
 const isNavigationFlightRequest = (request: Request) =>
   request.method() === 'GET' && request.headers()['accept'] === 'text/x-component';
 
+type ViewTransitionObservation = {
+  status: 'Finished' | 'Rejected' | 'Started';
+  readonly types: ReadonlyArray<string>;
+};
+
+const observeViewTransitions = (page: Page) =>
+  page.addInitScript(() => {
+    const startViewTransition = document.startViewTransition.bind(document);
+    Reflect.set(window, '__ersc_view_transitions__', []);
+    Reflect.set(document, 'startViewTransition', (...args: ReadonlyArray<unknown>) => {
+      const transition = Reflect.apply(startViewTransition, document, args) as ViewTransition;
+      const transitions = Reflect.get(
+        window,
+        '__ersc_view_transitions__',
+      ) as Array<ViewTransitionObservation>;
+      const options = args[0];
+      const types =
+        typeof options === 'object' &&
+        options !== null &&
+        Array.isArray(Reflect.get(options, 'types'))
+          ? (Reflect.get(options, 'types') as ReadonlyArray<string>)
+          : [];
+      const observation: ViewTransitionObservation = { status: 'Started', types };
+      transitions.push(observation);
+      void transition.finished.then(
+        () => {
+          observation.status = 'Finished';
+        },
+        () => {
+          observation.status = 'Rejected';
+        },
+      );
+      return transition;
+    });
+  });
+
+const waitForViewTransition = (page: Page, types: ReadonlyArray<string>) =>
+  expect
+    .poll(
+      () => page.evaluate(() => JSON.stringify(Reflect.get(window, '__ersc_view_transitions__'))),
+      { timeout: 3_000 },
+    )
+    .toContain(JSON.stringify({ status: 'Finished', types }));
+
 test('moves between conference days through the composed schedule', async ({ page }) => {
   const browserErrors = observeBrowserErrors(page);
   let navigationFlightFinished = false;
+  await observeViewTransitions(page);
   page.on('requestfinished', (request) => {
     if (
       new URL(request.url()).pathname === '/schedule/sunday' &&
@@ -50,6 +95,7 @@ test('moves between conference days through the composed schedule', async ({ pag
   await expect(page.locator('body')).toBeFocused();
   // This covers the current forward-navigation reset, not history restoration for streamed UI.
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  await waitForViewTransition(page, ['navigation', 'navigation-push', 'navigation-forward']);
   expect(navigationFlightFinished).toBe(false);
   await flightRequest;
 
@@ -67,6 +113,7 @@ test('moves between conference days through the composed schedule', async ({ pag
 test('reuses completed route trees for back and forward navigation', async ({ page }) => {
   const browserErrors = observeBrowserErrors(page);
   const flightRequests: Array<string> = [];
+  await observeViewTransitions(page);
   page.on('request', (request) => {
     if (isNavigationFlightRequest(request)) {
       flightRequests.push(new URL(request.url()).pathname);
@@ -82,6 +129,7 @@ test('reuses completed route trees for back and forward navigation', async ({ pa
 
   await page.evaluate(() => window.navigation.back().finished);
   await expect(page.getByRole('heading', { level: 1, name: 'Saturday schedule' })).toBeVisible();
+  await waitForViewTransition(page, ['navigation', 'navigation-traverse', 'navigation-backward']);
 
   await page.evaluate(() => window.navigation.forward().finished);
   await expect(page.getByRole('heading', { level: 1, name: 'Sunday schedule' })).toBeVisible();

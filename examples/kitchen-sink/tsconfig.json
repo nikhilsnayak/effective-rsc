@@ -5,7 +5,7 @@
     "paths": {
       "@/*": ["./src/*"]
     },
-    "types": ["bun"]
+    "types": ["bun", "react/canary"]
   },
   "include": ["e2e", "playwright.config.ts", "src", "tests"]
 }

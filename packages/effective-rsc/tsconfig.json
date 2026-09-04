@@ -3,7 +3,7 @@
   "compilerOptions": {
     "isolatedModules": true,
     "rootDir": "./src",
-    "types": ["bun", "@rspack/core/module"]
+    "types": ["bun", "@rspack/core/module", "react/canary"]
   },
   "include": ["src"]
 }

@@ -1,5 +1,5 @@
 import { Effect, Exit, MutableRef } from 'effect';
-import { startTransition } from 'react';
+import { addTransitionType, startTransition } from 'react';
 
 import { BrowserEffectRunner } from './browser-effect-runner';
 import { BrowserRenderer, type BrowserRendererNavigation } from './browser-renderer';
@@ -13,6 +13,27 @@ import { RouteLoader, type RouteLoad } from './route-loader';
 
 type NavigationGeneration = symbol;
 type RouteResource = Extract<RouteLoad, { readonly _tag: 'Route' }>;
+
+const getNavigationTransitionTypes = (
+  event: NavigateEvent,
+  fromIndex: number | null,
+): ReadonlyArray<string> => {
+  const types = ['navigation', `navigation-${event.navigationType}`];
+  if (event.navigationType === 'push') {
+    return [...types, 'navigation-forward'];
+  }
+  if (event.navigationType !== 'traverse') {
+    return types;
+  }
+
+  if (fromIndex === null || fromIndex === event.destination.index) {
+    return types;
+  }
+  return [
+    ...types,
+    event.destination.index < fromIndex ? 'navigation-backward' : 'navigation-forward',
+  ];
+};
 
 type NavigationEntryState =
   | { readonly _tag: 'PendingCommit' }
@@ -485,6 +506,13 @@ export const installClientRouter = Effect.gen(function* () {
             const rendererNavigation = yield* Effect.sync(() => {
               let navigation!: BrowserRendererNavigation;
               startTransition(() => {
+                const fromIndex =
+                  navigationApi.getTransition()?.from.index ??
+                  navigationApi.getCurrentEntry()?.index ??
+                  null;
+                for (const type of getNavigationTransitionTypes(event, fromIndex)) {
+                  addTransitionType(type);
+                }
                 navigation = browserRenderer.navigate(command.resource.routeTree);
               });
               return navigation;

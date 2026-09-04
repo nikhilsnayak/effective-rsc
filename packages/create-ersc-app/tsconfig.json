@@ -2,7 +2,7 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "rootDir": ".",
-    "types": ["bun"]
+    "types": ["bun", "react/canary"]
   },
   "include": ["src", "tests"]
 }

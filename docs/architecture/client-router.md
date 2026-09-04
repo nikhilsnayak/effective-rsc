@@ -68,6 +68,37 @@ Some traversals are non-cancelable and cannot use `precommitHandler`; their entr
 committed when routing starts. They otherwise use the same loading, rendering, and stream ownership
 rules.
 
+## React View Transitions
+
+The application owns every React `<ViewTransition>` boundary and all animation policy. ERSC does
+not wrap the route tree and does not call `document.startViewTransition()`. It supplies context by
+calling React's `addTransitionType()` inside the same `startTransition()` callback that publishes
+the corresponding render.
+
+This placement is significant. Routed Flight and current-route refreshes load asynchronously, so
+adding types only to the outer async Action would not associate them with the later UI update. The
+nested publication Transition adds the types immediately before calling `BrowserRenderer`.
+
+Transition types are additive:
+
+| Publication                                            | Types                                                   |
+| ------------------------------------------------------ | ------------------------------------------------------- |
+| Every routed navigation                                | `navigation`, then `navigation-${event.navigationType}` |
+| Push navigation                                        | `navigation-forward`                                    |
+| Backward traversal                                     | `navigation-backward`                                   |
+| Forward traversal                                      | `navigation-forward`                                    |
+| Navigation with `event.hasUAVisualTransition`          | `navigation-ua-visual-transition`                       |
+| Server Function response tree or current-route refresh | `server-function`                                       |
+| HMR current-route refresh                              | `hmr-refresh`                                           |
+
+A replace navigation has no direction type. A traversal also has no direction type when its source
+index is unavailable or equal to its destination index. Applications may use the UA visual and HMR
+types to suppress author animation, but ERSC does not impose that styling policy.
+
+These types describe the first publication only. Nested Suspense content can reveal in later React
+Transitions after native navigation has finished; React does not carry the router's types into those
+later reveals. Applications own any Suspense-specific `<ViewTransition>` boundaries and styling.
+
 ## State model
 
 The router stores exactly one visible generation and at most one preparing candidate. A third
@@ -274,7 +305,9 @@ The required cases are:
 - a discarded B render never becomes visible;
 - native transition, focus, default forward-navigation scroll, and View Transition finish at Layout
   commit rather than EOF;
-  and
+- push, replace, backward traversal, forward traversal, and UA visual-transition publications carry
+  their exact additive navigation types;
+- Server Function and HMR refresh publications carry their exact refresh type; and
 - nested Suspense content may reveal after native Navigation finishes.
 
 ## Delivery

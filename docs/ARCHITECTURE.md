@@ -51,6 +51,8 @@ Details:
   entry points.
 - React owns the RSC and Server Function protocols. ERSC adds Effect typing, validation, and
   lifetimes without replacing those transports.
+- Applications own React `<ViewTransition>` boundaries and animation policy. ERSC publishes UI in
+  React Transitions and supplies router transition types at that publication boundary.
 - Effect owns application services, HTTP integration, resource scopes, and interruption.
 
 ## Known limitations

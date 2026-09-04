@@ -46,10 +46,13 @@ Run `bunx create-ersc-app` without a directory for the interactive flow.
   Pages, Layouts, Components, and Server Functions retain inferred service requirements and run as
   request-scoped Effects. Provide the application Layer once; native Effect HTTP routes, APIs, RPC,
   and middleware share the same Bun server and lifetime.
-- **[Navigation owns the full request lifetime](https://github.com/nikhilsnayak/effective-rsc/blob/main/packages/effective-rsc/docs/03-advanced/02-client-navigation/index.md).**
-  The URL commits with visible UI while navigation remains active through Flight EOF. Cancellation
-  and supersession interrupt obsolete browser and server work without desynchronizing the URL and
-  visible UI.
+- **[Streamed navigation without native-navigation deadlock](https://github.com/nikhilsnayak/effective-rsc/blob/main/packages/effective-rsc/docs/03-advanced/02-client-navigation/index.md).**
+  Native Navigation completes when the destination Layout commits, allowing URL/history, focus,
+  scroll, and React View Transitions to proceed. The client router retains the remaining Flight
+  stream until EOF or render retirement and preserves the visible route while a successor prepares.
+- **Application-owned, router-aware View Transitions.** ERSC tags publication with additive
+  navigation kind, direction, UA visual-transition, Server Function, and HMR types. Applications
+  own every React `<ViewTransition>` boundary and animation style.
 
 ## Manual installation
 
@@ -102,7 +105,7 @@ Create `tsconfig.json`:
     "exactOptionalPropertyTypes": true,
     "noUncheckedIndexedAccess": true,
     "noUncheckedSideEffectImports": true,
-    "types": ["bun", "react", "react-dom"],
+    "types": ["bun", "react", "react-dom", "react/canary"],
     "lib": ["ESNext", "DOM", "DOM.Iterable"]
   },
   "include": ["src"]

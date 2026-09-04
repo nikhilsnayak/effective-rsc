@@ -18,7 +18,11 @@ const getNavigationTransitionTypes = (
   event: NavigateEvent,
   fromIndex: number | null,
 ): ReadonlyArray<string> => {
-  const types = ['navigation', `navigation-${event.navigationType}`];
+  const types = [
+    'navigation',
+    `navigation-${event.navigationType}`,
+    ...(event.hasUAVisualTransition ? ['navigation-ua-visual-transition'] : []),
+  ];
   if (event.navigationType === 'push') {
     return [...types, 'navigation-forward'];
   }

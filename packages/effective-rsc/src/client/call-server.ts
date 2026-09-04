@@ -1,5 +1,5 @@
 import { Effect, MutableRef, Schema } from 'effect';
-import { startTransition } from 'react';
+import { addTransitionType, startTransition } from 'react';
 import {
   createTemporaryReferenceSet,
   encodeReply,
@@ -127,7 +127,7 @@ export const installCallServer = Effect.gen(function* () {
     );
     if (selectRefreshSource(invocation) === 'CurrentRoute') {
       yield* resource.release;
-      yield* routeRefresher.refreshCurrentRoute;
+      yield* routeRefresher.refreshCurrentRoute('server-function');
       return;
     }
 
@@ -135,6 +135,7 @@ export const installCallServer = Effect.gen(function* () {
     const commitRefresh = routeLoader.prepareRefresh(resource.payload.routeTree);
     const committed = Promise.withResolvers<void>();
     startTransition(() => {
+      addTransitionType('server-function');
       // Keep the commit Promise outside React's Transition Action. Returning it would make React
       // wait for the commit that this Promise itself observes.
       browserRenderer.refresh(resource.payload.routeTree).then(committed.resolve, committed.reject);

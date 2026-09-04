@@ -1,5 +1,5 @@
 import { Context, Effect, FiberMap, Layer, Ref, Schema } from 'effect';
-import { startTransition } from 'react';
+import { addTransitionType, startTransition } from 'react';
 
 import { BrowserEffectRunner } from './browser-effect-runner';
 import { BrowserRenderer } from './browser-renderer';
@@ -13,9 +13,11 @@ class RouteRefreshError extends Schema.TaggedError<RouteRefreshError>()('RouteRe
   cause: Schema.Defect(),
 }) {}
 
+export type RouteRefreshTransitionType = 'hmr-refresh' | 'server-function';
+
 type RouteRefreshImplementation = {
   readonly interruptCurrentRouteRefresh: Effect.Effect<void>;
-  readonly refreshCurrentRoute: Effect.Effect<void>;
+  readonly refreshCurrentRoute: (transitionType: RouteRefreshTransitionType) => Effect.Effect<void>;
 };
 
 export class RouteRefresher extends Context.Service<RouteRefresher>()(
@@ -25,7 +27,7 @@ export class RouteRefresher extends Context.Service<RouteRefresher>()(
       const navigationApi = yield* NavigationApi;
       const implementation = yield* Ref.make<RouteRefreshImplementation>({
         interruptCurrentRouteRefresh: Effect.void,
-        refreshCurrentRoute: Effect.sync(navigationApi.reloadDocument),
+        refreshCurrentRoute: () => Effect.sync(navigationApi.reloadDocument),
       });
 
       const interruptCurrentRouteRefresh = Effect.gen(function* () {
@@ -33,9 +35,11 @@ export class RouteRefresher extends Context.Service<RouteRefresher>()(
         yield* current.interruptCurrentRouteRefresh;
       });
 
-      const refreshCurrentRoute = Effect.gen(function* () {
+      const refreshCurrentRoute = Effect.fn('RouteRefresher.refreshCurrentRoute')(function* (
+        transitionType: RouteRefreshTransitionType,
+      ) {
         const current = yield* Ref.get(implementation);
-        yield* current.refreshCurrentRoute;
+        yield* current.refreshCurrentRoute(transitionType);
       });
 
       return {
@@ -81,7 +85,7 @@ export const installRouteRefresh = Effect.gen(function* () {
     return Effect.sync(unsubscribe);
   });
 
-  const refreshRoute = Effect.gen(function* () {
+  const refreshRoute = Effect.fnUntraced(function* (transitionType: RouteRefreshTransitionType) {
     const currentEntry = navigationApi.getCurrentEntry();
     const destination = new URL(currentEntry?.url ?? navigationApi.getCurrentUrl());
     const resource = yield* routeLoader.load({
@@ -106,31 +110,41 @@ export const installRouteRefresh = Effect.gen(function* () {
     }
 
     const commitRefresh = routeLoader.prepareRefresh(resource.routeTree);
-    yield* Effect.all(
-      [Effect.promise(() => browserRenderer.refresh(resource.routeTree)), resource.completed],
-      { concurrency: 'unbounded', discard: true },
-    ).pipe(Effect.andThen(Effect.sync(commitRefresh)), Effect.ensuring(resource.release));
+    const committed = Promise.withResolvers<void>();
+    startTransition(() => {
+      addTransitionType(transitionType);
+      browserRenderer.refresh(resource.routeTree).then(committed.resolve, committed.reject);
+    });
+    yield* Effect.all([Effect.promise(() => committed.promise), resource.completed], {
+      concurrency: 'unbounded',
+      discard: true,
+    }).pipe(Effect.andThen(Effect.sync(commitRefresh)), Effect.ensuring(resource.release));
   });
 
-  const refreshInReactTransition = Effect.callback<void, RouteRefreshError>((resume, signal) => {
-    startTransition(() =>
-      run(refreshRoute, { signal }).then(
-        () => resume(Effect.void),
-        (cause) => resume(Effect.fail(new RouteRefreshError({ cause }))),
-      ),
-    );
-  });
+  const refreshInReactTransition = (transitionType: RouteRefreshTransitionType) =>
+    Effect.callback<void, RouteRefreshError>((resume, signal) => {
+      startTransition(() =>
+        run(refreshRoute(transitionType), { signal }).then(
+          () => resume(Effect.void),
+          (cause) => resume(Effect.fail(new RouteRefreshError({ cause }))),
+        ),
+      );
+    });
 
-  const refreshCurrentRoute = Effect.gen(function* () {
-    routeLoader.invalidate();
-    yield* waitForNavigationIdle;
-    yield* Effect.raceFirst(refreshInReactTransition, waitForRoutedNavigation);
-  }).pipe(Effect.catch((cause) => Effect.logError('Failed to refresh the current route.', cause)));
+  const refreshCurrentRoute = Effect.fnUntraced(
+    function* (transitionType: RouteRefreshTransitionType) {
+      routeLoader.invalidate();
+      yield* waitForNavigationIdle;
+      yield* Effect.raceFirst(refreshInReactTransition(transitionType), waitForRoutedNavigation);
+    },
+    Effect.catch((cause) => Effect.logError('Failed to refresh the current route.', cause)),
+  );
 
   yield* routeRefresher.replace({
     interruptCurrentRouteRefresh: FiberMap.remove(refreshes, CurrentRouteRefreshKey),
-    refreshCurrentRoute: FiberMap.run(refreshes, CurrentRouteRefreshKey, refreshCurrentRoute).pipe(
-      Effect.asVoid,
-    ),
+    refreshCurrentRoute: (transitionType) =>
+      FiberMap.run(refreshes, CurrentRouteRefreshKey, refreshCurrentRoute(transitionType)).pipe(
+        Effect.asVoid,
+      ),
   });
 });

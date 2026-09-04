@@ -1,7 +1,20 @@
-import { expect, it } from '@effect/vitest';
+import { beforeEach, expect, it } from '@effect/vitest';
 import { Deferred, Effect, Exit, Fiber, Layer, Scope } from 'effect';
 import { HttpClient, HttpClientResponse } from 'effect/unstable/http';
 import { vi } from 'vitest';
+
+const react = vi.hoisted(() => ({
+  transitionTypes: [] as Array<string>,
+}));
+
+vi.mock('react', (importOriginal) =>
+  importOriginal<typeof import('react')>().then((original) => ({
+    ...original,
+    addTransitionType: (type: string) => {
+      react.transitionTypes.push(type);
+    },
+  })),
+);
 
 vi.mock('react-server-dom-rspack/client.browser', () => ({
   createFromReadableStream: vi.fn((stream: ReadableStream<Uint8Array>) => {
@@ -36,6 +49,7 @@ type TestNavigateEvent = Event &
     | 'destination'
     | 'downloadRequest'
     | 'formData'
+    | 'hasUAVisualTransition'
     | 'hashChange'
     | 'info'
     | 'intercept'
@@ -118,6 +132,7 @@ type TestNavigateEventOverrides = Partial<
     | 'canIntercept'
     | 'downloadRequest'
     | 'formData'
+    | 'hasUAVisualTransition'
     | 'hashChange'
     | 'info'
     | 'navigationType'
@@ -167,6 +182,10 @@ const makeNavigationEvent = (overrides: TestNavigateEventOverrides = {}) => {
     interception: () => interception,
   };
 };
+
+beforeEach(() => {
+  react.transitionTypes.length = 0;
+});
 
 const makeHttpClient = (requestedUrls: Array<string> = [], contentType = 'text/x-component') =>
   HttpClient.make((request) =>
@@ -361,7 +380,7 @@ it.effect('splits a cancelable navigation between React commit and Flight comple
     yield* Effect.scoped(
       Effect.gen(function* () {
         yield* listen(navigation, makeBrowserRenderer(renders), makeHttpClient(requestedUrls));
-        const pendingNavigation = makeNavigationEvent();
+        const pendingNavigation = makeNavigationEvent({ hasUAVisualTransition: true });
 
         navigation.dispatch(pendingNavigation.event);
 
@@ -391,6 +410,12 @@ it.effect('splits a cancelable navigation between React commit and Flight comple
           return yield* Effect.die('Expected a navigation render.');
         }
         expect(render.routeTree.id).toBe('root');
+        expect(react.transitionTypes).toEqual([
+          'navigation',
+          'navigation-push',
+          'navigation-ua-visual-transition',
+          'navigation-forward',
+        ]);
       }),
     );
   }),

@@ -16,7 +16,17 @@ type ServerCallback = (id: string, args: ReadonlyArray<unknown>) => Promise<unkn
 
 const reactClient = vi.hoisted(() => ({
   serverCallback: undefined as ServerCallback | undefined,
+  transitionTypes: [] as Array<string>,
 }));
+
+vi.mock('react', (importOriginal) =>
+  importOriginal<typeof import('react')>().then((original) => ({
+    ...original,
+    addTransitionType: (type: string) => {
+      reactClient.transitionTypes.push(type);
+    },
+  })),
+);
 
 vi.mock('react-server-dom-rspack/client.browser', () => ({
   createTemporaryReferenceSet: vi.fn(() => ({})),
@@ -65,6 +75,7 @@ const invokeServerFn = (id: string) => {
 
 beforeEach(() => {
   reactClient.serverCallback = undefined;
+  reactClient.transitionTypes.length = 0;
 });
 
 type CallServerDependencies =
@@ -164,6 +175,7 @@ const staleResponseScenario = (changeNavigation: (state: TestNavigationState) =>
       const response = yield* Deferred.make<ReturnType<typeof makeFlight>>();
       const requestStarted = yield* Deferred.make<void>();
       const currentRouteRefresh = yield* Deferred.make<void>();
+      const refreshTransitionTypes: Array<string> = [];
       const released = vi.fn();
       const rendered = vi.fn(() => Promise.resolve());
       const navigationState: TestNavigationState = {
@@ -207,7 +219,10 @@ const staleResponseScenario = (changeNavigation: (state: TestNavigationState) =>
       });
       const routeRefresherLayer = RouteRefresher.layerTest({
         interruptCurrentRouteRefresh: Effect.void,
-        refreshCurrentRoute: Deferred.succeed(currentRouteRefresh, undefined),
+        refreshCurrentRoute: (transitionType) =>
+          Effect.sync(() => refreshTransitionTypes.push(transitionType)).pipe(
+            Effect.andThen(Deferred.succeed(currentRouteRefresh, undefined)),
+          ),
         replace: () => Effect.void,
       });
       yield* listen(
@@ -229,6 +244,7 @@ const staleResponseScenario = (changeNavigation: (state: TestNavigationState) =>
       const value = yield* Effect.promise(() => result);
       expect(value).toBe('first result');
       yield* Deferred.await(currentRouteRefresh);
+      expect(refreshTransitionTypes).toEqual(['server-function']);
       expect(released).toHaveBeenCalledOnce();
       expect(rendered).not.toHaveBeenCalled();
     }).pipe(
@@ -262,6 +278,7 @@ it.effect('does not let an older invocation response overwrite a newer response'
       const firstStarted = yield* Deferred.make<void>();
       const secondStarted = yield* Deferred.make<void>();
       const currentRouteRefresh = yield* Deferred.make<void>();
+      const refreshTransitionTypes: Array<string> = [];
       const directRefreshCommitted = Promise.withResolvers<void>();
       const firstReleased = vi.fn();
       const interruptedCurrentRouteRefresh = vi.fn();
@@ -316,7 +333,10 @@ it.effect('does not let an older invocation response overwrite a newer response'
       });
       const routeRefresherLayer = RouteRefresher.layerTest({
         interruptCurrentRouteRefresh: Effect.sync(interruptedCurrentRouteRefresh),
-        refreshCurrentRoute: Deferred.succeed(currentRouteRefresh, undefined),
+        refreshCurrentRoute: (transitionType) =>
+          Effect.sync(() => refreshTransitionTypes.push(transitionType)).pipe(
+            Effect.andThen(Deferred.succeed(currentRouteRefresh, undefined)),
+          ),
         replace: () => Effect.void,
       });
       yield* listen(
@@ -340,6 +360,7 @@ it.effect('does not let an older invocation response overwrite a newer response'
       expect(secondValue).toBe('second result');
       yield* Effect.promise(() => directRefreshCommitted.promise);
       expect(interruptedCurrentRouteRefresh).toHaveBeenCalledOnce();
+      expect(reactClient.transitionTypes).toEqual(['server-function']);
       yield* Deferred.succeed(
         firstResponse,
         makeFlight('older', 'first result', Effect.sync(firstReleased)),
@@ -348,6 +369,7 @@ it.effect('does not let an older invocation response overwrite a newer response'
       const firstValue = yield* Effect.promise(() => firstResult);
       expect(firstValue).toBe('first result');
       yield* Deferred.await(currentRouteRefresh);
+      expect(refreshTransitionTypes).toEqual(['server-function']);
       expect(rendered).toEqual(['newer']);
       expect(firstReleased).toHaveBeenCalledOnce();
     }).pipe(

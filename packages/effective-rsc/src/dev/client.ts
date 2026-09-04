@@ -85,7 +85,7 @@ export const startDevClient = Effect.gen(function* () {
       return;
     }
     if (action === 'Refresh') {
-      yield* routeRefresher.refreshCurrentRoute;
+      yield* routeRefresher.refreshCurrentRoute('hmr-refresh');
     }
     yield* panel.dispatch({ _tag: 'Reconciled' });
   });

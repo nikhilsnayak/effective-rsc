@@ -109,6 +109,28 @@ it.effect('resolves the server bundle where Rspack emits it', () =>
   }).pipe(Effect.provide(Path.layer)),
 );
 
+it.effect('content-addresses every compiled client asset in both modes', () =>
+  Effect.gen(function* () {
+    const { applicationRoot, entries } = yield* resolveFixtureBuild('/workspace');
+
+    for (const configs of [
+      makeRspackBuildConfig(applicationRoot, entries),
+      makeRspackDevConfig(applicationRoot, entries),
+    ]) {
+      const { output } = configNamed(configs, 'client');
+
+      for (const template of [
+        output?.filename,
+        output?.chunkFilename,
+        output?.cssFilename,
+        output?.cssChunkFilename,
+      ]) {
+        expect(template).toContain('[contenthash]');
+      }
+    }
+  }).pipe(Effect.provide(Path.layer)),
+);
+
 it.effect('compiles Tailwind CSS against the application root in both runtime graphs', () =>
   Effect.gen(function* () {
     const { applicationRoot, entries } = yield* resolveFixtureBuild('/workspace');
@@ -138,12 +160,15 @@ it.effect('keeps development candidates immutable until they are published', () 
       expect(config.optimization?.emitOnErrors).toBe(false);
       expect(config.output?.clean).toBe(false);
       expect(config.output?.filename).toBe('[name].[contenthash].js');
-      expect(config.output?.cssFilename).toBe('[name].[contenthash].css');
       expect(tailwindUseNamed(config)?.options).toEqual({
         base: '/workspace',
         optimize: false,
       });
     }
+
+    // Only the browser compilation emits stylesheets.
+    expect(client.output?.cssFilename).toBe('[name].[contenthash].css');
+    expect(server.output?.cssFilename).toBeUndefined();
 
     expect(client.devtool).toBe('cheap-module-source-map');
     expect(server.devtool).toBe('source-map');

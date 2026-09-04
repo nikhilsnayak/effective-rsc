@@ -4,7 +4,7 @@ import { Effect, FileSystem, Layer, Path, Stream } from 'effect';
 import { vi } from 'vitest';
 
 import { loadCompiledServer } from '../../src/build/compiled-server';
-import { BuildClientOutputDir, DevClientOutputDir, ErscOutputDir } from '../../src/build/contract';
+import { EnvironmentConfig, ErscOutputDir } from '../../src/build/contract';
 import { Rspack, type RspackWatchEvent } from '../../src/build/rspack';
 import { makeRspackBuildConfig, makeRspackDevConfig } from '../../src/build/rspack-config';
 import { DevChannelPath } from '../../src/dev/channel';
@@ -118,7 +118,9 @@ it.effect(
       expect(hashes[1]).not.toBe(hashes[0]);
       expect(onCompilationStart).toHaveBeenCalledTimes(2);
       expect(onServerComponentChanges).toHaveBeenCalledTimes(1);
-      const clientOutput = yield* readJavaScriptOutput(path.join(directory, DevClientOutputDir));
+      const clientOutput = yield* readJavaScriptOutput(
+        path.join(directory, EnvironmentConfig.development.clientOutputDir),
+      );
       expect(clientOutput).toContain(DevChannelPath);
     }).pipe(Effect.provide(Layer.merge(BunServices.layer, Rspack.layer)), Effect.scoped),
   15_000,
@@ -167,7 +169,9 @@ it.effect(
       );
 
       const bundle = yield* loadCompiledServer(directory);
-      const clientOutput = yield* readJavaScriptOutput(path.join(directory, BuildClientOutputDir));
+      const clientOutput = yield* readJavaScriptOutput(
+        path.join(directory, EnvironmentConfig.production.clientOutputDir),
+      );
       expect(bundle.default.entryCssFiles).toEqual([]);
       expect(clientOutput).not.toContain(DevChannelPath);
       expect(clientOutput).not.toContain('ersc-dev-refresh');

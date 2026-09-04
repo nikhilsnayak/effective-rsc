@@ -45,6 +45,7 @@ export const decodeServerBundle = Schema.decodeUnknownEffect(ServerBundle);
 
 type RunnableLayerOptions = {
   readonly bundle: ServerBundle;
+  readonly clientAssetsCacheControl: string;
   readonly clientOutputDir: string;
   readonly hostname: string;
   readonly port: number;
@@ -53,6 +54,7 @@ type RunnableLayerOptions = {
 
 const makeServerConfigLayer = Effect.fnUntraced(function* ({
   bundle,
+  clientAssetsCacheControl,
   clientOutputDir,
   hostname,
   port,
@@ -63,6 +65,7 @@ const makeServerConfigLayer = Effect.fnUntraced(function* ({
   return Layer.succeed(
     ServerConfig,
     ServerConfig.of({
+      clientAssetsCacheControl,
       clientAssetsRoot: path.resolve(root, clientOutputDir),
       clientBootstrapScripts: bundle[CompiledServerExportNames.application].entryJsFiles,
       clientStylesheets: bundle[CompiledServerExportNames.application].entryCssFiles,

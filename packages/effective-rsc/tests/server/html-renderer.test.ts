@@ -11,6 +11,7 @@ import { ServerConfig } from '../../src/server/server-config';
 const formState = Symbol('formState') as unknown as ReactFormState;
 const clientBootstrapScripts = ['/_ersc/assets/runtime.js', '/_ersc/assets/main.js'];
 const serverConfig = ServerConfig.of({
+  clientAssetsCacheControl: 'no-store',
   clientAssetsRoot: '/tmp/ersc-client',
   clientBootstrapScripts,
   clientStylesheets: ['/_ersc/assets/main.css'],

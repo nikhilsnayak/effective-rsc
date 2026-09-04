@@ -1,7 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const startOrigin = 'http://localhost:18194';
-const startReadyUrl = `${startOrigin}/_ersc/assets/main.js`;
 const developmentOrigin = 'http://localhost:18195';
 export default defineConfig({
   testDir: './e2e',
@@ -34,7 +33,7 @@ export default defineConfig({
       command: 'ersc start',
       env: { PORT: '18194' },
       name: 'start',
-      url: startReadyUrl,
+      url: startOrigin,
       reuseExistingServer: false,
       timeout: 30_000,
       gracefulShutdown: {

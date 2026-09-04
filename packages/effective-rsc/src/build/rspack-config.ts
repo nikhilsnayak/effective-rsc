@@ -6,15 +6,9 @@ import { ReactRefreshRspackPlugin } from '@rspack/plugin-react-refresh';
 import { FrameworkAssetPrefix } from '../application/route-path';
 import {
   ApplicationEntrySpecifier,
-  BuildClientOutputDir,
-  BuildCssFilenameTemplate,
-  BuildJsFilenameTemplate,
-  BuildServerOutputDir,
   ClientEntryName,
-  DevClientOutputDir,
-  DevCssFilenameTemplate,
-  DevJsFilenameTemplate,
-  DevServerOutputDir,
+  type Environment,
+  EnvironmentConfig,
   ServerEntryName,
 } from './contract';
 
@@ -69,9 +63,7 @@ export const guardBrowserModule = ({ request }: ExternalsRequest): false => {
   return false;
 };
 
-type CompilationMode = 'development' | 'production';
-
-const makeSwcRule = (target: 'browser' | 'server', mode: CompilationMode): RuleSetRule => ({
+const makeSwcRule = (target: 'browser' | 'server', mode: Environment): RuleSetRule => ({
   test: /\.(?:js|jsx|mjs|cjs|ts|tsx|mts|cts)$/,
   type: 'javascript/auto',
   use: [
@@ -104,7 +96,7 @@ const makeSwcRule = (target: 'browser' | 'server', mode: CompilationMode): RuleS
   ],
 });
 
-const makeCssRule = (root: string, mode: CompilationMode): RuleSetRule => ({
+const makeCssRule = (root: string, mode: Environment): RuleSetRule => ({
   test: /\.css$/i,
   type: 'css/auto',
   use: [
@@ -139,16 +131,13 @@ const makeCompilationStartPlugin = (onCompilationStart: () => void) => ({
 const makeRspackConfig = (
   root: string,
   entries: RspackEntries,
-  mode: CompilationMode,
+  mode: Environment,
   devOptions?: RspackDevConfigOptions,
 ): ReadonlyArray<Configuration> => {
   const { ClientPlugin, ServerPlugin } = rspack.experiments.rsc.createPlugins();
   const { Layers } = rspack.experiments.rsc;
   const development = mode === 'development';
-  const clientOutputDir = development ? DevClientOutputDir : BuildClientOutputDir;
-  const serverOutputDir = development ? DevServerOutputDir : BuildServerOutputDir;
-  const cssFilename = development ? DevCssFilenameTemplate : BuildCssFilenameTemplate;
-  const jsFilename = development ? DevJsFilenameTemplate : BuildJsFilenameTemplate;
+  const config = EnvironmentConfig[mode];
 
   const client: Configuration = {
     context: root,
@@ -176,12 +165,12 @@ const makeRspackConfig = (
       },
     },
     output: {
-      chunkFilename: jsFilename,
+      chunkFilename: config.clientJsFilename,
       clean: !development,
-      cssChunkFilename: cssFilename,
-      cssFilename,
-      filename: jsFilename,
-      path: `${root}/${clientOutputDir}`,
+      cssChunkFilename: config.clientCssFilename,
+      cssFilename: config.clientCssFilename,
+      filename: config.clientJsFilename,
+      path: `${root}/${config.clientOutputDir}`,
       publicPath: FrameworkAssetPrefix,
     },
     plugins: [
@@ -235,18 +224,16 @@ const makeRspackConfig = (
       },
     },
     output: {
-      chunkFilename: jsFilename,
+      chunkFilename: config.serverJsFilename,
       chunkFormat: 'module',
       chunkLoading: 'import',
       clean: !development,
-      cssChunkFilename: cssFilename,
-      cssFilename,
-      filename: jsFilename,
+      filename: config.serverJsFilename,
       library: {
         type: 'module',
       },
       module: true,
-      path: `${root}/${serverOutputDir}`,
+      path: `${root}/${config.serverOutputDir}`,
       publicPath: '/',
     },
     plugins: [

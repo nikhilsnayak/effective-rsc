@@ -26,6 +26,10 @@ CSS remains in Rspack's pipeline, including Tailwind CSS v4 through `@tailwindcs
 `public/` is served at `/` by Effect `HttpStaticServer`; compiled assets are served below
 `/_ersc/assets`.
 
+Every compiled browser asset carries a content hash, so `/_ersc/assets` is served immutably from a
+build and unstored in development, where one output directory is reused across rebuilds. The
+compiled server bundle keeps a stable name instead, because `ersc start` resolves it by path.
+
 ## Development
 
 `ersc dev` watches the same browser and server compiler graphs. A successful generation atomically

@@ -24,21 +24,22 @@ test('loads every compiler asset needed by the hydrated document', async ({ page
   const scripts = [...responsesByPath.keys()].filter((pathname) => pathname.endsWith('.js'));
 
   expect(stylesheets.length).toBeGreaterThan(0);
-  if (testInfo.project.name === 'dev') {
-    expect(
-      scripts.some((pathname) => /^\/_ersc\/assets\/main\.[a-f0-9]+\.js$/.test(pathname)),
-    ).toBe(true);
-  } else {
-    expect(scripts).toContain('/_ersc/assets/main.js');
-  }
+  expect(scripts.some((pathname) => /^\/_ersc\/assets\/main\.[a-f0-9]+\.js$/.test(pathname))).toBe(
+    true,
+  );
   expect(scripts.length).toBeGreaterThan(1);
+
+  const expectedCacheControl =
+    testInfo.project.name === 'dev' ? 'no-store' : 'public, max-age=31536000, immutable';
 
   for (const [pathname, response] of responsesByPath) {
     expect(response.status()).toBe(200);
     expect((await response.body()).length).toBeGreaterThan(0);
-    expect((await response.allHeaders())['content-type']).toContain(
+    const headers = await response.allHeaders();
+    expect(headers['content-type']).toContain(
       pathname.endsWith('.css') ? 'text/css' : 'text/javascript',
     );
+    expect(headers['cache-control']).toBe(expectedCacheControl);
   }
 });
 

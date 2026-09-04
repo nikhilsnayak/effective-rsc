@@ -16,7 +16,7 @@ import PackageJson from '../../package.json' with { type: 'json' };
 import { DevChannelPath } from '../dev/channel';
 import { resolveApplicationBuild } from './build';
 import { loadServerBundle, makeRunnableHttpLayer } from './compiled-server';
-import { DevClientOutputDir, DevOutputDir } from './contract';
+import { DevOutputDir, EnvironmentConfig } from './contract';
 import { makeDevChannel } from './dev-channel';
 import { Rspack, type RspackError, type RspackWatchEvent } from './rspack';
 import { makeRspackDevConfig } from './rspack-config';
@@ -55,7 +55,8 @@ export const acquireDevGeneration = Effect.fnUntraced(function* ({
   );
   const HttpLayer = yield* makeRunnableHttpLayer({
     bundle,
-    clientOutputDir: DevClientOutputDir,
+    clientAssetsCacheControl: EnvironmentConfig.development.clientAssetsCacheControl,
+    clientOutputDir: EnvironmentConfig.development.clientOutputDir,
     hostname,
     port,
     root,

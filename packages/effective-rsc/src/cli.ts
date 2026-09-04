@@ -7,7 +7,7 @@ import * as Flag from 'effect/unstable/cli/Flag';
 
 import PackageJson from '../package.json' with { type: 'json' };
 import { loadCompiledServer, makeRunnableServerLayer } from './build/compiled-server';
-import { BuildClientOutputDir } from './build/contract';
+import { EnvironmentConfig } from './build/contract';
 import {
   ApplicationIdleTimeoutSeconds,
   DefaultApplicationHostname,
@@ -42,7 +42,8 @@ const start = Effect.fn('ersc/cli/start')(function* ({
   const bundle = yield* loadCompiledServer(root);
   const ServerLayer = yield* makeRunnableServerLayer({
     bundle,
-    clientOutputDir: BuildClientOutputDir,
+    clientAssetsCacheControl: EnvironmentConfig.production.clientAssetsCacheControl,
+    clientOutputDir: EnvironmentConfig.production.clientOutputDir,
     hostname,
     port,
     root,

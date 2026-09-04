@@ -10,6 +10,7 @@ export const ApplicationIdleTimeoutSeconds = 0;
 export class ServerConfig extends Context.Service<
   ServerConfig,
   {
+    readonly clientAssetsCacheControl: string;
     readonly clientAssetsRoot: string;
     readonly clientBootstrapScripts: ReadonlyArray<string>;
     readonly clientStylesheets: ReadonlyArray<string>;

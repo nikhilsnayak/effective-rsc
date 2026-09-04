@@ -46,6 +46,7 @@ class CurrentUser extends Context.Service<CurrentUser, { readonly name: string }
 const ServerConfigLayer = Layer.succeed(
   ServerConfig,
   ServerConfig.of({
+    clientAssetsCacheControl: 'no-store',
     clientAssetsRoot: '/tmp/ersc-test-assets',
     clientBootstrapScripts: ['/_ersc/assets/client.js'],
     clientStylesheets: [],

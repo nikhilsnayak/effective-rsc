@@ -25,6 +25,7 @@ const { ServerApplication } = await import('../../src/server/application');
 const ServerConfigLayer = Layer.succeed(
   ServerConfig,
   ServerConfig.of({
+    clientAssetsCacheControl: 'no-store',
     clientAssetsRoot: '/tmp/ersc-client',
     clientBootstrapScripts: ['/_ersc/assets/main.js'],
     clientStylesheets: [],

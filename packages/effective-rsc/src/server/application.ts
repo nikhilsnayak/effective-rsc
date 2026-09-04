@@ -34,9 +34,9 @@ import {
 const RenderersLayer = Layer.mergeAll(FlightRenderer.layer, HtmlRenderer.layer);
 
 const StaticAssetsLayer = Layer.unwrap(
-  Effect.map(ServerConfig, ({ clientAssetsRoot }) =>
+  Effect.map(ServerConfig, ({ clientAssetsCacheControl, clientAssetsRoot }) =>
     HttpStaticServer.layer({
-      cacheControl: 'no-store',
+      cacheControl: clientAssetsCacheControl,
       prefix: FrameworkAssetNamespace,
       root: clientAssetsRoot,
     }),

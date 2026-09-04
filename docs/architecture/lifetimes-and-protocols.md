@@ -57,6 +57,11 @@ requests must carry an Origin whose host matches the application host, and their
 while streaming once it exceeds the configured limit. Public assets use Effect `HttpStaticServer`;
 application HTTP routes, APIs, RPC, and global middleware share the same router and Layer.
 
+`serverLayer` binds Bun explicitly rather than through `NODE_ENV`: contextual error pages stay off,
+so a failure escaping the router cannot answer with its message and source stack, and the idle
+timeout stays off, so a stalled Suspense boundary keeps its connection. Connection deadlines belong
+to the deployment in front of the application.
+
 ## Middleware reach
 
 | Request                          | Scoped route middleware              | Scoped Server Function middleware | Native global middleware |

@@ -8,7 +8,11 @@ import * as Flag from 'effect/unstable/cli/Flag';
 import PackageJson from '../package.json' with { type: 'json' };
 import { loadCompiledServer, makeRunnableServerLayer } from './build/compiled-server';
 import { BuildClientOutputDir } from './build/contract';
-import { DefaultApplicationHostname, DefaultApplicationPort } from './server/server-config';
+import {
+  ApplicationIdleTimeoutSeconds,
+  DefaultApplicationHostname,
+  DefaultApplicationPort,
+} from './server/server-config';
 
 export class BuildModuleLoadError extends Schema.TaggedError<BuildModuleLoadError>()(
   'BuildModuleLoadError',
@@ -106,7 +110,17 @@ const runDev = Effect.fnUntraced(function* ({
     hostname,
     port,
     root: process.cwd(),
-  }).pipe(Effect.provide(BunHttpServer.layer({ hostname, port })), Effect.scoped);
+  }).pipe(
+    Effect.provide(
+      BunHttpServer.layer({
+        development: true,
+        hostname,
+        idleTimeout: ApplicationIdleTimeoutSeconds,
+        port,
+      }),
+    ),
+    Effect.scoped,
+  );
 });
 
 const devCommand = Command.make('dev', { hostname, port }).pipe(

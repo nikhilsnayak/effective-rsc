@@ -24,7 +24,7 @@ import { renderRouteTree } from '../rsc/render-route-tree';
 import { FlightRenderer } from './flight-renderer';
 import { HtmlRenderError, HtmlRenderer } from './html-renderer';
 import type { RequestOutcome } from './request-outcome';
-import { ServerConfig } from './server-config';
+import { ApplicationIdleTimeoutSeconds, ServerConfig } from './server-config';
 import {
   prepareServerFnRequest,
   type PreparedServerFnRequest,
@@ -52,10 +52,14 @@ const PublicAssetsLayer = Layer.unwrap(
   ),
 );
 
+// Bun derives `development` from NODE_ENV, which `ersc start` does not set, and its error page
+// carries the failure message and source stack.
 const BunServerLayer = Layer.unwrap(
   Effect.map(ServerConfig, ({ hostname, port }) =>
     BunHttpServer.layer({
+      development: false,
       hostname,
+      idleTimeout: ApplicationIdleTimeoutSeconds,
       port,
     }),
   ),

@@ -44,8 +44,8 @@ the current route, the refreshed Page, Layout, and Component Effects use the ren
 their Layout, Loading, and middleware ancestry.
 
 Page paths own `:parameter` segments. Mount prefixes are parameter-free. ERSC validates canonical
-paths, duplicate matcher shapes, concern identity, parameter Schema keys, and the reserved
-`/_ersc/assets` namespace. Effect HTTP remains the only runtime matcher.
+paths, duplicate matcher shapes, concern identity, parameter Schema keys, and the reserved `/_ersc`
+namespace. Effect HTTP remains the only runtime matcher.
 
 Compilation flattens the graph into destinations containing the Page, middleware, and
 Layout/Loading ancestry. A graph may be mounted at several prefixes, so every destination owns its

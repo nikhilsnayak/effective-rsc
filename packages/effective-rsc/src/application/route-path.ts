@@ -94,7 +94,9 @@ export type JoinPath<Prefix extends AbsolutePath, Path extends AbsolutePath> = P
     ? Prefix
     : `${Prefix}${Path}`;
 
-export const FrameworkAssetNamespace = '/_ersc/assets';
+export const FrameworkNamespace = '/_ersc';
+
+export const FrameworkAssetNamespace = `${FrameworkNamespace}/assets`;
 
 export const FrameworkAssetPrefix = `${FrameworkAssetNamespace}/` as const;
 
@@ -104,16 +106,9 @@ type SegmentCanMatch<Segment extends string, Expected extends string> = Segment 
     ? true
     : false;
 
-type MatchesReservedSegments<Segments extends string> =
-  Segments extends `${infer First}/${infer Rest}`
-    ? Rest extends `${infer Second}/${string}`
-      ? SegmentCanMatch<First, '_ersc'> extends true
-        ? SegmentCanMatch<Second, 'assets'>
-        : false
-      : SegmentCanMatch<First, '_ersc'> extends true
-        ? SegmentCanMatch<Rest, 'assets'>
-        : false
-    : false;
+type MatchesReservedSegments<Segments extends string> = Segments extends `${infer First}/${string}`
+  ? SegmentCanMatch<First, '_ersc'>
+  : SegmentCanMatch<Segments, '_ersc'>;
 
 export type ReservedRoutePath<Path extends AbsolutePath> = Path extends `/${infer Segments}`
   ? MatchesReservedSegments<Segments> extends true
@@ -191,9 +186,9 @@ export const validateUnreservedPath = (path: string) => {
   const segments = path.slice(1).split('/');
   const canMatch = (segment: string | undefined, expected: string) =>
     segment?.startsWith(':') === true || segment?.toLowerCase() === expected;
-  if (canMatch(segments[0], '_ersc') && canMatch(segments[1], 'assets')) {
+  if (canMatch(segments[0], '_ersc')) {
     throw new TypeError(
-      `Route "${path}" uses the framework-reserved "${FrameworkAssetNamespace}" namespace.`,
+      `Route "${path}" uses the framework-reserved "${FrameworkNamespace}" namespace.`,
     );
   }
 };

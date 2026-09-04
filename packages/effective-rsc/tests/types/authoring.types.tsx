@@ -148,12 +148,16 @@ ERSC.Routes.make().page('/users/%61', HomePage);
 // @ts-expect-error Dynamic mount prefixes are not supported.
 ERSC.Routes.make().mount('/:group', ERSC.Routes.make().page('/', HomePage));
 ERSC.make({
-  // @ts-expect-error The final application path uses the framework asset namespace.
-  routes: ERSC.Routes.make({ layout: RootLayout }).page('/_ersc/assets/example', HomePage),
+  // @ts-expect-error The final application path uses the framework namespace.
+  routes: ERSC.Routes.make({ layout: RootLayout }).page('/_ersc/dev', HomePage),
 });
 ERSC.make({
-  // @ts-expect-error A parameterized pattern can match the framework asset namespace.
-  routes: ERSC.Routes.make({ layout: RootLayout }).page('/:slug/assets', SlugPage),
+  // @ts-expect-error A parameterized pattern can match the framework namespace.
+  routes: ERSC.Routes.make({ layout: RootLayout }).page('/:slug/dev', SlugPage),
+});
+ERSC.make({
+  // @ts-expect-error The framework namespace root is reserved.
+  routes: ERSC.Routes.make({ layout: RootLayout }).page('/_ersc', HomePage),
 });
 
 const homeRoutes = ERSC.Routes.make().page('/', HomePage);

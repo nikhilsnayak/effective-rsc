@@ -135,16 +135,22 @@ describe('Routes', () => {
     ).toThrow('Routes cannot be mounted beneath parameterized path "/:group".');
     expect(() =>
       ERSC.make({
-        // @ts-expect-error Exercise runtime validation for the reserved asset namespace.
-        routes: ERSC.Routes.make({ layout: Shell }).page('/_ersc/assets/example', HomePage),
+        // @ts-expect-error Exercise runtime validation for the reserved framework namespace.
+        routes: ERSC.Routes.make({ layout: Shell }).page('/_ersc/dev', HomePage),
       }),
-    ).toThrow('uses the framework-reserved "/_ersc/assets" namespace');
+    ).toThrow('uses the framework-reserved "/_ersc" namespace');
     expect(() =>
       ERSC.make({
-        // @ts-expect-error Exercise overlap detection for a parameterized reserved route.
-        routes: ERSC.Routes.make({ layout: Shell }).page('/:slug/assets', SlugPage),
+        // @ts-expect-error Exercise overlap detection for a parameterized framework route.
+        routes: ERSC.Routes.make({ layout: Shell }).page('/:slug/dev', SlugPage),
       }),
-    ).toThrow('uses the framework-reserved "/_ersc/assets" namespace');
+    ).toThrow('uses the framework-reserved "/_ersc" namespace');
+    expect(() =>
+      ERSC.make({
+        // @ts-expect-error Exercise runtime validation for the namespace root.
+        routes: ERSC.Routes.make({ layout: Shell }).page('/_ersc', HomePage),
+      }),
+    ).toThrow('uses the framework-reserved "/_ersc" namespace');
   });
 
   it('rejects duplicate paths introduced locally or by a mount', () => {

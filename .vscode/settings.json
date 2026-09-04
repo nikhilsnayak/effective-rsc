@@ -8,15 +8,15 @@
   },
   "files.watcherExclude": {
     "**/.ersc/**": true,
-    "repos/**": true
+    "vendor/**": true
   },
   "search.exclude": {
     "**/.ersc/**": true,
-    "repos/**": true
+    "vendor/**": true
   },
-  "js/ts.preferences.autoImportFileExcludePatterns": ["repos/**"],
+  "js/ts.preferences.autoImportFileExcludePatterns": ["vendor/**"],
   "files.exclude": {
-    "repos/**": true
+    "vendor/**": true
   },
   "oxc.fmt.configPath": "oxfmt.config.ts",
   "editor.defaultFormatter": "oxc.oxc-vscode",

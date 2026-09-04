@@ -1,5 +1,5 @@
 // Adapted from rsc-html-stream by Devon Govett.
-// Copyright (c) 2024-present Devon Govett. Licensed under the MIT License; see repos/rsc-html-stream/LICENSE.
+// Copyright (c) 2024-present Devon Govett. Licensed under the MIT License; see vendor/rsc-html-stream/LICENSE.
 import { Context, Effect, Layer } from 'effect';
 
 const Encoder = new TextEncoder();

@@ -11,9 +11,9 @@
 - Read `docs/README.md` and the relevant owning documents before planning or changing framework
   behavior. Do not contradict an Accepted decision or silently resolve an Open question; surface
   the conflict instead.
-- `repos/` contains read-only references. Never edit or import from them; prefer them over web
+- `vendor/` contains read-only references. Never edit or import from them; prefer them over web
   sources.
-- Read `repos/effect/LLMS.md` before writing Effect code.
+- Read `vendor/effect/LLMS.md` before writing Effect code.
 
 ## Code
 

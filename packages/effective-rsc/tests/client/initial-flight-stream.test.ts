@@ -1,5 +1,5 @@
 // Adapted from the rsc-html-stream test suite by Devon Govett.
-// Copyright (c) 2024-present Devon Govett. Licensed under the MIT License; see repos/rsc-html-stream/LICENSE.
+// Copyright (c) 2024-present Devon Govett. Licensed under the MIT License; see vendor/rsc-html-stream/LICENSE.
 import { describe, expect, it } from '@effect/vitest';
 import { Effect } from 'effect';
 

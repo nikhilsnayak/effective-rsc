@@ -36,7 +36,7 @@ const vendors = {
     kind: 'subtree',
     repository: 'https://github.com/Effect-TS/effect.git',
     ref: 'main',
-    prefix: 'repos/effect',
+    prefix: 'vendor/effect',
     requiredPaths: ['LICENSE', 'LLMS.md', 'packages/effect/src/unstable/workflow/Workflow.ts'],
   },
   'react-server-dom-rspack': {
@@ -45,7 +45,7 @@ const vendors = {
     repository: 'https://github.com/react/react.git',
     ref: 'f148045f80fb8841f3a9b098cda2aeaa7a20bb69',
     sourcePath: 'packages/react-server-dom-rspack',
-    prefix: 'repos/react-server-dom-rspack',
+    prefix: 'vendor/react-server-dom-rspack',
     requiredPaths: [
       'LICENSE',
       'package.json',
@@ -59,7 +59,7 @@ const vendors = {
     repository: 'https://github.com/rstackjs/rstack-examples.git',
     ref: 'main',
     sourcePath: 'rspack/rspack-rsc',
-    prefix: 'repos/rspack-rsc',
+    prefix: 'vendor/rspack-rsc',
     requiredPaths: [
       'LICENSE',
       'README.md',
@@ -74,7 +74,7 @@ const vendors = {
     repository: 'https://github.com/rstackjs/rsbuild-plugin-rsc.git',
     ref: 'main',
     sourcePath: '.',
-    prefix: 'repos/rsbuild-plugin-rsc',
+    prefix: 'vendor/rsbuild-plugin-rsc',
     requiredPaths: [
       'package.json',
       'src/index.ts',
@@ -88,7 +88,7 @@ const vendors = {
     repository: 'https://github.com/vitejs/vite-plugin-react.git',
     ref: 'main',
     sourcePath: 'packages/plugin-rsc',
-    prefix: 'repos/vite-plugin-rsc',
+    prefix: 'vendor/vite-plugin-rsc',
     requiredPaths: [
       'LICENSE',
       'package.json',
@@ -102,7 +102,7 @@ const vendors = {
     repository: 'https://github.com/devongovett/rsc-html-stream.git',
     ref: 'main',
     sourcePath: '.',
-    prefix: 'repos/rsc-html-stream',
+    prefix: 'vendor/rsc-html-stream',
     requiredPaths: ['LICENSE', 'package.json', 'client.js', 'server.js', 'test.js'],
   },
   'cosmos-rsc': {
@@ -110,7 +110,7 @@ const vendors = {
     repository: 'https://github.com/nikhilsnayak/cosmos-rsc.git',
     ref: 'main',
     sourcePath: '.',
-    prefix: 'repos/cosmos-rsc',
+    prefix: 'vendor/cosmos-rsc',
     requiredPaths: [
       'package.json',
       'core/build/webpack.config.js',
@@ -137,7 +137,7 @@ const vendors = {
         destinationPath: 'shared/lib',
       },
     ],
-    prefix: 'repos/next.js',
+    prefix: 'vendor/next.js',
     requiredPaths: [
       'LICENSE',
       'server/app-render/app-render.tsx',
@@ -151,7 +151,7 @@ const vendors = {
     repository: 'https://github.com/twofold-rsc/twofold.git',
     ref: 'main',
     sourcePath: 'packages',
-    prefix: 'repos/twofold',
+    prefix: 'vendor/twofold',
     requiredPaths: [
       'framework/package.json',
       'framework/src/backend/runtime/page-request.ts',
@@ -166,7 +166,7 @@ const vendors = {
     repository: 'https://github.com/wakujs/waku.git',
     ref: 'main',
     sourcePath: 'packages/waku',
-    prefix: 'repos/waku',
+    prefix: 'vendor/waku',
     requiredPaths: [
       'LICENSE',
       'package.json',
@@ -338,7 +338,7 @@ type VendorLock = Record<
 >;
 
 const updateVendorLock = async (name: string, vendor: Vendor, commit: string, root: string) => {
-  const lockPath = join(root, 'repos/.vendor-lock.json');
+  const lockPath = join(root, 'vendor/.vendor-lock.json');
   const lockFile = Bun.file(lockPath);
   const lock: VendorLock = (await lockFile.exists()) ? await lockFile.json() : {};
 
@@ -354,12 +354,12 @@ const updateVendorLock = async (name: string, vendor: Vendor, commit: string, ro
 };
 
 const commitSubtreeVendorLock = async (name: string, root: string, headBeforeSync: string) => {
-  if ((await run(['git', 'add', '--', 'repos/.vendor-lock.json'], root)) !== 0) {
+  if ((await run(['git', 'add', '--', 'vendor/.vendor-lock.json'], root)) !== 0) {
     throw new Error(`Could not stage the ${name} vendor lock update.`);
   }
 
   const staged = await run(
-    ['git', 'diff', '--cached', '--quiet', '--', 'repos/.vendor-lock.json'],
+    ['git', 'diff', '--cached', '--quiet', '--', 'vendor/.vendor-lock.json'],
     root,
   );
   if (staged === 0) {

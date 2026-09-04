@@ -30,5 +30,5 @@
       }
     ]
   },
-  "exclude": ["repos"]
+  "exclude": ["vendor"]
 }

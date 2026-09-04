@@ -18,8 +18,11 @@ vi.mock('react-server-dom-rspack/client.browser', () => ({
 }));
 
 import { FlightClient } from '../../src/client/flight-client';
+import { InitialFlightStream } from '../../src/client/initial-flight-stream';
 import { NavigationApi } from '../../src/client/navigation-api';
 import { RouteLoader } from '../../src/client/route-loader';
+
+const FlightClientLayer = FlightClient.layer.pipe(Layer.provide(InitialFlightStream.layer));
 
 const makeRouteTree = (id: string): RouteTreeModel => ({
   child: null,
@@ -97,7 +100,7 @@ const makeRouteLoader = Effect.fnUntraced(function* (
         }),
       });
     }),
-  ).pipe(Layer.provide(FlightClient.layer));
+  ).pipe(Layer.provide(FlightClientLayer));
   const routeLoaderLayer = RouteLoader.layer.pipe(
     Layer.provide(flightClientLayer),
     Layer.provide(makeNavigationApiLayer(navigationHistory)),

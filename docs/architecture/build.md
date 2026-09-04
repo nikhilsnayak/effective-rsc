@@ -27,8 +27,10 @@ CSS remains in Rspack's pipeline, including Tailwind CSS v4 through `@tailwindcs
 `/_ersc/assets`.
 
 Every compiled browser asset carries a content hash, so `/_ersc/assets` is served immutably from a
-build and unstored in development, where one output directory is reused across rebuilds. The
-compiled server bundle keeps a stable name instead, because `ersc start` resolves it by path.
+build and unstored in development, where one output directory is reused across rebuilds. Requests
+for these compiler-owned assets skip the per-request logger; public assets and application routes
+remain logged. The compiled server bundle keeps a stable name instead, because `ersc start`
+resolves it by path.
 
 ## Development
 

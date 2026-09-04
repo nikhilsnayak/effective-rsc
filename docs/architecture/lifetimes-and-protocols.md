@@ -35,7 +35,7 @@ rules.
 | ------------------------------------ | ----------------------------------- | ---------------------------------------------------------------- |
 | Route matching and native middleware | Effect HTTP                         | Compile authored routes and preserve native semantics            |
 | RSC and Server Functions             | React and `react-server-dom-rspack` | Add Effect execution, Schema decoding, and lifecycle wiring      |
-| HTML rendering                       | React Fizz and `rsc-html-stream`    | Tee Flight, surface pre-shell failure, and own stream finalizers |
+| HTML rendering                       | React Fizz and ERSC Flight injector | Tee Flight, surface pre-shell failure, and own stream finalizers |
 | Browser navigation                   | Navigation API                      | Coordinate visible commit, completion, cancellation, and cache   |
 | Application resources                | Effect Layer                        | Build once and release at server shutdown                        |
 
@@ -53,14 +53,15 @@ rules.
 ## HTTP policy
 
 Page requests vary on the headers used for Flight and HTML negotiation. Server Function browser
-requests must carry an Origin whose host matches the application host, and their body is rejected
-while streaming once it exceeds the configured limit. Public assets use Effect `HttpStaticServer`;
-application HTTP routes, APIs, RPC, and global middleware share the same router and Layer.
+requests must carry an Origin whose host matches the application host. Bun rejects any request body
+larger than 10 MiB before it reaches framework routing, so Server Function input is bounded before
+React decodes it. Public assets use Effect `HttpStaticServer`; application HTTP routes, APIs, RPC,
+and global middleware share the same router and Layer.
 
 `serverLayer` binds Bun explicitly rather than through `NODE_ENV`: contextual error pages stay off,
 so a failure escaping the router cannot answer with its message and source stack, and the idle
-timeout stays off, so a stalled Suspense boundary keeps its connection. Connection deadlines belong
-to the deployment in front of the application.
+timeout stays off, so a stalled Suspense boundary keeps its connection. The server-wide request
+body limit is 10 MiB. Connection deadlines belong to the deployment in front of the application.
 
 ## Middleware reach
 

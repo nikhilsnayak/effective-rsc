@@ -38,9 +38,12 @@ import { BrowserEffectRunner } from '../../src/client/browser-effect-runner';
 import { BrowserRenderer } from '../../src/client/browser-renderer';
 import { installClientRouter } from '../../src/client/client-router';
 import { FlightClient } from '../../src/client/flight-client';
+import { InitialFlightStream } from '../../src/client/initial-flight-stream';
 import { NavigationApi } from '../../src/client/navigation-api';
 import { RouteLoader, type RouteLoad } from '../../src/client/route-loader';
 import type { RouteTreeModel } from '../../src/rsc/route-tree';
+
+const FlightClientLayer = FlightClient.layer.pipe(Layer.provide(InitialFlightStream.layer));
 
 type TestNavigateEvent = Event &
   Pick<
@@ -344,7 +347,7 @@ const listen = (
           }),
         });
       }),
-    ).pipe(Layer.provide(FlightClient.layer));
+    ).pipe(Layer.provide(FlightClientLayer));
     const routeLoaderLayer = RouteLoader.layer.pipe(
       Layer.provide(flightClientLayer),
       Layer.provide(navigationApiLayer),

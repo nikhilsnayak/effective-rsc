@@ -7,6 +7,10 @@ export const DefaultApplicationHostname = 'localhost';
 // ten seconds. Connection deadlines belong to the deployment's proxy.
 export const ApplicationIdleTimeoutSeconds = 0;
 
+// Bun rejects oversized bodies before they reach the framework router or React's Server Function
+// decoder.
+export const ApplicationMaxRequestBodySizeBytes = 10 * 1024 * 1024;
+
 export class ServerConfig extends Context.Service<
   ServerConfig,
   {

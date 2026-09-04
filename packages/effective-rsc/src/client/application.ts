@@ -9,6 +9,7 @@ import { showBrowserFailure } from './browser-screen';
 import { installCallServer } from './call-server';
 import { installClientRouter } from './client-router';
 import { FlightClient } from './flight-client';
+import { InitialFlightStream } from './initial-flight-stream';
 import { NavigationApi } from './navigation-api';
 import { ReactDOMRenderer } from './react-dom-renderer';
 import { RouteLoader } from './route-loader';
@@ -19,7 +20,7 @@ const BrowserServicesLayer = Layer.mergeAll(
   BrowserRenderer.layer,
   FlightClient.layer,
   NavigationApi.layer,
-);
+).pipe(Layer.provide(InitialFlightStream.layer));
 
 const BrowserLayer = Layer.mergeAll(
   ReactDOMRenderer.layer,

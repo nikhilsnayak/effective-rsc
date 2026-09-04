@@ -2,10 +2,10 @@ import { Context, Effect, FiberSet, Layer, Schema, type Scope } from 'effect';
 import { use } from 'react';
 import { renderToReadableStream } from 'react-dom/server.bun';
 import { createFromReadableStream } from 'react-server-dom-rspack/client';
-import { injectRSCPayload } from 'rsc-html-stream/server';
 
 import { RouteTree } from '../client/route-tree';
 import type { FlightPayload } from '../rsc/flight';
+import { FlightHtmlInjector } from './flight-html-stream';
 import type { FlightRender } from './flight-renderer';
 import { ServerConfig } from './server-config';
 
@@ -20,6 +20,7 @@ export class HtmlRenderer extends Context.Service<HtmlRenderer>()(
   {
     make: Effect.gen(function* () {
       const { clientBootstrapScripts, clientStylesheets } = yield* ServerConfig;
+      const flightHtmlInjector = yield* FlightHtmlInjector;
 
       return {
         render: Effect.fn('HtmlRenderer.render')(function* ({
@@ -66,7 +67,7 @@ export class HtmlRenderer extends Context.Service<HtmlRenderer>()(
             catch: (cause) => new HtmlRenderError({ cause }),
           });
 
-          return htmlStream.pipeThrough(injectRSCPayload(browserFlightStream));
+          return htmlStream.pipeThrough(flightHtmlInjector.inject(browserFlightStream));
         }),
       };
     }),

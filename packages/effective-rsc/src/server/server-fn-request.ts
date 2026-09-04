@@ -16,33 +16,26 @@ import type { RequestOutcome } from './request-outcome';
 import { serverFnOutcome } from './server-fn-outcome';
 
 const ServerFnArraySizeLimit = 10_000;
-const ServerFnBodySizeLimit = 10 * 1024 * 1024;
-const ServerFnBodySizeLimitLabel = `${ServerFnBodySizeLimit / 1024 / 1024} MiB`;
 const NoMiddleware = Object.freeze([]);
-
-type StreamingRequestInit = RequestInit & { readonly duplex: 'half' };
 
 export class ServerFnRequestError extends Schema.TaggedError<ServerFnRequestError>()(
   'ServerFnRequestError',
   {
     cause: Schema.Defect(),
     message: Schema.String,
-    status: Schema.Literals([400, 403, 413, 500]),
+    status: Schema.Literals([400, 403, 500]),
   },
 ) {}
-
-const isServerFnRequestError = Schema.is(ServerFnRequestError);
 
 class ServerFnExecutionError extends Schema.TaggedError<ServerFnExecutionError>()(
   'ServerFnExecutionError',
   { cause: Schema.Defect() },
 ) {}
 
-const requestError = (message: string, status: 400 | 403 | 413 | 500, cause: unknown) =>
+const requestError = (message: string, status: 400 | 403 | 500, cause: unknown) =>
   new ServerFnRequestError({ cause, message, status });
 
-const bodyReadError = (message: string, cause: unknown) =>
-  isServerFnRequestError(cause) ? cause : requestError(message, 400, cause);
+const bodyReadError = (message: string, cause: unknown) => requestError(message, 400, cause);
 
 const normalizeServerFnFailure = <Output, Error, Services>(
   effect: Effect.Effect<Output, Error, Services>,
@@ -81,53 +74,6 @@ const validateOrigin = (request: HttpServerRequest.HttpServerRequest) =>
     },
     catch: (cause) => requestError('Rejected a cross-origin Server Function request.', 403, cause),
   });
-
-const limitRequestBody = Effect.fnUntraced(function* (
-  request: HttpServerRequest.HttpServerRequest,
-) {
-  const signal = yield* Effect.abortSignal;
-  const webRequest = yield* HttpServerRequest.toWeb(request, { signal });
-  const contentLength = Number(request.headers['content-length']);
-  if (Number.isFinite(contentLength) && contentLength > ServerFnBodySizeLimit) {
-    return yield* requestError(
-      `The Server Function request body exceeds the ${ServerFnBodySizeLimitLabel} limit.`,
-      413,
-      new Error(`Content-Length is ${contentLength} bytes.`),
-    );
-  }
-
-  if (webRequest.body === null) {
-    return new Request(webRequest, { signal });
-  }
-
-  let bodySize = 0;
-  const body = webRequest.body.pipeThrough(
-    new TransformStream<Uint8Array, Uint8Array>({
-      transform(chunk, controller) {
-        bodySize += chunk.byteLength;
-        if (bodySize > ServerFnBodySizeLimit) {
-          controller.error(
-            requestError(
-              `The Server Function request body exceeds the ${ServerFnBodySizeLimitLabel} limit.`,
-              413,
-              new Error(`Received more than ${ServerFnBodySizeLimit} bytes.`),
-            ),
-          );
-          return;
-        }
-        controller.enqueue(chunk);
-      },
-    }),
-  );
-  const requestInit: StreamingRequestInit = {
-    body,
-    duplex: 'half',
-    method: 'POST',
-    signal,
-  };
-
-  return new Request(webRequest, requestInit);
-});
 
 const readBody = Effect.fnUntraced(function* (request: Request) {
   if (request.headers.get('content-type')?.toLowerCase().startsWith('multipart/form-data')) {
@@ -260,7 +206,8 @@ export const prepareServerFnRequest = Effect.fnUntraced(function* <Services>(
   identity: ERSCIdentity<Services>,
 ) {
   yield* validateOrigin(request);
-  const webRequest = yield* limitRequestBody(request);
+  const signal = yield* Effect.abortSignal;
+  const webRequest = yield* HttpServerRequest.toWeb(request, { signal });
   const actionId = request.headers[ServerFnIdHeader];
   const prepareRequest =
     actionId === undefined

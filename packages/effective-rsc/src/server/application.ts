@@ -21,17 +21,24 @@ import type { CompiledDestination } from '../application/route-graph';
 import { FrameworkAssetNamespace, isAbsolutePath } from '../application/route-path';
 import { FlightMediaType } from '../rsc/flight';
 import { renderRouteTree } from '../rsc/render-route-tree';
+import { FlightHtmlInjector } from './flight-html-stream';
 import { FlightRenderer } from './flight-renderer';
 import { HtmlRenderError, HtmlRenderer } from './html-renderer';
 import type { RequestOutcome } from './request-outcome';
-import { ApplicationIdleTimeoutSeconds, ServerConfig } from './server-config';
+import {
+  ApplicationIdleTimeoutSeconds,
+  ApplicationMaxRequestBodySizeBytes,
+  ServerConfig,
+} from './server-config';
 import {
   prepareServerFnRequest,
   type PreparedServerFnRequest,
   type ServerFnRequestFailure,
 } from './server-fn-request';
 
-const RenderersLayer = Layer.mergeAll(FlightRenderer.layer, HtmlRenderer.layer);
+const RenderersLayer = Layer.mergeAll(FlightRenderer.layer, HtmlRenderer.layer).pipe(
+  Layer.provide(FlightHtmlInjector.layer),
+);
 
 const StaticAssetsLayer = Layer.unwrap(
   Effect.map(ServerConfig, ({ clientAssetsCacheControl, clientAssetsRoot }) =>
@@ -39,7 +46,7 @@ const StaticAssetsLayer = Layer.unwrap(
       cacheControl: clientAssetsCacheControl,
       prefix: FrameworkAssetNamespace,
       root: clientAssetsRoot,
-    }),
+    }).pipe(Layer.provide(HttpRouter.disableLogger)),
   ),
 );
 
@@ -60,6 +67,7 @@ const BunServerLayer = Layer.unwrap(
       development: false,
       hostname,
       idleTimeout: ApplicationIdleTimeoutSeconds,
+      maxRequestBodySize: ApplicationMaxRequestBodySizeBytes,
       port,
     }),
   ),

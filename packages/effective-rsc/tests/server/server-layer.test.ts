@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from '@effect/vitest';
 import { Effect, Layer } from 'effect';
 
 import { Application } from '../../src/application/ersc';
-import { ServerConfig } from '../../src/server/server-config';
+import { ApplicationMaxRequestBodySizeBytes, ServerConfig } from '../../src/server/server-config';
 
 const serveLayer = vi.fn((_options: unknown) => Layer.empty);
 
@@ -73,6 +73,17 @@ describe('ServerApplication.serverLayer', () => {
       yield* buildServerLayer;
 
       expect(serveLayer.mock.calls[0]?.[0]).toMatchObject({ idleTimeout: 0 });
+    }),
+  );
+
+  it.effect('configures Bun to reject oversized request bodies', () =>
+    Effect.gen(function* () {
+      serveLayer.mockClear();
+      yield* buildServerLayer;
+
+      expect(serveLayer.mock.calls[0]?.[0]).toMatchObject({
+        maxRequestBodySize: ApplicationMaxRequestBodySizeBytes,
+      });
     }),
   );
 });

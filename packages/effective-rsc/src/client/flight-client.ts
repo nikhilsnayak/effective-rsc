@@ -5,9 +5,9 @@ import {
   createFromReadableStream,
   type TemporaryReferenceSet,
 } from 'react-server-dom-rspack/client.browser';
-import { rscStream } from 'rsc-html-stream/client';
 
 import { FlightMediaType, ServerFnIdHeader, type FlightPayload } from '../rsc/flight';
+import { InitialFlightStream } from './initial-flight-stream';
 
 export class FlightLoadError extends Schema.TaggedError<FlightLoadError>()('FlightLoadError', {
   cause: Schema.Defect(),
@@ -46,10 +46,11 @@ type DocumentResource = {
 export class FlightClient extends Context.Service<FlightClient>()('ersc/client/FlightClient', {
   make: Effect.gen(function* () {
     const httpClient = yield* HttpClient.HttpClient;
+    const initialFlight = yield* InitialFlightStream;
 
     const loadInitial = Effect.gen(function* () {
       const completed = Promise.withResolvers<void>();
-      const stream = rscStream.pipeThrough(
+      const stream = initialFlight.stream.pipeThrough(
         new TransformStream({
           flush: () => completed.resolve(),
           transform: (chunk, controller) => controller.enqueue(chunk),

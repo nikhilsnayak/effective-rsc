@@ -78,7 +78,6 @@
         "@rspack/plugin-react-refresh": "2.0.2",
         "@tailwindcss/webpack": "4.3.3",
         "react-refresh": "0.18.0",
-        "rsc-html-stream": "0.0.8",
       },
       "devDependencies": {
         "@base-ui/react": "catalog:",
@@ -612,8 +611,6 @@
     "rolldown": ["rolldown@1.2.5", "", { "dependencies": { "@oxc-project/types": "=0.146.0", "@rolldown/pluginutils": "^1.0.0" }, "optionalDependencies": { "@rolldown/binding-android-arm-eabi": "1.2.5", "@rolldown/binding-android-arm64": "1.2.5", "@rolldown/binding-darwin-arm64": "1.2.5", "@rolldown/binding-darwin-x64": "1.2.5", "@rolldown/binding-freebsd-x64": "1.2.5", "@rolldown/binding-linux-arm-gnueabihf": "1.2.5", "@rolldown/binding-linux-arm64-gnu": "1.2.5", "@rolldown/binding-linux-arm64-musl": "1.2.5", "@rolldown/binding-linux-ppc64-gnu": "1.2.5", "@rolldown/binding-linux-s390x-gnu": "1.2.5", "@rolldown/binding-linux-x64-gnu": "1.2.5", "@rolldown/binding-linux-x64-musl": "1.2.5", "@rolldown/binding-openharmony-arm64": "1.2.5", "@rolldown/binding-win32-arm64-msvc": "1.2.5", "@rolldown/binding-win32-x64-msvc": "1.2.5" }, "bin": { "rolldown": "./bin/cli.mjs" } }, "sha512-VD2IE5PUG4Oj8zz2VGykiYd5wbnjdIiSsNQb8Qu5B+noEp+A78mu2iVvpp27g8es14Tk9rofNs5Tku9iQCS4fA=="],
 
     "rsbuild-plugin-dts": ["rsbuild-plugin-dts@1.0.0-rc.2", "", { "dependencies": { "@ast-grep/napi": "0.45.1" }, "peerDependencies": { "@microsoft/api-extractor": "^7", "@rsbuild/core": "^2.0.0", "typescript": "^5 || ^6 || ^7" }, "optionalPeers": ["@microsoft/api-extractor", "typescript"] }, "sha512-Mqalmu3j7UcDLUl3O5Y502V5Id6cbKyNn/nUxQIxar7gK2KjdPyw58WRfMQ7/4r4oHmeBeIgeSCb50M648ysoA=="],
-
-    "rsc-html-stream": ["rsc-html-stream@0.0.8", "", {}, "sha512-5wSLqZmmxqVYV/70Ueq2XMw0NRPeTeUlUCxA+CEdDqE/IGDXG8EOUOjENzC3WYwWkeYSAI8ZrWbpIhPRK4UuRw=="],
 
     "scheduler": ["scheduler@0.28.0-canary-a1124489-20260826", "", {}, "sha512-4A1cEyZlH9w6WTY/CHBJjBwrjOjp5oxncD8SlQNOuUvBfwL5405gENnOLuX57cYKR1jcJCZakMvcSwWagxNhDQ=="],
 

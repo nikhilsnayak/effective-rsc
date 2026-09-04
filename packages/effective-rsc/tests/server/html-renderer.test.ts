@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from '@effect/vitest';
-import { Effect, Exit, Logger, Scope } from 'effect';
+import { Effect, Exit, Layer, Logger, Scope } from 'effect';
 import { Children, Fragment, isValidElement, type ReactNode } from 'react';
 import type { ReactFormState } from 'react-dom/client';
 import type { RenderToReadableStreamOptions } from 'react-dom/server';
 
 import type { FlightPayload } from '../../src/rsc/flight';
+import { FlightHtmlInjector } from '../../src/server/flight-html-stream';
 import type { FlightRender } from '../../src/server/flight-renderer';
 import { ServerConfig } from '../../src/server/server-config';
 
@@ -51,11 +52,12 @@ vi.doMock('react-server-dom-rspack/client', () => ({
 vi.doMock('react-dom/server.bun', () => ({
   renderToReadableStream: renderDocument,
 }));
-vi.doMock('rsc-html-stream/server', () => ({
-  injectRSCPayload: injectPayload,
-}));
-
 const { HtmlRenderError, HtmlRenderer } = await import('../../src/server/html-renderer');
+const FlightHtmlInjectorTestLayer = FlightHtmlInjector.layerTest({ inject: injectPayload });
+const HtmlRendererTestLayer = HtmlRenderer.layer.pipe(
+  Layer.provide(FlightHtmlInjectorTestLayer),
+  Layer.provide(Layer.succeed(ServerConfig, serverConfig)),
+);
 
 beforeEach(() => {
   decodeFlight.mockClear();
@@ -112,11 +114,7 @@ describe('HtmlRenderer', () => {
       renderOptions?.onError?.(renderError, { componentStack: '\n    at Page' });
       yield* Effect.promise(() => logged.promise);
       expect(logs).toEqual([['HTML render failed.', renderError, '\n    at Page']]);
-    }).pipe(
-      Effect.withLogger(logger),
-      Effect.provide(HtmlRenderer.layer),
-      Effect.provideService(ServerConfig, serverConfig),
-    );
+    }).pipe(Effect.withLogger(logger), Effect.provide(HtmlRendererTestLayer));
   });
 
   it.effect('maps a pre-shell Fizz rejection to HtmlRenderError', () => {
@@ -136,7 +134,7 @@ describe('HtmlRenderer', () => {
       expect(error).toBeInstanceOf(HtmlRenderError);
       expect(error.cause).toBe(shellFailure);
       expect(injectPayload).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(HtmlRenderer.layer), Effect.provideService(ServerConfig, serverConfig));
+    }).pipe(Effect.provide(HtmlRendererTestLayer));
   });
 
   it.effect('does not log an expected render error after its request scope aborts', () => {
@@ -161,11 +159,7 @@ describe('HtmlRenderer', () => {
       onError?.(new Error('request aborted'), { componentStack: '\n    at Page' });
 
       expect(logs).toEqual([]);
-    }).pipe(
-      Effect.withLogger(logger),
-      Effect.provide(HtmlRenderer.layer),
-      Effect.provideService(ServerConfig, serverConfig),
-    );
+    }).pipe(Effect.withLogger(logger), Effect.provide(HtmlRendererTestLayer));
   });
 
   it.effect('does not log an expected error from an aborted Flight render', () => {
@@ -189,10 +183,6 @@ describe('HtmlRenderer', () => {
       });
 
       expect(logs).toEqual([]);
-    }).pipe(
-      Effect.withLogger(logger),
-      Effect.provide(HtmlRenderer.layer),
-      Effect.provideService(ServerConfig, serverConfig),
-    );
+    }).pipe(Effect.withLogger(logger), Effect.provide(HtmlRendererTestLayer));
   });
 });

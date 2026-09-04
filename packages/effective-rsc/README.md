@@ -218,11 +218,12 @@ is the complete application example.
   [react-server-dom-rspack](https://www.npmjs.com/package/react-server-dom-rspack) provide native
   RSC compilation and transport. Special thanks to [Cong-Cong Pan](https://github.com/SyMind) for
   their work on Rspack's RSC implementation.
-- [rsc-html-stream](https://github.com/devongovett/rsc-html-stream) by
-  [Devon Govett](https://x.com/devongovett) embeds Flight in streamed HTML.
 
 ### Prior art
 
+- [rsc-html-stream](https://github.com/devongovett/rsc-html-stream) by
+  [Devon Govett](https://x.com/devongovett) established the compact streamed-HTML Flight embedding
+  shape adapted by ERSC's injector.
 - [Next.js](https://github.com/vercel/next.js) is a reference for production RSC conventions and
   protocol behavior.
 - [Waku](https://github.com/wakujs/waku) by [Daishi Kato](https://x.com/dai_shi) and

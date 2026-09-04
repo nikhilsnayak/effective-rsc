@@ -2,8 +2,13 @@ import * as BunFileSystem from '@effect/platform-bun/BunFileSystem';
 import * as BunHttpPlatform from '@effect/platform-bun/BunHttpPlatform';
 import * as BunPath from '@effect/platform-bun/BunPath';
 import { describe, expect, it, vi } from '@effect/vitest';
-import { Context, Effect, Layer, Schema } from 'effect';
-import { HttpRouter, HttpServerRequest, HttpServerResponse } from 'effect/unstable/http';
+import { Context, Effect, FileSystem, Layer, Logger, Path, Schema } from 'effect';
+import {
+  HttpMiddleware,
+  HttpRouter,
+  HttpServerRequest,
+  HttpServerResponse,
+} from 'effect/unstable/http';
 
 import { Application } from '../../src/application/ersc';
 import { ServerFnIdHeader } from '../../src/rsc/flight';
@@ -58,7 +63,6 @@ const ServerConfigLayer = Layer.succeed(
 
 const Origin = 'http://effective-rsc.test';
 const ProtectedUrl = `${Origin}/protected`;
-const MaximumBodyBytes = 10 * 1024 * 1024;
 
 type Harness = {
   readonly call: (input: Request) => Effect.Effect<Response>;
@@ -66,7 +70,11 @@ type Harness = {
   readonly events: Array<string>;
 };
 
-const makeHttpLayer = (counters: Harness['counters'], events: Harness['events']) => {
+const makeHttpLayer = (
+  counters: Harness['counters'],
+  events: Harness['events'],
+  serverConfigLayer = ServerConfigLayer,
+) => {
   const ERSC = Application.ersc<RequestTrace>();
   const Outer = ERSC.Middleware.make((httpEffect) =>
     Effect.gen(function* () {
@@ -179,7 +187,7 @@ const makeHttpLayer = (counters: Harness['counters'], events: Harness['events'])
   });
 
   return ServerApplication.httpLayer(App).pipe(
-    Layer.provide(ServerConfigLayer),
+    Layer.provide(serverConfigLayer),
     Layer.provide(Layer.mergeAll(BunFileSystem.layer, BunHttpPlatform.layer, BunPath.layer)),
   );
 };
@@ -232,6 +240,61 @@ const progressiveServerFnRequest = (body: FormData) =>
   });
 
 describe('ServerApplication.httpLayer', () => {
+  it.effect('disables request logging for compiled assets only', () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const clientAssetsRoot = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: 'ersc-client-assets-',
+      });
+      const publicAssetsRoot = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: 'ersc-public-assets-',
+      });
+      yield* fileSystem.writeFileString(path.join(clientAssetsRoot, 'client.js'), 'client');
+
+      const logs: Array<unknown> = [];
+      const logger = Logger.make<unknown, void>(({ message }) => {
+        logs.push(message);
+      });
+      const counters = { acquisitions: 0, globalRequests: 0 };
+      const events: Array<string> = [];
+      const serverConfigLayer = Layer.succeed(
+        ServerConfig,
+        ServerConfig.of({
+          clientAssetsCacheControl: 'public, max-age=31536000, immutable',
+          clientAssetsRoot,
+          clientBootstrapScripts: ['/_ersc/assets/client.js'],
+          clientStylesheets: [],
+          hostname: 'localhost',
+          port: 18193,
+          publicAssetsRoot,
+        }),
+      );
+      const { dispose, handler } = HttpRouter.toWebHandler(
+        makeHttpLayer(counters, events, serverConfigLayer),
+        {
+          disableLogger: true,
+          middleware: (httpEffect) =>
+            HttpMiddleware.logger(httpEffect).pipe(Effect.withLogger(logger)),
+        },
+      );
+
+      yield* Effect.addFinalizer(() => Effect.promise(dispose));
+
+      const assetResponse = yield* Effect.promise(() =>
+        handler(new Request(`${Origin}/_ersc/assets/client.js`)),
+      );
+      const assetBody = yield* Effect.promise(() => assetResponse.text());
+      expect(assetResponse.status).toBe(200);
+      expect(assetBody).toBe('client');
+      expect(logs).toEqual([]);
+
+      const apiResponse = yield* Effect.promise(() => handler(new Request(`${Origin}/api/health`)));
+      expect(apiResponse.status).toBe(200);
+      expect(logs).toEqual([['Sent HTTP response']]);
+    }).pipe(Effect.provide(Layer.merge(BunFileSystem.layer, BunPath.layer)), Effect.scoped),
+  );
+
   it.effect('prefers an application root Page over the public asset fallback', () =>
     withHarness(({ call, events }) =>
       Effect.gen(function* () {
@@ -335,42 +398,6 @@ describe('ServerApplication.httpLayer', () => {
 
         expect(response.status).toBe(400);
         expect(decodeReply).toHaveBeenCalledTimes(1);
-      }),
-    ),
-  );
-
-  it.effect('rejects Server Function bodies over the limit before React decodes them', () =>
-    withHarness(({ call }) =>
-      Effect.gen(function* () {
-        const knownOversized = yield* call(
-          serverFnRequest('known-oversized', {
-            headers: { 'content-length': String(MaximumBodyBytes + 1) },
-          }),
-        );
-        expect(knownOversized.status).toBe(413);
-
-        const chunk = new Uint8Array(64 * 1024);
-        let chunksRemaining = 161;
-        const streamingBody = new ReadableStream<Uint8Array>({
-          pull(controller) {
-            if (chunksRemaining === 0) {
-              controller.close();
-              return;
-            }
-            chunksRemaining -= 1;
-            controller.enqueue(chunk);
-          },
-        });
-        const streamingInit: ServerFnRequestOptions & { readonly duplex: 'half' } = {
-          body: streamingBody,
-          duplex: 'half',
-        };
-        const streamingOversized = yield* call(
-          serverFnRequest('streaming-oversized', streamingInit),
-        );
-
-        expect(streamingOversized.status).toBe(413);
-        expect(decodeReply).not.toHaveBeenCalled();
       }),
     ),
   );

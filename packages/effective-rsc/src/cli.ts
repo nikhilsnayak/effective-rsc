@@ -10,6 +10,7 @@ import { loadCompiledServer, makeRunnableServerLayer } from './build/compiled-se
 import { EnvironmentConfig } from './build/contract';
 import {
   ApplicationIdleTimeoutSeconds,
+  ApplicationMaxRequestBodySizeBytes,
   DefaultApplicationHostname,
   DefaultApplicationPort,
 } from './server/server-config';
@@ -117,6 +118,7 @@ const runDev = Effect.fnUntraced(function* ({
         development: true,
         hostname,
         idleTimeout: ApplicationIdleTimeoutSeconds,
+        maxRequestBodySize: ApplicationMaxRequestBodySizeBytes,
         port,
       }),
     ),

@@ -52,6 +52,8 @@ services. The channel accepts only WebSocket handshakes whose `Origin` matches t
 
 Development diagnostics start independently of hydration. Current-route refresh initially reloads
 the document; successful client-navigation activation replaces it with streamed RSC refresh.
+The initial successful socket snapshot reconciles when its hash differs from the loaded browser
+bundle.
 
 React Server Components Performance Tracks remain native. Initial hydration uses the document
 timeline origin; navigation and Server Function decoding receive a timestamp captured before HTTP

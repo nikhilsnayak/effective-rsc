@@ -9,6 +9,8 @@ import { cn } from '@/lib/utils';
 import type { FixtureMetadata, ObservedQuery } from '@/modules/fixture/model';
 import { FixtureService } from '@/modules/fixture/service';
 
+import RuntimeProbe from './runtime-probe';
+
 type FixtureHomeProps = {
   readonly fixture: ObservedQuery<FixtureMetadata>;
 };
@@ -51,6 +53,7 @@ function FixtureHomeView({ fixture }: FixtureHomeProps) {
         </div>
       </header>
 
+      <RuntimeProbe />
       <section className='grid gap-4 py-9 sm:grid-cols-2' aria-label='Fixture route groups'>
         {groups.map((group) => (
           <Card key={group.href}>

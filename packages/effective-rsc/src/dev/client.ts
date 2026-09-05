@@ -98,7 +98,7 @@ export const startDevClient = Effect.gen(function* () {
     const handleUpdate = Effect.fnUntraced(function* (phase: DevUpdatePhase, message: DevUpdate) {
       if (message._tag === 'BuildFailed') {
         yield* panel.dispatch(message);
-      } else if (phase === 'Live') {
+      } else if (phase === 'Live' || message.clientHash !== import.meta.rspackHash) {
         yield* handleHotUpdate(message);
       }
 

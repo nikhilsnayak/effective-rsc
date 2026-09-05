@@ -7,9 +7,11 @@ import type { CommunicationsError } from '@/modules/communications/service';
 import { CommunicationsService } from '@/modules/communications/service';
 import { CurrentOrganizer, OrganizerERSC } from '@/modules/organizer/current-organizer';
 
-export type CommunicationsMutationState =
-  | { readonly message: string; readonly status: 'success' }
-  | { readonly message: string; readonly status: 'error' };
+const CommunicationsMutationState = Schema.Union([
+  Schema.Struct({ message: Schema.String, status: Schema.Literal('success') }),
+  Schema.Struct({ message: Schema.String, status: Schema.Literal('error') }),
+]);
+export type CommunicationsMutationState = typeof CommunicationsMutationState.Type;
 
 const RequiredText = (maximum: number) =>
   Schema.String.check(Schema.isTrimmed(), Schema.isMinLength(1), Schema.isMaxLength(maximum));
@@ -48,8 +50,8 @@ const result = <A>(effect: Effect.Effect<A, CommunicationsError>, message: (valu
   );
 
 export const saveAnnouncement = OrganizerERSC.ServerFn.make({
-  input: SaveAnnouncementInput,
-  handler: Effect.fn('saveAnnouncement')(function* (input) {
+  input: [Schema.NullOr(CommunicationsMutationState), SaveAnnouncementInput],
+  handler: Effect.fn('saveAnnouncement')(function* (_previousState, input) {
     const { userId } = yield* CurrentOrganizer;
     const service = yield* CommunicationsService;
     return yield* result(service.saveDraft(userId, input), () => 'Announcement draft saved.');
@@ -57,8 +59,8 @@ export const saveAnnouncement = OrganizerERSC.ServerFn.make({
 });
 
 export const sendAnnouncement = OrganizerERSC.ServerFn.make({
-  input: SendAnnouncementInput,
-  handler: Effect.fn('sendAnnouncement')(function* ({ announcementId, eventId }) {
+  input: [Schema.NullOr(CommunicationsMutationState), SendAnnouncementInput],
+  handler: Effect.fn('sendAnnouncement')(function* (_previousState, { announcementId, eventId }) {
     const { userId } = yield* CurrentOrganizer;
     const service = yield* CommunicationsService;
     return yield* result(service.send(userId, eventId, announcementId), ({ recipientCount }) =>

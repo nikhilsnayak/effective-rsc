@@ -6,9 +6,11 @@ import { CurrentOrganizer, OrganizerERSC } from '@/modules/organizer/current-org
 import type { ProgrammeError } from '@/modules/programme/service';
 import { ProgrammeService } from '@/modules/programme/service';
 
-export type ProgrammeMutationState =
-  | { readonly message: string; readonly status: 'success' }
-  | { readonly message: string; readonly status: 'error' };
+const ProgrammeMutationState = Schema.Union([
+  Schema.Struct({ message: Schema.String, status: Schema.Literal('success') }),
+  Schema.Struct({ message: Schema.String, status: Schema.Literal('error') }),
+]);
+export type ProgrammeMutationState = typeof ProgrammeMutationState.Type;
 
 const RequiredText = (maximum: number) =>
   Schema.String.check(Schema.isTrimmed(), Schema.isMinLength(1), Schema.isMaxLength(maximum));
@@ -92,8 +94,8 @@ const result = <A>(effect: Effect.Effect<A, ProgrammeError>, message: (value: A)
   );
 
 export const saveRoom = OrganizerERSC.ServerFn.make({
-  input: SaveRoomInput,
-  handler: Effect.fn('saveRoom')(function* (input) {
+  input: [Schema.NullOr(ProgrammeMutationState), SaveRoomInput],
+  handler: Effect.fn('saveRoom')(function* (_previousState, input) {
     const { userId } = yield* CurrentOrganizer;
     const service = yield* ProgrammeService;
     return yield* result(service.saveRoom(userId, input), ({ operation }) =>
@@ -103,8 +105,8 @@ export const saveRoom = OrganizerERSC.ServerFn.make({
 });
 
 export const saveSpeaker = OrganizerERSC.ServerFn.make({
-  input: SaveSpeakerInput,
-  handler: Effect.fn('saveSpeaker')(function* (input) {
+  input: [Schema.NullOr(ProgrammeMutationState), SaveSpeakerInput],
+  handler: Effect.fn('saveSpeaker')(function* (_previousState, input) {
     const { userId } = yield* CurrentOrganizer;
     const service = yield* ProgrammeService;
     return yield* result(service.saveSpeaker(userId, input), ({ operation }) =>
@@ -114,8 +116,8 @@ export const saveSpeaker = OrganizerERSC.ServerFn.make({
 });
 
 export const saveSession = OrganizerERSC.ServerFn.make({
-  input: SaveSessionInput,
-  handler: Effect.fn('saveSession')(function* (input) {
+  input: [Schema.NullOr(ProgrammeMutationState), SaveSessionInput],
+  handler: Effect.fn('saveSession')(function* (_previousState, input) {
     const { userId } = yield* CurrentOrganizer;
     const service = yield* ProgrammeService;
     return yield* result(service.saveSession(userId, input), ({ operation }) =>

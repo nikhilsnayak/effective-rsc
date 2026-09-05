@@ -3,7 +3,7 @@
 // oxlint-disable effecttsgo/async-function -- React Transition Actions are native Promise boundaries.
 
 import { RotateCcw, ScanLine, UserCheck } from 'lucide-react';
-import { useRef, useState, useTransition } from 'react';
+import { startTransition, useActionState, useRef } from 'react';
 
 import { RevealTransition } from '@/components/navigation-transition';
 import { Button } from '@/components/ui/button';
@@ -14,16 +14,14 @@ import { mutateCheckIn } from '@/modules/check-in/server-functions';
 
 export function CheckInScanner({ eventId }: { readonly eventId: string }) {
   const input = useRef<HTMLInputElement>(null);
-  const [state, setState] = useState<CheckInMutationState | null>(null);
-  const [pending, startTransition] = useTransition();
-
-  const submit = (formData: FormData) => {
-    startTransition(async () => {
-      const result = await mutateCheckIn(formData);
-      startTransition(() => setState(result));
+  const [state, submit, pending] = useActionState<CheckInMutationState | null, FormData>(
+    async (previousState, form) => {
+      const result = await mutateCheckIn(previousState, form);
       input.current?.select();
-    });
-  };
+      return result;
+    },
+    null,
+  );
 
   return (
     <section aria-labelledby='credential-scanner'>
@@ -41,7 +39,8 @@ export function CheckInScanner({ eventId }: { readonly eventId: string }) {
         className='mt-5 flex flex-col gap-3 sm:flex-row'
         onSubmit={(event) => {
           event.preventDefault();
-          submit(new FormData(event.currentTarget));
+          const formData = new FormData(event.currentTarget);
+          startTransition(() => submit(formData));
         }}
       >
         <input name='eventId' type='hidden' value={eventId} />
@@ -101,7 +100,7 @@ export function CheckInScanner({ eventId }: { readonly eventId: string }) {
                       formData.set('eventId', eventId);
                       formData.set('operation', 'undo');
                       formData.set('ticketCode', state.ticket.code);
-                      submit(formData);
+                      startTransition(() => submit(formData));
                     }}
                     size='sm'
                     type='button'

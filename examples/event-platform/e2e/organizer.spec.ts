@@ -45,6 +45,21 @@ test('authors, publishes, discovers, and registers for an event', async ({ page 
   await ticketForm.getByRole('button', { name: 'Add ticket' }).click();
   await expect(page.getByRole('heading', { name: 'Standard admission' })).toBeVisible();
 
+  const authoredTicket = page
+    .locator('form')
+    .filter({ has: page.getByRole('heading', { name: 'Standard admission' }) });
+  await authoredTicket.getByRole('button', { name: 'Hide from sale' }).click();
+  await expect(authoredTicket.getByText('Ticket is hidden.')).toBeVisible();
+  await authoredTicket.getByLabel('Quantity').fill('101');
+  await authoredTicket.getByRole('button', { name: 'Save ticket' }).click();
+  await expect(
+    authoredTicket.getByText('Capacity cannot be lower than allocated, sold, or reserved tickets.'),
+  ).toBeVisible();
+  await expect(authoredTicket.getByLabel('Quantity')).toHaveValue('101');
+  await authoredTicket.getByLabel('Quantity').fill('50');
+  await authoredTicket.getByRole('button', { name: 'Put on sale' }).click();
+  await expect(authoredTicket.getByText('Ticket is on sale.')).toBeVisible();
+
   await page.getByRole('link', { name: 'Manage programme' }).click();
   const roomForm = page
     .locator('form')
@@ -86,6 +101,12 @@ test('authors, publishes, discovers, and registers for an event', async ({ page 
   await expect(authoredSession).toBeVisible();
   await authoredSession.getByRole('button', { name: 'Publish session' }).click();
   await expect(page.getByText('Session published.')).toBeVisible();
+  await authoredSession.getByRole('button', { name: 'Save session' }).click();
+  await expect(authoredSession.getByText('Session saved.')).toBeVisible();
+  await authoredSession.getByRole('button', { name: 'Move to draft' }).click();
+  await expect(authoredSession.getByText('Session moved to draft.')).toBeVisible();
+  await authoredSession.getByRole('button', { name: 'Publish session' }).click();
+  await expect(authoredSession.getByText('Session published.')).toBeVisible();
 
   await page.goto('/organizer');
   const authoredEvent = page
@@ -161,9 +182,17 @@ test('drafts and delivers a targeted attendee announcement', async ({ page }, te
   await page.getByLabel('Subject').fill(subject);
   await page.getByLabel('Audience', { exact: true }).selectOption('not_checked_in');
   await page.getByLabel('Message').fill('Doors open at 08:30. Bring your ticket code.');
+  const announcementId = page
+    .locator('form')
+    .filter({ has: page.getByRole('button', { name: 'Save draft' }) })
+    .locator('input[name="announcementId"]');
+  const draftId = await announcementId.inputValue();
   await page.getByRole('button', { name: 'Save draft' }).click();
 
   await expect(page.getByText('Announcement draft saved.')).toBeVisible();
+  await expect(page.getByLabel('Subject')).toHaveValue('');
+  await expect(page.getByLabel('Message')).toHaveValue('');
+  await expect(announcementId).not.toHaveValue(draftId);
   const announcement = page
     .locator('[data-slot="card"]')
     .filter({ has: page.getByText(subject, { exact: true }) });
@@ -202,9 +231,23 @@ test('refunds an attendee order and returns its inventory', async ({ page }) => 
   await expect(order.getByText('paid', { exact: true })).toBeVisible();
   await order.getByRole('button', { name: 'Refund order' }).click();
   await page.getByLabel('Refund reason').fill('Attendee requested cancellation');
+  const orderIdInput = page.getByRole('alertdialog').locator('input[name="orderId"]');
+  const orderId = await orderIdInput.inputValue();
+  await orderIdInput.evaluate((input: HTMLInputElement) => {
+    input.value = 'missing-order';
+  });
+  await page.getByRole('button', { name: 'Confirm refund' }).click();
+  await expect(page.getByText('That order is unavailable or was already refunded.')).toBeAttached();
+  await expect(page.getByRole('alertdialog')).toBeVisible();
+  await expect(page.getByLabel('Refund reason')).toHaveValue('Attendee requested cancellation');
+  await expect(page.getByRole('button', { name: 'Confirm refund' })).toBeEnabled();
+  await orderIdInput.evaluate((input: HTMLInputElement, value) => {
+    input.value = value;
+  }, orderId);
   await page.getByRole('button', { name: 'Confirm refund' }).click();
 
   await expect(page.getByText('Order refunded and attendee notified.')).toBeVisible();
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
   await expect(order.getByText('refunded', { exact: true })).toBeVisible();
   await expect(order.getByRole('button', { name: 'Refund order' })).toHaveCount(0);
 
@@ -236,9 +279,27 @@ test('configures and archives a custom registration question', async ({ page }, 
   await page.getByLabel('Help text').fill('Used to tailor the programme.');
   await page.getByLabel('Answer type').selectOption('select');
   await page.getByLabel('Requirement').selectOption('true');
+  const questionId = page
+    .locator('form')
+    .filter({ has: page.getByRole('button', { name: 'Add question' }) })
+    .locator('input[name="questionId"]');
+  const firstQuestionId = await questionId.inputValue();
+  await page.getByLabel('Select options').fill('New to Effect');
+  await page.getByRole('button', { name: 'Add question' }).click();
+  await expect(
+    page.locator('[aria-live="polite"]').filter({
+      hasText: 'Select questions need at least two distinct options.',
+    }),
+  ).toBeVisible();
+  await expect(page.getByLabel('Question', { exact: true })).toHaveValue(question);
+  await expect(page.getByLabel('Select options')).toHaveValue('New to Effect');
+  await expect(questionId).toHaveValue(firstQuestionId);
   await page.getByLabel('Select options').fill('New to Effect\nUsing Effect in production');
   await page.getByRole('button', { name: 'Add question' }).click();
   await expect(page.getByText('Registration question created.')).toBeVisible();
+  await expect(page.getByLabel('Question', { exact: true })).toHaveValue('');
+  await expect(page.getByLabel('Select options')).toHaveValue('');
+  await expect(questionId).not.toHaveValue(firstQuestionId);
 
   const card = page
     .locator('[data-slot="card"]')

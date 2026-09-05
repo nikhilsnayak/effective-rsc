@@ -18,19 +18,27 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import type { EventStatusMutationState } from '@/modules/organizer/server-functions';
+import { transitionEventStatus } from '@/modules/organizer/server-functions';
 
 type EventStatusActionProps = {
-  readonly action: () => Promise<EventStatusMutationState>;
+  readonly eventId: string;
   readonly id: string;
   readonly label: string;
+  readonly targetStatus: 'published' | 'cancelled' | 'completed';
   readonly variant: 'default' | 'destructive' | 'outline';
 };
 
-export function EventStatusAction({ action, id, label, variant }: EventStatusActionProps) {
+export function EventStatusAction({
+  eventId,
+  id,
+  label,
+  targetStatus,
+  variant,
+}: EventStatusActionProps) {
   const [open, setOpen] = useState(false);
   const [state, formAction, pending] = useActionState<EventStatusMutationState | null>(
     () =>
-      action().then((next) => {
+      transitionEventStatus({ eventId, targetStatus }).then((next) => {
         if (next.status === 'success') {
           startTransition(() => setOpen(false));
         }

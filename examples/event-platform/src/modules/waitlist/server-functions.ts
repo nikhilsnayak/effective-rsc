@@ -55,8 +55,8 @@ const failureState = (error: WaitlistError): WaitlistMutationState => {
 };
 
 export const joinWaitlist = ERSC.ServerFn.make({
-  input: JoinInput,
-  handler: Effect.fn('joinWaitlist')(function* ({ idempotencyKey, ...input }) {
+  input: [Schema.NullOr(WaitlistMutationState), JoinInput],
+  handler: Effect.fn('joinWaitlist')(function* (_previousState, { idempotencyKey, ...input }) {
     const service = yield* WaitlistService;
     return yield* service.join(input, idempotencyKey).pipe(
       Effect.map(

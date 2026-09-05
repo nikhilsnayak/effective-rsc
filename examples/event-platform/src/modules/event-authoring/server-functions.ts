@@ -6,9 +6,15 @@ import type { EventAuthoringError } from '@/modules/event-authoring/service';
 import { EventAuthoringService } from '@/modules/event-authoring/service';
 import { CurrentOrganizer, OrganizerERSC } from '@/modules/organizer/current-organizer';
 
-export type AuthoringMutationState =
-  | { readonly editPath?: string; readonly message: string; readonly status: 'success' }
-  | { readonly message: string; readonly status: 'error' };
+const AuthoringMutationState = Schema.Union([
+  Schema.Struct({
+    editPath: Schema.NullOr(Schema.String),
+    message: Schema.String,
+    status: Schema.Literal('success'),
+  }),
+  Schema.Struct({ message: Schema.String, status: Schema.Literal('error') }),
+]);
+export type AuthoringMutationState = typeof AuthoringMutationState.Type;
 
 const RequiredText = (maximum: number) =>
   Schema.String.check(Schema.isTrimmed(), Schema.isMinLength(1), Schema.isMaxLength(maximum));
@@ -106,8 +112,8 @@ const result = <A, E extends EventAuthoringError>(
   );
 
 export const createEvent = OrganizerERSC.ServerFn.make({
-  input: CreateEventInput,
-  handler: Effect.fn('createEvent')(function* (input) {
+  input: [Schema.NullOr(AuthoringMutationState), CreateEventInput],
+  handler: Effect.fn('createEvent')(function* (_previousState, input) {
     const { userId } = yield* CurrentOrganizer;
     const service = yield* EventAuthoringService;
     return yield* result(service.createEvent(userId, input), ({ eventId }) => ({
@@ -119,11 +125,12 @@ export const createEvent = OrganizerERSC.ServerFn.make({
 });
 
 export const updateEvent = OrganizerERSC.ServerFn.make({
-  input: UpdateEventInput,
-  handler: Effect.fn('updateEvent')(function* (input) {
+  input: [Schema.NullOr(AuthoringMutationState), UpdateEventInput],
+  handler: Effect.fn('updateEvent')(function* (_previousState, input) {
     const { userId } = yield* CurrentOrganizer;
     const service = yield* EventAuthoringService;
     return yield* result(service.updateEvent(userId, input), () => ({
+      editPath: null,
       message: 'Event details saved.',
       status: 'success',
     }));
@@ -131,11 +138,12 @@ export const updateEvent = OrganizerERSC.ServerFn.make({
 });
 
 export const saveTicketType = OrganizerERSC.ServerFn.make({
-  input: SaveTicketTypeInput,
-  handler: Effect.fn('saveTicketType')(function* (input) {
+  input: [Schema.NullOr(AuthoringMutationState), SaveTicketTypeInput],
+  handler: Effect.fn('saveTicketType')(function* (_previousState, input) {
     const { userId } = yield* CurrentOrganizer;
     const service = yield* EventAuthoringService;
     return yield* result(service.saveTicketType(userId, input), ({ operation }) => ({
+      editPath: null,
       message: operation === 'created' ? 'Ticket type created.' : 'Ticket type saved.',
       status: 'success',
     }));
@@ -150,6 +158,7 @@ export const setTicketTypeStatus = OrganizerERSC.ServerFn.make({
     return yield* result(
       service.setTicketTypeStatus(userId, eventId, ticketTypeId, status),
       (updated) => ({
+        editPath: null,
         message: updated.status === 'active' ? 'Ticket is on sale.' : 'Ticket is hidden.',
         status: 'success',
       }),

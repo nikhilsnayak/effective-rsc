@@ -1,14 +1,11 @@
 'use client';
 
-// oxlint-disable effecttsgo/async-function -- React Transition Actions are native Promise boundaries.
-
-import { useState, useTransition } from 'react';
+import { startTransition, useActionState } from 'react';
 
 import { RevealTransition } from '@/components/navigation-transition';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import type { TicketHolderMutationState } from '@/modules/attendee/server-functions';
 import { updateTicketHolder } from '@/modules/attendee/server-functions';
 
 export function TicketHolderForm({
@@ -18,8 +15,7 @@ export function TicketHolderForm({
   readonly holderName: string;
   readonly ticketId: string;
 }) {
-  const [state, setState] = useState<TicketHolderMutationState | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [state, submit, pending] = useActionState(updateTicketHolder, null);
 
   return (
     <form
@@ -27,10 +23,7 @@ export function TicketHolderForm({
       onSubmit={(event) => {
         event.preventDefault();
         const formData = new FormData(event.currentTarget);
-        startTransition(async () => {
-          const result = await updateTicketHolder(formData);
-          startTransition(() => setState(result));
-        });
+        startTransition(() => submit(formData));
       }}
     >
       <input name='ticketId' type='hidden' value={ticketId} />

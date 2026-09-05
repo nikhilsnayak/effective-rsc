@@ -3,7 +3,7 @@
 // oxlint-disable effecttsgo/async-function -- React Transition Actions are native Promise boundaries.
 
 import { RotateCcw, TriangleAlert } from 'lucide-react';
-import { useState, useTransition } from 'react';
+import { startTransition, useActionState, useState } from 'react';
 
 import { RevealTransition } from '@/components/navigation-transition';
 import {
@@ -25,8 +25,16 @@ import { refundOrder } from '@/modules/orders/server-functions';
 
 export function RefundOrderAction({ eventId, orderId }: { eventId: string; orderId: string }) {
   const [open, setOpen] = useState(false);
-  const [pending, startTransition] = useTransition();
-  const [state, setState] = useState<OrderMutationState | null>(null);
+  const [state, submit, pending] = useActionState<OrderMutationState | null, FormData>(
+    async (previousState, form) => {
+      const next = await refundOrder(previousState, form);
+      if (next.status === 'success') {
+        startTransition(() => setOpen(false));
+      }
+      return next;
+    },
+    null,
+  );
 
   return (
     <div className='grid gap-2'>
@@ -54,15 +62,7 @@ export function RefundOrderAction({ eventId, orderId }: { eventId: string; order
             onSubmit={(event) => {
               event.preventDefault();
               const formData = new FormData(event.currentTarget);
-              startTransition(async () => {
-                const next = await refundOrder(formData);
-                startTransition(() => {
-                  setState(next);
-                  if (next.status === 'success') {
-                    setOpen(false);
-                  }
-                });
-              });
+              startTransition(() => submit(formData));
             }}
           >
             <input name='eventId' type='hidden' value={eventId} />

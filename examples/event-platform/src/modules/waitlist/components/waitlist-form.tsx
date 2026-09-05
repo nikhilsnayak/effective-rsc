@@ -4,7 +4,7 @@
 // oxlint-disable effecttsgo/crypto-random-uuid -- Browser-generated idempotency keys must not pull Effect into the client graph.
 
 import { BellRing } from 'lucide-react';
-import { useState, useTransition } from 'react';
+import { startTransition, useActionState, useState } from 'react';
 
 import { RevealTransition } from '@/components/navigation-transition';
 import { Button } from '@/components/ui/button';
@@ -24,8 +24,16 @@ export function WaitlistForm({
 }) {
   // oxlint-disable-next-line effecttsgo/crypto-random-uuid -- The browser owns this join-attempt key before invoking the Server Function.
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
-  const [pending, startTransition] = useTransition();
-  const [state, setState] = useState<WaitlistMutationState | null>(null);
+  const [state, submit, pending] = useActionState<WaitlistMutationState | null, FormData>(
+    async (previousState, form) => {
+      const result = await joinWaitlist(previousState, form);
+      if (result.status === 'error') {
+        setIdempotencyKey(crypto.randomUUID());
+      }
+      return result;
+    },
+    null,
+  );
 
   if (tickets.length === 0) {
     return null;
@@ -46,16 +54,7 @@ export function WaitlistForm({
         onSubmit={(event) => {
           event.preventDefault();
           const formData = new FormData(event.currentTarget);
-          startTransition(async () => {
-            const result = await joinWaitlist(formData);
-            startTransition(() => {
-              setState(result);
-              if (result.status === 'error') {
-                // oxlint-disable-next-line effecttsgo/crypto-random-uuid -- A rejected attempt receives a fresh browser-owned key.
-                setIdempotencyKey(crypto.randomUUID());
-              }
-            });
-          });
+          startTransition(() => submit(formData));
         }}
       >
         <input name='eventId' type='hidden' value={eventId} />

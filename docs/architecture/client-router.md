@@ -1,8 +1,13 @@
 # Client router
 
-Status: **Current** under [D-066 and D-067](../DECISIONS.md).
+Status: **Current** under [D-063, D-066, and D-067](../DECISIONS.md).
 
 ## Purpose
+
+Hydration, Server Functions, and current-page refreshes do not require the Navigation API. Only
+client-router installation requires both the Navigation API and `NavigationPrecommitController`.
+When either is missing, links use native full-page navigation while Client Components remain
+interactive. This does not introduce a History API router or polyfill other browser APIs.
 
 The client router is a private deep module whose sole interface, `installClientRouter`, installs the
 Navigation API subscription in the browser scope. Behind it, the router selects routed navigations,

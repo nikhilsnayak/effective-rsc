@@ -24,6 +24,38 @@ button {
   font: inherit;
 }
 
+.warning-notice {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2147483645;
+  display: flex;
+  width: min(440px, calc(100% - 32px));
+  gap: 12px;
+  padding: 16px;
+  color: var(--ersc-text);
+  font:
+    14px/1.5 system-ui,
+    sans-serif;
+  background: var(--ersc-surface);
+  border: 1px solid #b88a36;
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgb(0 0 0 / 24%);
+}
+
+.warning-notice .title {
+  margin-top: 6px;
+  color: #f3c56b;
+}
+
+.warning-notice p {
+  margin: 8px 0 0;
+}
+
+.warning-notice .close {
+  flex: 0 0 auto;
+}
+
 .backdrop {
   position: fixed;
   inset: 0;

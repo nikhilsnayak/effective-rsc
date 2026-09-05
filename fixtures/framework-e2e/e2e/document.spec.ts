@@ -47,12 +47,15 @@ test('reveals the loading UI before the suspended catalog', async ({ page }) => 
 });
 
 for (const missingApi of ['navigation', 'NavigationPrecommitController']) {
-  test(`serves a plain multi-page application without ${missingApi}`, async ({ page }) => {
+  test(`hydrates with document navigation without ${missingApi}`, async ({ page }) => {
     const browserErrors = observeBrowserErrors(page);
     await page.addInitScript((api) => {
       Object.defineProperty(window, api, { configurable: true, value: undefined });
     }, missingApi);
-    await page.goto('/catalog/primary');
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Probe count: 0' }).click();
+    await expect(page.getByRole('button', { name: 'Probe count: 1' })).toBeVisible();
+    await page.getByRole('link', { name: 'Open the Primary catalog' }).click();
 
     await expect(page.getByRole('heading', { level: 1, name: 'Primary catalog' })).toBeVisible();
     await page.evaluate(() => Reflect.set(window, '__ersc_document_marker__', true));

@@ -18,6 +18,29 @@ const apply = (...events: ReadonlyArray<DevPanelEvent>) =>
   events.reduce(applyDevPanelEvent, InitialDevPanelState);
 
 describe('development panel state', () => {
+  const warning: DevPanelEvent = { _tag: 'Warning', message: 'Links use full-page navigation.' };
+
+  it('keeps warnings through successful builds and renders until dismissed', () => {
+    const visible = apply(warning, { _tag: 'BuildSucceeded' }, { _tag: 'RuntimeReconciled' });
+    expect(visible).toEqual({ _tag: 'Visible', content: warning });
+    const dismissed = applyDevPanelEvent(visible, { _tag: 'Dismissed' });
+    expect(dismissed).toEqual({ _tag: 'Dismissed', content: warning });
+    expect(applyDevPanelEvent(dismissed, warning)).toBe(dismissed);
+    expect(applyDevPanelEvent(dismissed, { _tag: 'RuntimeReconciled' })).toBe(dismissed);
+  });
+
+  it('gives failures precedence over warnings in either arrival order', () => {
+    for (const failure of [
+      { _tag: 'BuildFailed', diagnostics: 'Compilation failed' },
+      { _tag: 'RuntimeFailed', failure: runtimeFailure('runtime failed') },
+      { _tag: 'RenderFailed', failure: runtimeFailure('render failed') },
+    ] satisfies ReadonlyArray<DevPanelEvent>) {
+      const failed = apply(failure);
+      expect(apply(warning, failure)).toEqual(failed);
+      expect(apply(failure, warning)).toEqual(failed);
+    }
+  });
+
   it('gives build failures precedence over runtime failures', () => {
     expect(
       apply(

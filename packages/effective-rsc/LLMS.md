@@ -183,9 +183,12 @@ Give work that must outlive a request an explicit application-owned scope.
 
 ERSC handles eligible document navigations through the browser Navigation API and
 `NavigationPrecommitController`. There is no History API fallback. A browser missing either one
-never hydrates: the streamed document stays as served and the application behaves as a plain
-multi-page application, with document navigations and natively submitted forms but no interactive
-Client Components.
+still hydrates Client Components and supports Server Functions and streamed current-page refreshes,
+including HMR. Links use full-page navigation instead of the client router. Without JavaScript,
+the server-rendered document retains working links and natively submitted forms.
+
+Development reports a missing navigation API in the console and a dismissible development-panel
+warning. The warning does not block interaction and is absent in production.
 
 An intercepted Page navigation has two milestones:
 

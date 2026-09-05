@@ -1,7 +1,8 @@
 import * as BrowserSocket from '@effect/platform-browser/BrowserSocket';
-import { Effect, Layer, Ref, Semaphore, Stream } from 'effect';
+import { Console, Effect, Layer, Ref, Semaphore, Stream } from 'effect';
 import { RpcClient, RpcSerialization } from 'effect/unstable/rpc';
 
+import { navigationMode } from '../client/browser-capabilities';
 import { BrowserRenderStatus } from '../client/browser-render-status';
 import { RouteRefresher } from '../client/route-refresh';
 import { DevChannelPath, DevRpcs, type DevUpdate } from './channel';
@@ -74,6 +75,14 @@ export const startDevClient = Effect.gen(function* () {
   const routeRefresher = yield* RouteRefresher;
   const renderStatus = yield* BrowserRenderStatus;
   const panel = yield* makeDevPanel;
+  const mode = yield* navigationMode;
+  if (mode === 'Document') {
+    const missingApi =
+      window.navigation === undefined ? 'Navigation API' : 'NavigationPrecommitController';
+    const message = `This browser does not support ${missingApi}. Links use full-page navigation. Client Components, Server Functions, and HMR remain enabled.`;
+    yield* Console.warn(`[effective-rsc] ${message}`);
+    yield* panel.dispatch({ _tag: 'Warning', message });
+  }
   const pendingUpdate = yield* Ref.make<PendingDevUpdate>({
     acknowledgedClientHash: import.meta.rspackHash,
     clientHash: import.meta.rspackHash,

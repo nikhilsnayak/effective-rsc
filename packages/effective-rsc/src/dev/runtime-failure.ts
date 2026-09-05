@@ -41,6 +41,14 @@ export const fromUnhandledRejection = (
 ): DevRuntimeFailure =>
   fromUnknown('UnhandledRejection', event.reason, 'Unhandled promise rejection.');
 
+export const fromRenderError = (
+  error: unknown,
+  componentStack: string | null,
+): DevRuntimeFailure => ({
+  ...fromUnknown('RuntimeError', error, 'Unknown React render error.'),
+  ...(componentStack === null ? {} : { componentStack }),
+});
+
 export const reportBrowserFailures = Effect.fnUntraced(function* (
   report: (failure: DevRuntimeFailure) => Effect.Effect<void>,
 ) {

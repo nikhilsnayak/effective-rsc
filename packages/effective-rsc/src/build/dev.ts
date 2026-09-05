@@ -1,4 +1,5 @@
 import {
+  Cause,
   Deferred,
   Effect,
   Fiber,
@@ -224,7 +225,11 @@ export const makeDevApplication = Effect.fnUntraced(function* ({
 
             return Effect.logInfo(`${Terminal.green('✓')} Ready${duration}${details}`);
           }),
-          Effect.catch((error) => Effect.logError(error)),
+          Effect.catch((error) =>
+            channel
+              .publishBuildFailure(Cause.pretty(Cause.fail(error)))
+              .pipe(Effect.andThen(Effect.logError(error))),
+          ),
         );
       }
     }

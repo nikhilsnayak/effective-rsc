@@ -4,6 +4,7 @@ import { Effect, Layer } from 'effect';
 
 import { checkBrowserCapabilities } from './browser-capabilities';
 import { BrowserEffectRunner } from './browser-effect-runner';
+import { BrowserRenderStatus } from './browser-render-status';
 import { BrowserRenderer } from './browser-renderer';
 import { showBrowserFailure } from './browser-screen';
 import { installCallServer } from './call-server';
@@ -18,6 +19,7 @@ import { installRouteRefresh, RouteRefresher } from './route-refresh';
 const BrowserServicesLayer = Layer.mergeAll(
   BrowserEffectRunner.layer,
   BrowserRenderer.layer,
+  BrowserRenderStatus.layer,
   FlightClient.layer,
   NavigationApi.layer,
 ).pipe(Layer.provide(InitialFlightStream.layer));

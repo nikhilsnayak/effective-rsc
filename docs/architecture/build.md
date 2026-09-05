@@ -41,6 +41,8 @@ code. Successful replacement interrupts the previous generation's pending handle
 streams before disposing its application services. Saving a file can therefore cut off an active
 response; development does not drain old generations or automatically retry Server Functions.
 Failed candidates leave the current generation's existing requests alone.
+Compilation and application startup failures are reported in both the terminal and the development
+panel. A failed candidate never publishes a successful browser update.
 Content-hashed development server bundles and chunks remain available for the development session.
 
 Browser updates use the compiler's HMR protocol; RSC changes refresh the current route through the
@@ -52,6 +54,16 @@ services. The channel accepts only WebSocket handshakes whose `Origin` matches t
 
 Development diagnostics start independently of hydration. Current-route refresh initially reloads
 the document; successful client-navigation activation replaces it with streamed RSC refresh.
+The initial successful socket snapshot reconciles when its hash differs from the loaded browser
+bundle.
+
+Caught React render errors include their component stack in the development panel. Later
+HMR or explicit navigation can recover the framework error boundary; starting a refresh alone does
+not clear the error. Healthy trees retain their React state, application error boundaries retain
+their own policy, and recovery never replays a Server Function or retries unchanged code on a timer.
+Build diagnostics clear only when the server reports a successful replacement. A successful render
+or a cached history traversal does not clear a compilation failure, and build success alone does
+not clear a runtime failure.
 
 React Server Components Performance Tracks remain native. Initial hydration uses the document
 timeline origin; navigation and Server Function decoding receive a timestamp captured before HTTP

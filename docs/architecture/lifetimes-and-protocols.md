@@ -49,7 +49,9 @@ rules.
   React and Web Streams own boundary recovery or stream termination.
 - Expected request aborts do not log as render failures.
 - Browser hydration uses one framework error boundary so an unexpected render failure does not crash
-  outside React.
+  outside React. A later navigation or HMR publication can recover it without remounting healthy
+  trees. Caught render failures reach development diagnostics; only a successful recovery commit
+  clears them. Application error boundaries retain their own recovery policy.
 
 ## HTTP policy
 

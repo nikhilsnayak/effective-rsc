@@ -7,9 +7,11 @@ import { CurrentOrganizer, OrganizerERSC } from '@/modules/organizer/current-org
 import type { WaitlistError } from '@/modules/waitlist/service';
 import { WaitlistService } from '@/modules/waitlist/service';
 
-export type WaitlistMutationState =
-  | { readonly message: string; readonly status: 'success' }
-  | { readonly message: string; readonly status: 'error' };
+const WaitlistMutationState = Schema.Union([
+  Schema.Struct({ message: Schema.String, status: Schema.Literal('success') }),
+  Schema.Struct({ message: Schema.String, status: Schema.Literal('error') }),
+]);
+export type WaitlistMutationState = typeof WaitlistMutationState.Type;
 
 const PersonName = Schema.String.check(
   Schema.isTrimmed(),
@@ -73,8 +75,8 @@ export const joinWaitlist = ERSC.ServerFn.make({
 });
 
 export const notifyWaitlistEntry = OrganizerERSC.ServerFn.make({
-  input: NotifyInput,
-  handler: Effect.fn('notifyWaitlistEntry')(function* ({ entryId, eventId }) {
+  input: [Schema.NullOr(WaitlistMutationState), NotifyInput],
+  handler: Effect.fn('notifyWaitlistEntry')(function* (_previousState, { entryId, eventId }) {
     const { userId } = yield* CurrentOrganizer;
     const service = yield* WaitlistService;
     return yield* service.notify(userId, eventId, entryId).pipe(

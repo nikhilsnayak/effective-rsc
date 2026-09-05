@@ -7,10 +7,11 @@ import {
   Path,
   Ref,
   Schema,
+  Scope,
   ScopedRef,
   Stream,
 } from 'effect';
-import { HttpRouter, HttpServer } from 'effect/unstable/http';
+import { HttpBody, HttpRouter, HttpServer, HttpServerResponse } from 'effect/unstable/http';
 
 import PackageJson from '../../package.json' with { type: 'json' };
 import { DevChannelPath } from '../dev/channel';
@@ -71,9 +72,34 @@ export const acquireDevGeneration = Effect.fnUntraced(function* ({
     ),
   );
 
+  // Close request work before the generation's application services.
+  const generationScope = yield* Effect.scope;
+  const requests = yield* Scope.fork(generationScope, 'parallel');
+  const ownRequest = Effect.withFiber((fiber) => {
+    Fiber.runIn(fiber, requests);
+    return Effect.void;
+  });
+
   return {
     hash: compilation.hash,
-    httpEffect,
+    httpEffect: Effect.gen(function* () {
+      yield* ownRequest;
+      const response = yield* httpEffect;
+      const body = response.body;
+      if (body._tag !== 'Stream') {
+        return response;
+      }
+
+      // Bun consumes the response body on a separate fiber after the handler returns.
+      return HttpServerResponse.setBody(
+        response,
+        HttpBody.stream(
+          Stream.onStart(body.stream, ownRequest),
+          body.contentType,
+          body.contentLength,
+        ),
+      );
+    }),
   };
 });
 
@@ -108,6 +134,7 @@ export const makeDevGenerationStore = Effect.fnUntraced(function* (options: DevG
         yield* ScopedRef.set(
           generation,
           acquireDevGeneration({ ...options, compilation: event }).pipe(
+            Effect.interruptible,
             Effect.map((ready): DevGenerationState => ({
               _tag: 'Ready',
               generation: ready,

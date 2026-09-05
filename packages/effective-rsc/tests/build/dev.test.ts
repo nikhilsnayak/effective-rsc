@@ -1,7 +1,21 @@
+// oxlint-disable effecttsgo/global-fetch-in-effect -- These integration tests exercise Bun's native response body readers and disconnects.
 import * as BunHttpServer from '@effect/platform-bun/BunHttpServer';
 import * as BunServices from '@effect/platform-bun/BunServices';
 import { expect, it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, FileSystem, Layer, Logger, Path, Ref, Stream } from 'effect';
+import {
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  FileSystem,
+  Layer,
+  Logger,
+  Path,
+  Ref,
+  Schedule,
+  Scope,
+  Stream,
+} from 'effect';
 import { TestClock } from 'effect/testing';
 import { HttpServer, HttpServerRequest } from 'effect/unstable/http';
 import { RpcClient, RpcSerialization } from 'effect/unstable/rpc';
@@ -31,7 +45,7 @@ const CompilationDetails = {
 } as const;
 
 const serverBundleSource = (httpLayer: string) => `
-  import { Effect, Layer } from ${JSON.stringify(EffectModuleUrl)};
+  import { Effect, FileSystem, Layer, Stream } from ${JSON.stringify(EffectModuleUrl)};
   import { HttpRouter, HttpServerResponse } from ${JSON.stringify(HttpModuleUrl)};
 
   export default {
@@ -79,6 +93,8 @@ it.effect('acquires a complete development generation before returning it', () =
         HttpServerRequest.HttpServerRequest,
         HttpServerRequest.fromWeb(new Request('http://localhost/ready')),
       ),
+      Effect.forkChild,
+      Effect.flatMap(Fiber.join),
     );
     expect(response.status).toBe(200);
 
@@ -129,6 +145,8 @@ it.effect('waits for the current compilation outcome before dispatching', () =>
           HttpServerRequest.HttpServerRequest,
           HttpServerRequest.fromWeb(new Request(`http://localhost${pathname}`)),
         ),
+        Effect.forkChild,
+        Effect.flatMap(Fiber.join),
       );
 
     yield* store.update({ _tag: 'Building', changedFiles: [] });
@@ -184,6 +202,195 @@ it.effect('waits for the current compilation outcome before dispatching', () =>
     });
     const recoveredResponse = yield* Fiber.join(recoveredRequest);
     expect(recoveredResponse.status).toBe(204);
+  }).pipe(Effect.provide(BunServices.layer), Effect.scoped),
+);
+
+const streamServerBundleSource = (closedPath: string) =>
+  serverBundleSource(`Layer.mergeAll(
+    HttpRouter.add('GET', '/stream', Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      yield* Effect.addFinalizer(() => fs.writeFileString(${JSON.stringify(closedPath + '.request')}, 'request/').pipe(Effect.orDie));
+      return HttpServerResponse.stream(
+        Stream.make(new TextEncoder().encode('first')).pipe(
+          Stream.concat(Stream.fromEffect(Effect.sleep('1 second').pipe(Effect.as(new TextEncoder().encode('last'))))),
+          Stream.onExit(() => fs.writeFileString(${JSON.stringify(closedPath + '.body')}, 'body/').pipe(Effect.orDie))
+        )
+      );
+    })),
+    HttpRouter.add('GET', '/pending', Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      yield* Effect.addFinalizer(() => fs.writeFileString(${JSON.stringify(closedPath + '.pending')}, 'pending').pipe(Effect.orDie));
+      yield* fs.writeFileString(${JSON.stringify(closedPath + '.started')}, 'started');
+      return yield* Effect.never;
+    })),
+    Layer.effectDiscard(Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      yield* Effect.addFinalizer(() => Effect.gen(function* () {
+        const body = yield* fs.readFileString(${JSON.stringify(closedPath + '.body')});
+        const request = yield* fs.readFileString(${JSON.stringify(closedPath + '.request')});
+        const pending = yield* fs.readFileString(${JSON.stringify(closedPath + '.pending')});
+        yield* fs.writeFileString(${JSON.stringify(closedPath)}, body + request + pending);
+      }).pipe(Effect.orDie));
+    }))
+  )`);
+
+const replacementScenario = (completion: 'Eof' | 'Disconnect' | 'Rebuild' | 'Shutdown') =>
+  Effect.gen(function* () {
+    const fileSystem = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const directory = yield* fileSystem.makeTempDirectoryScoped({
+      prefix: 'ersc-dev-replacement-',
+    });
+    const closedPath = path.join(directory, 'closed');
+    yield* fileSystem.writeFileString(
+      path.join(directory, 'stream.js'),
+      streamServerBundleSource(closedPath),
+    );
+    yield* fileSystem.writeFileString(
+      path.join(directory, 'next.js'),
+      serverBundleSource("HttpRouter.add('GET', '/stream', HttpServerResponse.text('next'))"),
+    );
+    yield* fileSystem.writeFileString(
+      path.join(directory, 'failed.js'),
+      serverBundleSource("Layer.effectDiscard(Effect.fail('startup failed'))"),
+    );
+    const scope = yield* Effect.scope;
+    const generationScope = yield* Scope.fork(scope, 'sequential');
+    const store = yield* makeDevGenerationStore({
+      hostname: 'localhost',
+      port: 18193,
+      root: directory,
+    }).pipe(Scope.provide(generationScope));
+    const compile = (filename: string) =>
+      store.update({
+        _tag: 'Compiled',
+        ...CompilationDetails,
+        hash: filename,
+        serverBundle: { filename, outputPath: directory },
+      });
+    yield* compile('stream.js');
+    const server = yield* HttpServer.HttpServer;
+    const serving = yield* launchDevApplication({
+      closeDevChannel: Effect.void,
+      httpEffect: store.httpEffect,
+      watch: Effect.never,
+    }).pipe(Effect.forkScoped({ startImmediately: true }));
+    const url = HttpServer.formatAddress(server.address);
+    const response = yield* Effect.promise(() => fetch(`${url}/stream`));
+    const reader = response.body!.getReader();
+    const first = yield* Effect.promise(() => reader.read());
+    expect(new TextDecoder().decode(first.value)).toBe('first');
+    yield* Effect.promise((signal) => fetch(`${url}/pending`, { signal })).pipe(
+      Effect.forkScoped({ startImmediately: true }),
+    );
+    yield* fileSystem
+      .exists(closedPath + '.started')
+      .pipe(
+        Effect.repeat({ while: (exists) => !exists, schedule: Schedule.spaced('10 millis') }),
+        Effect.timeout('1 second'),
+        TestClock.withLive,
+      );
+
+    yield* store.update({ _tag: 'Building', changedFiles: [] });
+    yield* compile('failed.js').pipe(Effect.flip);
+    const closedAfterFailure = yield* fileSystem.exists(closedPath);
+    const pendingClosedAfterFailure = yield* fileSystem.exists(closedPath + '.pending');
+    const bodyClosedAfterFailure = yield* fileSystem.exists(closedPath + '.body');
+    expect(closedAfterFailure).toBe(false);
+    expect(pendingClosedAfterFailure).toBe(false);
+    expect(bodyClosedAfterFailure).toBe(false);
+
+    switch (completion) {
+      case 'Eof': {
+        yield* TestClock.adjust('1 second');
+        const last = yield* Effect.promise(() => reader.read());
+        expect(new TextDecoder().decode(last.value)).toBe('last');
+        const eof = yield* Effect.promise(() => reader.read());
+        expect(eof.done).toBe(true);
+        break;
+      }
+      case 'Disconnect':
+        yield* Effect.promise(() => reader.cancel());
+        break;
+      case 'Rebuild':
+      case 'Shutdown':
+        break;
+    }
+
+    if (completion === 'Shutdown') {
+      yield* Fiber.interrupt(serving);
+      yield* Scope.close(generationScope, Exit.void);
+    } else {
+      yield* store.update({ _tag: 'Building', changedFiles: [] });
+      yield* compile('next.js');
+      const next = yield* Effect.promise(() =>
+        fetch(`${url}/stream`).then((response) => response.text()),
+      );
+      expect(next).toBe('next');
+    }
+    // The generation finalizer reads these markers: disposal fails if request cleanup ran late.
+    const cleanupOrder = yield* fileSystem.readFileString(closedPath);
+    expect(cleanupOrder).toBe('body/request/pending');
+    if (completion === 'Rebuild' || completion === 'Shutdown') {
+      const result = yield* Effect.promise(() =>
+        reader.read().then(
+          () => 'Completed' as const,
+          () => 'Interrupted' as const,
+        ),
+      );
+      expect(result).toBe('Interrupted');
+    }
+  }).pipe(
+    Effect.provide(
+      BunHttpServer.layer({ hostname: '127.0.0.1', port: 0, disablePreemptiveShutdown: true }),
+    ),
+    Effect.scoped,
+  );
+
+it.effect('cleans up completed streams before disposing the replaced generation', () =>
+  replacementScenario('Eof'),
+);
+it.effect('cleans up disconnected streams before disposing the replaced generation', () =>
+  replacementScenario('Disconnect'),
+);
+it.effect('cancels pending handlers and streams before disposing the replaced generation', () =>
+  replacementScenario('Rebuild'),
+);
+it.effect('cancels pending handlers and streams before disposing the generation on shutdown', () =>
+  replacementScenario('Shutdown'),
+);
+
+it.effect('interrupts a candidate whose application startup never completes', () =>
+  Effect.gen(function* () {
+    const fileSystem = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const directory = yield* fileSystem.makeTempDirectoryScoped({ prefix: 'ersc-dev-startup-' });
+    yield* fileSystem.writeFileString(
+      path.join(directory, 'stalled.js'),
+      serverBundleSource(
+        "Layer.effectDiscard(Effect.logInfo('startup entered').pipe(Effect.andThen(Effect.never)))",
+      ),
+    );
+    const store = yield* makeDevGenerationStore({
+      hostname: 'localhost',
+      port: 18193,
+      root: directory,
+    });
+    const started = yield* Deferred.make<void>();
+    const StartupLogger = Logger.layer([
+      Logger.make(() => Deferred.doneUnsafe(started, Exit.void)),
+    ]);
+    const starting = yield* store
+      .update({
+        _tag: 'Compiled',
+        ...CompilationDetails,
+        hash: 'stalled',
+        serverBundle: { filename: 'stalled.js', outputPath: directory },
+      })
+      .pipe(Effect.provide(StartupLogger), Effect.forkScoped({ startImmediately: true }));
+    yield* Deferred.await(started);
+    expect(starting.pollUnsafe()).toBeUndefined();
+    yield* Fiber.interrupt(starting).pipe(Effect.timeout('1 second'), TestClock.withLive);
   }).pipe(Effect.provide(BunServices.layer), Effect.scoped),
 );
 
@@ -245,6 +452,8 @@ it.effect('continues watching after a generation fails to start', () =>
         HttpServerRequest.HttpServerRequest,
         HttpServerRequest.fromWeb(new Request('http://localhost/ready')),
       ),
+      Effect.forkChild,
+      Effect.flatMap(Fiber.join),
     );
 
     expect(response.status).toBe(204);

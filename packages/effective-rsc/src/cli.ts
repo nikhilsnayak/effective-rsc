@@ -116,6 +116,8 @@ const runDev = Effect.fnUntraced(function* ({
     Effect.provide(
       BunHttpServer.layer({
         development: true,
+        // Explicit dev shutdown interrupts request scopes before releasing their generations.
+        disablePreemptiveShutdown: true,
         hostname,
         idleTimeout: ApplicationIdleTimeoutSeconds,
         maxRequestBodySize: ApplicationMaxRequestBodySizeBytes,

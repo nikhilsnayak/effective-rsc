@@ -13,14 +13,15 @@ Bun server scope
       └─ response stream finalizers
 ```
 
-| Work                               | Owner                           | Completion or interruption                       |
-| ---------------------------------- | ------------------------------- | ------------------------------------------------ |
-| Application services               | Server scope                    | Server shutdown                                  |
-| HTTP and Server Function Effect    | Request fiber                   | Response completion, disconnect, or interruption |
-| Authored render Effects            | Request render-runtime FiberSet | Flight completion or request interruption        |
-| Preparing browser navigation       | Client-router candidate         | First UI commit, native abort, or supersession   |
-| Visible navigation Flight stream   | Client-router generation        | Flight EOF or renderer-confirmed retirement      |
-| Completed history-entry route tree | Browser route cache             | Cache invalidation or history-entry disposal     |
+| Work                               | Owner                           | Completion or interruption                             |
+| ---------------------------------- | ------------------------------- | ------------------------------------------------------ |
+| Application services               | Server scope                    | Server shutdown                                        |
+| Development generation services    | Generation scope                | Replacement or shutdown, after cancelling its requests |
+| HTTP and Server Function Effect    | Request fiber                   | Response completion, disconnect, or interruption       |
+| Authored render Effects            | Request render-runtime FiberSet | Flight completion or request interruption              |
+| Preparing browser navigation       | Client-router candidate         | First UI commit, native abort, or supersession         |
+| Visible navigation Flight stream   | Client-router generation        | Flight EOF or renderer-confirmed retirement            |
+| Completed history-entry route tree | Browser route cache             | Cache invalidation or history-entry disposal           |
 
 Effect interruption and Web Stream cancellation propagate across these boundaries. Work is not
 detached unless another explicit owner retains it.

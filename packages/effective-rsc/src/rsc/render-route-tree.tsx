@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 
-import type { PagePathParams } from '../application/page';
+import type { PageParams } from '../application/page';
 import type { CompiledDestination } from '../application/route-graph';
 import type { AbsolutePath } from '../application/route-path';
 import { RouteOutlet } from '../client/route-tree';
@@ -9,18 +9,18 @@ import type { RouteTreeModel } from './route-tree';
 type RenderRouteTreeOptions<Services> = {
   readonly destination: CompiledDestination<Services>;
   readonly pathname: AbsolutePath;
-  readonly pathParams: PagePathParams;
+  readonly params: PageParams;
 };
 
 export const renderRouteTree = <Services,>({
   destination,
   pathname,
-  pathParams,
+  params,
 }: RenderRouteTreeOptions<Services>): RouteTreeModel => {
   const Page = destination.page.component;
   let tree: RouteTreeModel = {
     child: null,
-    content: <Page params={pathParams} />,
+    content: <Page params={params} />,
     id: `page:${pathname}`,
   };
 

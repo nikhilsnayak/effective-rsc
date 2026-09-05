@@ -44,6 +44,9 @@ rules.
 
 - A wiring invariant unreachable from request or application input throws a plain `TypeError`.
 - Request input, I/O, and application failures remain typed Effect failures at their boundary.
+- Page parameter Schema rejection on GET/HEAD becomes an empty `404` before rendering. Decoder
+  defects, interruption, and application render failures are not mapped to `404`. POST refresh
+  parameter rejection remains in React's render-error path, preserving the Server Function result.
 - React's stream protocol carries Flight failures.
 - If Fizz fails before the HTML shell, Effect HTTP returns an empty `500`. After headers commit,
   React and Web Streams own boundary recovery or stream termination.

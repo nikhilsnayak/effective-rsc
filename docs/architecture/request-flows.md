@@ -20,6 +20,11 @@ sequenceDiagram
 The browser makes no second initial Flight request. It hydrates `document`, not a framework
 container. Closing the response cancels both stream branches and interrupts request Effects.
 
+The GET/HEAD request handler validates parameters before either renderer starts, including
+when the Page is beneath Loading. Services from existing route middleware remain available during
+validation. Schema rejection returns an empty `404`; decoder defects are not classified as missing
+routes.
+
 ## Client navigation
 
 ```mermaid
@@ -50,6 +55,9 @@ fetch new Flight. A candidate leaves the current route visible until its replace
 precommit abort discards it without history rollback, while postcommit Flight failures use React's
 error handling.
 
+A navigation Flight request uses the same parameter validation boundary. Its `404` triggers the
+existing native document fallback, whose GET also receives an empty `404`.
+
 ## Server Function
 
 Hydrated calls use React's native Server Function POST. ERSC requires an Origin whose host matches
@@ -58,6 +66,9 @@ handler Effect, and starts the route refresh independently. React's decoded argu
 be an array; other decoded values are typed `400` failures before application invocation.
 The response carries the Server Function result and refreshed Flight through React's native
 protocol, allowing the result to settle without waiting for suspended route content.
+
+POST refreshes keep parameter decoding inside Page rendering. Parameter rejection therefore stays
+in React's render-error path and does not replace a completed Server Function result with a `404`.
 
 Hydrated invocations may execute concurrently. Only the latest invocation may apply its embedded
 route tree while its original history entry remains current and no navigation is active. Other

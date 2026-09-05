@@ -72,6 +72,7 @@ entry; read Git history for what it said.
 | D-066 | Finish native Navigation at first UI commit. The client router retains Flight until EOF or render retirement, preserves visible UI while successors prepare, discards precommit renders before release, and uses React errors without history rollback.           |
 | D-067 | Keep React `<ViewTransition>` boundaries and styles application-owned. At publication, tag routes with additive kind, direction, and UA visual-transition types, and tag Server Function and HMR refreshes with dedicated types.                                  |
 | D-068 | Let ServerFn input be one Schema for one argument or a readonly schema list for positional arguments, including previous state and FormData for native useActionState. A Tuple or Array Schema remains a single argument. Resolves OQ-008.                        |
+| D-069 | Decode Page params once in the request handler before GET/HEAD rendering; rejection returns an empty 404, including Flight. POST keeps render-time decoding and completed Server Function outcomes. Resolves OQ-003.                                              |
 
 ## Deferred
 

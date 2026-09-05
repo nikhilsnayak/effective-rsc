@@ -7,7 +7,8 @@ import { Application } from '../../src/application/ersc';
 import {
   type AnyPageDefinition,
   getPageState,
-  type PagePathParams,
+  type EncodedPageParams,
+  type PageRuntimeProps,
 } from '../../src/application/page';
 import type { CompiledDestination } from '../../src/application/route-graph';
 import type { AbsolutePath } from '../../src/application/route-path';
@@ -45,8 +46,13 @@ const renderApplicationRoute = <Services,>(
   routes: ReadonlyArray<CompiledDestination<Services>>,
   pattern: AbsolutePath,
   pathname: AbsolutePath = pattern,
-  pathParams: PagePathParams = {},
-) => renderRouteTree({ destination: findDestination(routes, pattern), pathname, pathParams });
+  encodedParams: EncodedPageParams = {},
+) =>
+  renderRouteTree({
+    destination: findDestination(routes, pattern),
+    pathname,
+    params: { _tag: 'Encoded', value: encodedParams },
+  });
 
 const applicationRoutes = <Services, ApplicationError>(
   application: ApplicationDefinition<Services, ApplicationError>,
@@ -130,14 +136,12 @@ describe('ERSC.make', () => {
         day: 'sunday',
       }),
     );
-    const saturdayElement = asElement<{
-      readonly params: Readonly<Record<string, string | undefined>>;
-    }>(saturdayPage.content);
+    const saturdayElement = asElement<PageRuntimeProps>(saturdayPage.content);
 
     expect(applicationRoutes(App).map(({ pattern }) => pattern)).toEqual(['/schedule/:day']);
     expect(saturdayPage.id).not.toBe(sundayPage.id);
     expect(saturdayElement.type).toBe(pageComponent(DayPage));
-    expect(saturdayElement.props.params).toEqual({ day: 'saturday' });
+    expect(saturdayElement.props.params).toEqual({ _tag: 'Encoded', value: { day: 'saturday' } });
   });
 
   it('preserves Layout ancestry and places Loading below its owning Layout', () => {

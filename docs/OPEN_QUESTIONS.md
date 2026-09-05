@@ -7,16 +7,6 @@ IDs are append-only and never reused, including after a question is resolved.
 
 ## Open
 
-### OQ-003 — Route-parameter Schema rejection
-
-- **Question:** How should a matched Page's path-parameter Schema rejection map to NotFound or another expected failure?
-- **Why:** Effect HTTP has already selected the route, but the application-level Schema can still reject captured values.
-- **Affected:** Page rendering, HTTP status, error boundaries, and navigation Flight. Any non-200 answer widens `RequestOutcome['status']`, which is `200` today.
-- **Evidence:** Parameter Schemas currently fail in the Page render Effect after route selection.
-- **Related:** D-028, D-046.
-- **Resolution:** Unresolved.
-- **Status:** Open.
-
 ### OQ-004 — Typed search parameters
 
 - **Question:** How should Pages declare and decode typed search parameters?

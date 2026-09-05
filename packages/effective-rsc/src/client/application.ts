@@ -2,7 +2,7 @@
 import * as BrowserHttpClient from '@effect/platform-browser/BrowserHttpClient';
 import { Effect, Layer } from 'effect';
 
-import { checkBrowserCapabilities } from './browser-capabilities';
+import { navigationMode } from './browser-capabilities';
 import { BrowserEffectRunner } from './browser-effect-runner';
 import { BrowserRenderStatus } from './browser-render-status';
 import { BrowserRenderer } from './browser-renderer';
@@ -32,22 +32,18 @@ const BrowserLayer = Layer.mergeAll(
 
 const renderBrowserFailure = Effect.sync(showBrowserFailure);
 
-const skipHydration = (missingApi: string) =>
-  process.env.NODE_ENV === 'development'
-    ? Effect.logWarning(
-        `effective-rsc did not hydrate because this browser does not provide ${missingApi}. The server-rendered document remains a plain multi-page application.`,
-      )
-    : Effect.void;
-
-const activateClientNavigation = Effect.gen(function* () {
+const activateBrowser = Effect.gen(function* () {
   const routeLoader = yield* RouteLoader;
   const reactDOMRenderer = yield* ReactDOMRenderer;
 
   const initialPayload = yield* routeLoader.loadInitial;
   yield* reactDOMRenderer.hydrate(document, initialPayload);
-  yield* installClientRouter;
   yield* installRouteRefresh;
   yield* installCallServer;
+  const mode = yield* navigationMode;
+  if (mode === 'Client') {
+    yield* installClientRouter;
+  }
 });
 
 export const browserMain = Effect.scoped(
@@ -60,13 +56,10 @@ export const browserMain = Effect.scoped(
       );
     }
 
-    yield* checkBrowserCapabilities.pipe(
-      Effect.andThen(activateClientNavigation),
+    yield* activateBrowser.pipe(
       Effect.catchTags({
         FlightLoadError: () => renderBrowserFailure,
         ReactDOMHydrationError: () => renderBrowserFailure,
-        NavigationApiUnavailableError: () => skipHydration('the Navigation API'),
-        NavigationPrecommitUnavailableError: () => skipHydration('NavigationPrecommitController'),
       }),
     );
     return yield* Effect.never;

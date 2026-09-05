@@ -1,20 +1,7 @@
-import { Effect, Schema } from 'effect';
+import { Effect } from 'effect';
 
-export class NavigationApiUnavailableError extends Schema.TaggedError<NavigationApiUnavailableError>()(
-  'NavigationApiUnavailableError',
-  {},
-) {}
-
-export class NavigationPrecommitUnavailableError extends Schema.TaggedError<NavigationPrecommitUnavailableError>()(
-  'NavigationPrecommitUnavailableError',
-  {},
-) {}
-
-export const checkBrowserCapabilities = Effect.gen(function* () {
-  if (window.navigation === undefined) {
-    return yield* new NavigationApiUnavailableError();
-  }
-  if (window.NavigationPrecommitController === undefined) {
-    return yield* new NavigationPrecommitUnavailableError();
-  }
-});
+export const navigationMode = Effect.sync(() =>
+  window.navigation !== undefined && window.NavigationPrecommitController !== undefined
+    ? ('Client' as const)
+    : ('Document' as const),
+);

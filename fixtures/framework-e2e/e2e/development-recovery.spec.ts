@@ -27,26 +27,33 @@ test('recovers caught React errors on explicit navigation without a document rel
   expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentIdentity);
 });
 
-test('refreshes RSC through a real React commit and preserves healthy client state', async ({
-  page,
-}) => {
-  const original = await readFile(homePath, 'utf8');
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Probe count: 0' }).click();
-  const documentIdentity = await page.evaluate(() => performance.timeOrigin);
-  try {
-    await writeFile(
-      homePath,
-      original.replace('RuntimeProbe />', 'RuntimeProbe /><p>RSC rebuild committed</p>'),
-    );
-    await expect(page.getByText('RSC rebuild committed', { exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Probe count: 1' })).toBeVisible();
-    expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentIdentity);
-  } finally {
-    await writeFile(homePath, original);
-    await expect(page.getByText('RSC rebuild committed', { exact: true })).toHaveCount(0);
-  }
-});
+for (const missingApi of ['None', 'navigation', 'NavigationPrecommitController']) {
+  test(`refreshes RSC and preserves client state with missing API: ${missingApi}`, async ({
+    page,
+  }) => {
+    if (missingApi !== 'None') {
+      await page.addInitScript((api) => {
+        Object.defineProperty(window, api, { configurable: true, value: undefined });
+      }, missingApi);
+    }
+    const original = await readFile(homePath, 'utf8');
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Probe count: 0' }).click();
+    const documentIdentity = await page.evaluate(() => performance.timeOrigin);
+    try {
+      await writeFile(
+        homePath,
+        original.replace('RuntimeProbe />', 'RuntimeProbe /><p>RSC rebuild committed</p>'),
+      );
+      await expect(page.getByText('RSC rebuild committed', { exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Probe count: 1' })).toBeVisible();
+      expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentIdentity);
+    } finally {
+      await writeFile(homePath, original);
+      await expect(page.getByText('RSC rebuild committed', { exact: true })).toHaveCount(0);
+    }
+  });
+}
 
 test('keeps render diagnostics until corrected HMR actually recovers', async ({ page }) => {
   const original = await readFile(probePath, 'utf8');

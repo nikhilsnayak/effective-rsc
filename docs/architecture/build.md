@@ -45,17 +45,22 @@ Compilation and application startup failures are reported in both the terminal a
 panel. A failed candidate never publishes a successful browser update.
 Content-hashed development server bundles and chunks remain available for the development session.
 
-Browser updates use the compiler's HMR protocol; RSC changes refresh the current route through the
-Navigation API. A streaming Effect RPC carries development
+Browser updates use the compiler's HMR protocol; RSC changes refresh the current page through
+Flight, including when client navigation is unavailable. A streaming Effect RPC carries development
 updates over `/_ersc/dev`. Development-only branches are removed from production builds. On
 shutdown, the development channel closes active WebSockets before stopping the Bun HTTP server, so
 connected browser tabs cannot retain the process. Request cleanup precedes disposal of generation
 services. The channel accepts only WebSocket handshakes whose `Origin` matches the development server.
 
 Development diagnostics start independently of hydration. Current-route refresh initially reloads
-the document; successful client-navigation activation replaces it with streamed RSC refresh.
+the document; successful hydration replaces it with streamed RSC refresh.
 The initial successful socket snapshot reconciles when its hash differs from the loaded browser
 bundle.
+
+When client-navigation APIs are unavailable, development logs a warning naming the missing API and
+shows a dismissible, non-modal notice in the development panel. It explains that links use full-page
+navigation while hydration, Server Functions, and HMR remain enabled. Successful builds and renders
+do not clear the warning; build and runtime failures take precedence. Production emits no such warning.
 
 Caught React render errors include their component stack in the development panel. Later
 HMR or explicit navigation can recover the framework error boundary; starting a refresh alone does

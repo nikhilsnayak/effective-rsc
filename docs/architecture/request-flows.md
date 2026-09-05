@@ -20,6 +20,10 @@ sequenceDiagram
 The browser makes no second initial Flight request. It hydrates `document`, not a framework
 container. Closing the response cancels both stream branches and interrupts request Effects.
 
+Hydration and Server Function setup also run when client-navigation APIs are missing. In that case,
+links load complete documents while Server Functions and HMR can still refresh the current page
+through Flight. Without JavaScript, forms retain the native progressive submission path.
+
 The GET/HEAD request handler validates parameters before either renderer starts, including
 when the Page is beneath Loading. Services from existing route middleware remain available during
 validation. Schema rejection returns an empty `404`; decoder defects are not classified as missing

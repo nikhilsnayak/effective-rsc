@@ -2,32 +2,26 @@ import { afterEach, expect, it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { vi } from 'vitest';
 
-import {
-  checkBrowserCapabilities,
-  NavigationApiUnavailableError,
-  NavigationPrecommitUnavailableError,
-} from '../../src/client/browser-capabilities';
+import { navigationMode } from '../../src/client/browser-capabilities';
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it.effect('fails explicitly when the browser does not provide the Navigation API', () => {
+it.effect('uses document navigation without the Navigation API', () => {
   vi.stubGlobal('window', {});
-  return checkBrowserCapabilities.pipe(
-    Effect.flip,
-    Effect.map((error) => {
-      expect(error).toBeInstanceOf(NavigationApiUnavailableError);
-    }),
-  );
+  return navigationMode.pipe(Effect.map((mode) => expect(mode).toBe('Document')));
 });
 
-it.effect('fails explicitly when the browser does not provide navigation precommit', () => {
+it.effect('uses document navigation without navigation precommit', () => {
   vi.stubGlobal('window', { navigation: new EventTarget() });
-  return checkBrowserCapabilities.pipe(
-    Effect.flip,
-    Effect.map((error) => {
-      expect(error).toBeInstanceOf(NavigationPrecommitUnavailableError);
-    }),
-  );
+  return navigationMode.pipe(Effect.map((mode) => expect(mode).toBe('Document')));
+});
+
+it.effect('uses client navigation when both APIs are available', () => {
+  vi.stubGlobal('window', {
+    navigation: new EventTarget(),
+    NavigationPrecommitController: class {},
+  });
+  return navigationMode.pipe(Effect.map((mode) => expect(mode).toBe('Client')));
 });

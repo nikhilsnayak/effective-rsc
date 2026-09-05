@@ -76,45 +76,49 @@ test.describe('Server Functions', () => {
     }
   });
 
-  test('submits progressively when client navigation is unavailable', async ({ page }) => {
-    const title = 'Navigation refresh';
-    const browserErrors = observeBrowserErrors(page);
-    await page.addInitScript(() => {
-      Object.defineProperty(window, 'navigation', { configurable: true, value: undefined });
-    });
-    await page.goto('/catalog/primary');
-    await setItemSelection(page, title, false);
-
-    try {
-      let item = itemCard(page, title);
-      await page.evaluate(() => Reflect.set(window, '__ersc_document_marker__', true));
-      const [response] = await Promise.all([
-        page.waitForResponse((candidateResponse) => {
-          const request = candidateResponse.request();
-          return request.isNavigationRequest() && request.method() === 'POST';
-        }),
-        page.waitForEvent('load'),
-        item.getByRole('button', { name: 'Add to the selection' }).click(),
-      ]);
-
-      expect(response.status()).toBe(200);
-      item = itemCard(page, title);
-      await expect(item.getByRole('button', { name: 'Remove from the selection' })).toBeVisible();
-      expect(
-        await page.evaluate(() => Reflect.get(window, '__ersc_document_marker__')),
-      ).toBeUndefined();
-      await expect(item.getByText('Added to the selection.')).toBeVisible();
-      await expect(
-        page.locator('section[aria-labelledby="fixture-selection-heading"]'),
-      ).toContainText(title);
-      expect(browserErrors).toEqual([]);
-    } finally {
-      await expect(page.getByRole('heading', { level: 1, name: 'Primary catalog' })).toBeVisible({
-        timeout: 15_000,
-      });
+  for (const missingApi of ['navigation', 'NavigationPrecommitController']) {
+    test(`submits hydrated Server Functions without ${missingApi}`, async ({ page }) => {
+      const title = 'Navigation refresh';
+      const browserErrors = observeBrowserErrors(page);
+      await page.addInitScript((api) => {
+        Object.defineProperty(window, api, { configurable: true, value: undefined });
+      }, missingApi);
+      await page.goto('/');
+      await page.getByRole('button', { name: 'Probe count: 0' }).click();
+      await expect(page.getByRole('button', { name: 'Probe count: 1' })).toBeVisible();
+      await page.goto('/catalog/primary');
       await setItemSelection(page, title, false);
-    }
-  });
+
+      try {
+        let item = itemCard(page, title);
+        await page.evaluate(() => Reflect.set(window, '__ersc_document_marker__', true));
+        const [response] = await Promise.all([
+          page.waitForResponse((candidateResponse) => {
+            const request = candidateResponse.request();
+            return !request.isNavigationRequest() && request.method() === 'POST';
+          }),
+          item.getByRole('button', { name: 'Add to the selection' }).click(),
+        ]);
+
+        expect(response.status()).toBe(200);
+        item = itemCard(page, title);
+        await expect(item.getByRole('button', { name: 'Remove from the selection' })).toBeVisible();
+        expect(await page.evaluate(() => Reflect.get(window, '__ersc_document_marker__'))).toBe(
+          true,
+        );
+        await expect(item.getByText('Added to the selection.')).toBeVisible();
+        await expect(
+          page.locator('section[aria-labelledby="fixture-selection-heading"]'),
+        ).toContainText(title);
+        expect(browserErrors).toEqual([]);
+      } finally {
+        await expect(page.getByRole('heading', { level: 1, name: 'Primary catalog' })).toBeVisible({
+          timeout: 15_000,
+        });
+        await setItemSelection(page, title, false);
+      }
+    });
+  }
 });
 
 test.describe('stateful forms without JavaScript', () => {

@@ -13,6 +13,7 @@ export type { DevRuntimeFailure } from './runtime-failure';
 export const DevPanelElementName = 'ersc-dev-panel';
 
 type DevPanelContent =
+  | { readonly _tag: 'Warning'; readonly message: string }
   | { readonly _tag: 'BuildFailed'; readonly diagnostics: string }
   | { readonly _tag: 'RuntimeFailed'; readonly failures: ReadonlyArray<DevRuntimeFailure> };
 
@@ -22,6 +23,7 @@ export type DevPanelState =
   | { readonly _tag: 'Dismissed'; readonly content: DevPanelContent };
 
 export type DevPanelEvent =
+  | { readonly _tag: 'Warning'; readonly message: string }
   | { readonly _tag: 'BuildFailed'; readonly diagnostics: string }
   | { readonly _tag: 'RuntimeFailed'; readonly failure: DevRuntimeFailure }
   | { readonly _tag: 'RenderFailed'; readonly failure: DevRuntimeFailure }
@@ -50,6 +52,8 @@ const appendRuntimeFailure = (
 
 export const applyDevPanelEvent = (state: DevPanelState, event: DevPanelEvent): DevPanelState => {
   switch (event._tag) {
+    case 'Warning':
+      return state._tag === 'Inactive' ? { _tag: 'Visible', content: event } : state;
     case 'RenderFailed':
       if (state._tag !== 'Inactive' && state.content._tag === 'BuildFailed') {
         return state;
@@ -85,6 +89,11 @@ export const applyDevPanelEvent = (state: DevPanelState, event: DevPanelEvent): 
                   _tag: 'RuntimeFailed',
                   failures: appendRuntimeFailure(state.content.failures, event.failure),
                 },
+              };
+            case 'Warning':
+              return {
+                _tag: 'Visible',
+                content: { _tag: 'RuntimeFailed', failures: [event.failure] },
               };
           }
       }
@@ -171,7 +180,7 @@ type DevPanelProps = {
 };
 
 function DevPanelContent({ state }: { readonly state: DevPanelState }) {
-  if (state._tag === 'Inactive') {
+  if (state._tag === 'Inactive' || state.content._tag === 'Warning') {
     return null;
   }
 
@@ -230,6 +239,29 @@ function DevPanelContent({ state }: { readonly state: DevPanelState }) {
 }
 
 function DevPanel({ onOpenChange, portalContainer, state }: DevPanelProps) {
+  if (state._tag !== 'Inactive' && state.content._tag === 'Warning') {
+    return state._tag === 'Dismissed' ? null : (
+      <>
+        <style>{PanelStyles}</style>
+        <aside aria-label='Development warning' aria-live='polite' className='warning-notice'>
+          <div>
+            <span className='brand'>effective-rsc / development</span>
+            <h2 className='title'>Client navigation unavailable</h2>
+            <p>{state.content.message}</p>
+          </div>
+          <button
+            aria-label='Dismiss development warning'
+            className='close'
+            onClick={() => onOpenChange(false)}
+            type='button'
+          >
+            ×
+          </button>
+        </aside>
+      </>
+    );
+  }
+
   return (
     <Dialog.Root onOpenChange={onOpenChange} open={state._tag === 'Visible'}>
       <Dialog.Portal container={portalContainer}>

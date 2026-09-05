@@ -65,8 +65,8 @@ responses trigger a fresh current-route refresh. Applying an embedded tree inter
 current-route refresh first, then rechecks invocation ordering, the current entry, and active
 navigation after that interruption finishes and before publishing.
 
-Progressive form submission uses the same native protocol and returns a redirect to the current
-route. The browser then performs an ordinary document request.
+Progressive form submission uses the same native protocol and returns a complete HTML document
+containing the refreshed route and React form state. It does not add a redirect or a second GET.
 
 Middleware captured by the Server Function surrounds its handler. Middleware already active for the
 Server Function is omitted from the refresh; the rest of the current route scope surrounds refreshed

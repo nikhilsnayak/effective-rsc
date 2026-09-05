@@ -70,7 +70,7 @@ body limit is 10 MiB. Connection deadlines belong to the deployment in front of 
 | -------------------------------- | ------------------------------------ | --------------------------------- | ------------------------ |
 | Page GET/HEAD                    | Matched route scope                  | No                                | Yes                      |
 | Hydrated Server Function POST    | Remaining route scope around refresh | Server Function scope             | Yes                      |
-| Progressive Server Function POST | No route refresh in the POST         | Server Function scope             | Yes                      |
+| Progressive Server Function POST | Remaining route scope around refresh | Server Function scope             | Yes                      |
 | Userland HTTP, assets, unmatched | No                                   | No                                | Yes                      |
 
 Within one Server Function request, middleware already active in the Server Function scope is not

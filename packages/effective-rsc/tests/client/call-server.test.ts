@@ -166,7 +166,10 @@ type TestNavigationState = {
   readonly transition: MutableRef.MutableRef<NavigationTransition | null>;
 };
 
-const staleResponseScenario = (changeNavigation: (state: TestNavigationState) => void) =>
+const staleResponseScenario = (
+  changeNavigation: (state: TestNavigationState) => void,
+  changeTiming: 'BeforeResponse' | 'DuringInterruption' = 'BeforeResponse',
+) =>
   Effect.scoped(
     Effect.gen(function* () {
       const response = yield* Deferred.make<ReturnType<typeof makeFlight>>();
@@ -212,7 +215,11 @@ const staleResponseScenario = (changeNavigation: (state: TestNavigationState) =>
         prepareRefresh: () => () => undefined,
       });
       const routeRefresherLayer = RouteRefresher.layerTest({
-        interruptCurrentRouteRefresh: Effect.void,
+        interruptCurrentRouteRefresh: Effect.sync(() => {
+          if (changeTiming === 'DuringInterruption') {
+            changeNavigation(navigationState);
+          }
+        }),
         refreshCurrentRoute: (transitionType) =>
           Effect.sync(() => refreshTransitionTypes.push(transitionType)).pipe(
             Effect.andThen(Deferred.succeed(currentRouteRefresh, undefined)),
@@ -232,7 +239,9 @@ const staleResponseScenario = (changeNavigation: (state: TestNavigationState) =>
 
       const result = invokeServerFn('first');
       yield* Deferred.await(requestStarted);
-      changeNavigation(navigationState);
+      if (changeTiming === 'BeforeResponse') {
+        changeNavigation(navigationState);
+      }
       yield* Deferred.succeed(response, makeFlight('stale', 'first result', Effect.sync(released)));
 
       const value = yield* Effect.promise(() => result);
@@ -251,6 +260,13 @@ const staleResponseScenario = (changeNavigation: (state: TestNavigationState) =>
 
 it.effect('refreshes the current route instead of applying a response from another entry', () =>
   staleResponseScenario(({ currentEntry }) => MutableRef.set(currentEntry, secondEntry)),
+);
+
+it.effect('rechecks the entry after awaiting older refresh cleanup', () =>
+  staleResponseScenario(
+    ({ currentEntry }) => MutableRef.set(currentEntry, secondEntry),
+    'DuringInterruption',
+  ),
 );
 
 it.effect('does not apply a Server Function response while navigation is in progress', () =>

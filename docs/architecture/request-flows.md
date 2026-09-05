@@ -61,7 +61,8 @@ waiting for suspended route content.
 Hydrated invocations may execute concurrently. Only the latest invocation may apply its embedded
 route tree while its original history entry remains current and no navigation is active. Other
 responses trigger a fresh current-route refresh. Applying an embedded tree interrupts any older
-current-route refresh first.
+current-route refresh first, then rechecks invocation ordering, the current entry, and active
+navigation after that interruption finishes and before publishing.
 
 Progressive form submission uses the same native protocol and returns a redirect to the current
 route. The browser then performs an ordinary document request.

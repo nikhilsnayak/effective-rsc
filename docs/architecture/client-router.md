@@ -62,8 +62,9 @@ calling React's `addTransitionType()` inside the same `startTransition()` callba
 the corresponding render.
 
 This placement is significant. Routed Flight and current-route refreshes load asynchronously, so
-adding types only to the outer async Action would not associate them with the later UI update. The
-nested publication Transition adds the types immediately before calling `BrowserRenderer`.
+adding types before loading would not associate them with the later UI update. The publication
+Transition adds the types immediately before calling `BrowserRenderer`. Effect owns loading and
+cleanup; the Transition callback does not return a Promise waiting for its own React commit.
 
 Transition types are additive:
 

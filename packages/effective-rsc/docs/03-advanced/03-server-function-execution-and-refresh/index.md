@@ -11,7 +11,9 @@ Flight EOF. Disconnecting interrupts unfinished request work and the response st
 Hydrated invocations may execute concurrently. Only the latest invocation may apply its response's
 route tree while its original history entry remains current and no navigation is active. Other
 responses trigger a fresh current-route refresh. A response tree interrupts any older current-route
-refresh before rendering.
+refresh before rendering, then rechecks applicability after cleanup completes. Effect owns refresh
+loading and cancellation; the React Transition publishes the tree without waiting for its own
+commit inside an async Action.
 
 After a successful mutation, ERSC clears the Back/Forward traversal cache because any route may have
 changed.

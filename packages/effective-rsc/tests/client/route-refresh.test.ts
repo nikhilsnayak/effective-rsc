@@ -8,12 +8,19 @@ vi.mock('react-server-dom-rspack/client.browser', () => ({
 }));
 
 const react = vi.hoisted(() => ({
+  transitionResults: [] as Array<unknown>,
   transitionTypes: [] as Array<string>,
 }));
 
 vi.mock('react', (importOriginal) =>
   importOriginal<typeof import('react')>().then((original) => ({
     ...original,
+    startTransition: (action: Parameters<typeof original.startTransition>[0]) =>
+      original.startTransition(() => {
+        const result = action();
+        react.transitionResults.push(result);
+        return result;
+      }),
     addTransitionType: (type: string) => {
       react.transitionTypes.push(type);
     },
@@ -84,6 +91,7 @@ const makeNavigationApiLayer = (navigation: TestNavigation) =>
 const testHttpClient = HttpClient.make(() => Effect.die('Unexpected HTTP request.'));
 
 beforeEach(() => {
+  react.transitionResults.length = 0;
   react.transitionTypes.length = 0;
 });
 
@@ -203,6 +211,8 @@ it.effect('applies the HMR transition type after the active navigation settles',
 
         expect(nextRouteTree.id).toBe('refreshed');
         expect(react.transitionTypes).toEqual(['hmr-refresh']);
+        // Returning an async Action here would make React wait for its own UI commit.
+        expect(react.transitionResults).toEqual([undefined]);
         expect(invalidated).toHaveBeenCalledOnce();
         expect(navigation.navigate).not.toHaveBeenCalled();
         yield* Effect.yieldNow;

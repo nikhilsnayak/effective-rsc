@@ -54,9 +54,10 @@ error handling.
 
 Hydrated calls use React's native Server Function POST. ERSC requires an Origin whose host matches
 the application host, enforces the body limit, decodes the reference and Schema input, runs the
-handler Effect, and starts the route refresh independently. The response carries the Server Function
-result and refreshed Flight through React's native protocol, allowing the result to settle without
-waiting for suspended route content.
+handler Effect, and starts the route refresh independently. React's decoded argument envelope must
+be an array; other decoded values are typed `400` failures before application invocation.
+The response carries the Server Function result and refreshed Flight through React's native
+protocol, allowing the result to settle without waiting for suspended route content.
 
 Hydrated invocations may execute concurrently. Only the latest invocation may apply its embedded
 route tree while its original history entry remains current and no navigation is active. Other
@@ -64,8 +65,8 @@ responses trigger a fresh current-route refresh. Applying an embedded tree inter
 current-route refresh first, then rechecks invocation ordering, the current entry, and active
 navigation after that interruption finishes and before publishing.
 
-Progressive form submission uses the same native protocol and returns a redirect to the current
-route. The browser then performs an ordinary document request.
+Progressive form submission uses the same native protocol and returns a complete HTML document
+containing the refreshed route and React form state. It does not add a redirect or a second GET.
 
 Middleware captured by the Server Function surrounds its handler. Middleware already active for the
 Server Function is omitted from the refresh; the rest of the current route scope surrounds refreshed

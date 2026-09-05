@@ -16,6 +16,7 @@ import type { RequestOutcome } from './request-outcome';
 import { serverFnOutcome } from './server-fn-outcome';
 
 const ServerFnArraySizeLimit = 10_000;
+const decodeArguments = Schema.decodeUnknownEffect(Schema.Array(Schema.Unknown));
 const NoMiddleware = Object.freeze([]);
 
 export class ServerFnRequestError extends Schema.TaggedError<ServerFnRequestError>()(
@@ -124,7 +125,7 @@ const prepareClientServerFn = Effect.fnUntraced(function* <ApplicationServices>(
 ) {
   const temporaryReferences = createTemporaryReferenceSet();
   const body = yield* readBody(request);
-  const args = yield* Effect.tryPromise({
+  const decoded = yield* Effect.tryPromise({
     try: () =>
       decodeReply(body, {
         arraySizeLimit: ServerFnArraySizeLimit,
@@ -132,6 +133,11 @@ const prepareClientServerFn = Effect.fnUntraced(function* <ApplicationServices>(
       }),
     catch: (cause) => requestError('Failed to decode Server Function arguments.', 400, cause),
   });
+  const args = yield* decodeArguments(decoded).pipe(
+    Effect.mapError((cause) =>
+      requestError('Expected a Server Function argument array.', 400, cause),
+    ),
+  );
   const action = yield* Effect.try({
     try: () => loadServerAction(actionId),
     catch: (cause) => requestError('The requested Server Function does not exist.', 400, cause),

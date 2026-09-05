@@ -34,13 +34,21 @@ resolves it by path.
 
 ## Development
 
-`ersc dev` watches the same browser and server compiler graphs. A successful generation atomically
-replaces the active server application. Browser updates use the compiler's HMR protocol; RSC changes
-refresh the current route through the Navigation API. A streaming Effect RPC carries development
+`ersc dev` watches the same browser and server compiler graphs. A replacement generation is fully
+initialized before it atomically becomes available to new requests. Admission waits for the current
+compilation outcome; compilation or startup failure rejects new requests instead of serving stale
+code. Successful replacement interrupts the previous generation's pending handlers and response
+streams before disposing its application services. Saving a file can therefore cut off an active
+response; development does not drain old generations or automatically retry Server Functions.
+Failed candidates leave the current generation's existing requests alone.
+Content-hashed development server bundles and chunks remain available for the development session.
+
+Browser updates use the compiler's HMR protocol; RSC changes refresh the current route through the
+Navigation API. A streaming Effect RPC carries development
 updates over `/_ersc/dev`. Development-only branches are removed from production builds. On
 shutdown, the development channel closes active WebSockets before stopping the Bun HTTP server, so
-connected browser tabs cannot retain the process. The channel accepts only WebSocket handshakes
-whose `Origin` matches the development server.
+connected browser tabs cannot retain the process. Request cleanup precedes disposal of generation
+services. The channel accepts only WebSocket handshakes whose `Origin` matches the development server.
 
 Development diagnostics start independently of hydration. Current-route refresh initially reloads
 the document; successful client-navigation activation replaces it with streamed RSC refresh.

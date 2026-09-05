@@ -125,13 +125,18 @@ export const installCallServer = Effect.gen(function* () {
         () => undefined,
       ),
     );
-    if (selectRefreshSource(invocation) === 'CurrentRoute') {
+    let refreshSource = selectRefreshSource(invocation);
+    if (refreshSource === 'Response') {
+      yield* routeRefresher.interruptCurrentRouteRefresh;
+      // Interruption awaits cleanup, during which navigation or another invocation can win.
+      refreshSource = selectRefreshSource(invocation);
+    }
+
+    if (refreshSource === 'CurrentRoute') {
       yield* resource.release;
       yield* routeRefresher.refreshCurrentRoute('server-function');
       return;
     }
-
-    yield* routeRefresher.interruptCurrentRouteRefresh;
     const commitRefresh = routeLoader.prepareRefresh(resource.payload.routeTree);
     let renderCommitted!: Promise<void>;
     yield* Effect.sync(() => {

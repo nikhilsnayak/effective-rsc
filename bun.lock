@@ -76,7 +76,7 @@
     },
     "packages/create-ersc-app": {
       "name": "create-ersc-app",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "bin": {
         "create-ersc-app": "./dist/cli.js",
       },
@@ -100,7 +100,7 @@
     },
     "packages/effective-rsc": {
       "name": "effective-rsc",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "bin": {
         "ersc": "./bin/ersc.js",
       },

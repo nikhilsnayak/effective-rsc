@@ -1,5 +1,5 @@
 import * as BunHttpServer from '@effect/platform-bun/BunHttpServer';
-import { Effect, Layer, Option, Stream, type Types } from 'effect';
+import { Effect, Layer, Option, Schema, Stream, type Types } from 'effect';
 import type { PlatformError } from 'effect/PlatformError';
 import {
   HttpEffect,
@@ -16,7 +16,7 @@ import {
   type AnyMiddleware,
   getScopedHttpMiddleware,
 } from '../application/middleware';
-import type { PagePathParams } from '../application/page';
+import type { EncodedPageParams, PageParams } from '../application/page';
 import type { CompiledDestination } from '../application/route-graph';
 import { FrameworkAssetNamespace, isAbsolutePath } from '../application/route-path';
 import { FlightMediaType } from '../rsc/flight';
@@ -73,7 +73,7 @@ const BunServerLayer = Layer.unwrap(
   ),
 );
 
-const EmptyPathParams: PagePathParams = Object.freeze({});
+const EmptyEncodedPageParams: EncodedPageParams = Object.freeze({});
 const DynamicResponseHeaders = {
   'cache-control': 'private, no-store',
 } as const;
@@ -157,53 +157,69 @@ const httpLayer = <Services, ApplicationError>(
       );
     }
 
-    const pathParams = yield* destination.page.paramsSchema === null
-      ? Effect.succeed(EmptyPathParams)
+    const pathname = requestUrl.value.pathname;
+    const encodedParams = yield* destination.page.paramsSchema === null
+      ? Effect.succeed(EmptyEncodedPageParams)
       : HttpRouter.params;
-    const routeTree = renderRouteTree({
-      destination,
-      pathParams,
-      pathname: requestUrl.value.pathname,
-    });
-    const flightRenderer = yield* FlightRenderer;
-    const flight = yield* flightRenderer.render({
-      formState,
-      middleware,
-      renderRuntime: identity.renderRuntime,
-      routeTree,
-      serverFnResult,
-      temporaryReferences,
-    });
+    const renderResponse = Effect.fnUntraced(function* (params: PageParams) {
+      const routeTree = renderRouteTree({
+        destination,
+        params,
+        pathname,
+      });
+      const flightRenderer = yield* FlightRenderer;
+      const flight = yield* flightRenderer.render({
+        formState,
+        middleware,
+        renderRuntime: identity.renderRuntime,
+        routeTree,
+        serverFnResult,
+        temporaryReferences,
+      });
 
-    if (request.headers['accept'] === FlightMediaType) {
-      return HttpServerResponse.stream(
-        fromWebStream(flight.stream, { releaseLockOnEnd: true }).pipe(
-          Stream.ensuring(flight.release),
-        ),
-        {
-          contentType: `${FlightMediaType};charset=utf-8`,
-          headers: {
-            ...DynamicResponseHeaders,
-            'content-location': requestUrl.value.href,
+      if (request.headers['accept'] === FlightMediaType) {
+        return HttpServerResponse.stream(
+          fromWebStream(flight.stream, { releaseLockOnEnd: true }).pipe(
+            Stream.ensuring(flight.release),
+          ),
+          {
+            contentType: `${FlightMediaType};charset=utf-8`,
+            headers: {
+              ...DynamicResponseHeaders,
+              'content-location': requestUrl.value.href,
+            },
+            status,
           },
+        );
+      }
+
+      const htmlRenderer = yield* HtmlRenderer;
+      const htmlStream = yield* htmlRenderer
+        .render({ flight, formState })
+        .pipe(Effect.onError(() => flight.release));
+
+      return HttpServerResponse.stream(
+        fromWebStream(htmlStream).pipe(Stream.ensuring(flight.release)),
+        {
+          contentType: 'text/html;charset=utf-8',
+          headers: DynamicResponseHeaders,
           status,
         },
       );
+    });
+
+    if (request.method !== 'POST' && destination.page.paramsSchema !== null) {
+      return yield* Schema.decodeEffect(destination.page.paramsSchema)(encodedParams).pipe(
+        Effect.matchEffect({
+          onFailure: () =>
+            Effect.succeed(
+              HttpServerResponse.empty({ status: 404, headers: DynamicResponseHeaders }),
+            ),
+          onSuccess: (value) => renderResponse({ _tag: 'Decoded', value }),
+        }),
+      );
     }
-
-    const htmlRenderer = yield* HtmlRenderer;
-    const htmlStream = yield* htmlRenderer
-      .render({ flight, formState })
-      .pipe(Effect.onError(() => flight.release));
-
-    return HttpServerResponse.stream(
-      fromWebStream(htmlStream).pipe(Stream.ensuring(flight.release)),
-      {
-        contentType: 'text/html;charset=utf-8',
-        headers: DynamicResponseHeaders,
-        status,
-      },
-    );
+    return yield* renderResponse({ _tag: 'Encoded', value: encodedParams });
   });
 
   const executeServerFnAndRefresh = (

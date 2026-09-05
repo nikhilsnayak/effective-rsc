@@ -108,7 +108,11 @@ renderer's inferred service requirements.
 - Routes are immutable and belong to one ERSC identity.
 - `page(path, page)` attaches a Page; `mount(prefix, routes)` nests a route scope.
 - Mounted scopes retain their Layout and Loading ancestry.
-- Page parameter Schemas decode Effect HTTP path captures before rendering.
+- On GET/HEAD, the request handler decodes Page parameters once before rendering, with services
+  from existing route middleware available. Rejected parameters return an empty `404`, including
+  navigation Flight.
+- Server Function POST refreshes keep parameter rejection in React's render-error path, preserving
+  the completed action result.
 - Effect HTTP owns route matching; ERSC rejects duplicate shapes and invalid composition while
   building the graph.
 
@@ -282,9 +286,14 @@ services and register native Effect HTTP on the framework router.
 the Schema's encoded keys must exactly match the path parameters and accept strings. Compose the
 Page with `Routes.page`.
 
-Pages produce React output. Only an unmatched route receives a native `404`. The mapping from a
-matched Page's parameter rejection to an expected HTTP outcome remains a
-[known limitation](https://github.com/nikhilsnayak/effective-rsc/blob/main/docs/ARCHITECTURE.md#known-limitations).
+Pages produce React output. On GET/HEAD, the request handler decodes parameters once before
+rendering, with services from existing route middleware available. Rejected parameters receive
+an empty `404`, including navigation Flight requests; unmatched routes also receive native `404`
+responses. Other failures keep their existing
+error behavior.
+
+Server Function POST refreshes decode parameters inside Page rendering. A rejection follows React's
+render-error path without replacing the completed Server Function result with a `404`.
 
 ## Layout
 

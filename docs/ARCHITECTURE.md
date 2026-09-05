@@ -57,9 +57,6 @@ Details:
 
 ## Known limitations
 
-- **L002 — Page parameter rejection:** a matched Page's Schema failure has no settled mapping to
-  NotFound or another expected HTTP outcome. See
-  [OQ-003](OPEN_QUESTIONS.md#oq-003--route-parameter-schema-rejection).
 - **L003 — Server Function failures:** the handler's typed Effect failure is not represented in the
   client Promise type. Expected failures should be encoded in the output. See
   [OQ-006](OPEN_QUESTIONS.md#oq-006--server-function-failure-channel).

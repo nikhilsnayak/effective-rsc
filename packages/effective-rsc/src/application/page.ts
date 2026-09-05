@@ -64,13 +64,14 @@ export type PageConcern<
   };
 };
 
-export type PagePathParams = Readonly<Record<string, string | undefined>>;
-export type PageRuntimeProps<ParamNames extends string = string> = {
-  readonly params: Readonly<Record<ParamNames, string | undefined>>;
+export type EncodedPageParams = Readonly<Record<string, string | undefined>>;
+export type PageParams =
+  | { readonly _tag: 'Encoded'; readonly value: EncodedPageParams }
+  | { readonly _tag: 'Decoded'; readonly value: Readonly<Record<string, unknown>> };
+export type PageRuntimeProps = {
+  readonly params: PageParams;
 };
-export type PageComponent<ParamNames extends string = string> = (
-  props: PageRuntimeProps<ParamNames>,
-) => Promise<Awaited<ReactNode>>;
+export type PageComponent = (props: PageRuntimeProps) => Promise<Awaited<ReactNode>>;
 
 export type StaticPageDefinition<Services> = ERSCStatefulMember<
   Services,
@@ -87,16 +88,16 @@ export type AnyPageDefinition<Services> =
   | StaticPageDefinition<Services>
   | ParameterizedPageDefinition<Services>;
 
-export type PageImplementationState = {
+export type PageImplementationState<Services = unknown> = {
   readonly component: PageComponent;
-  readonly paramsSchema: Schema.Constraint | null;
+  readonly paramsSchema: PageParamsSchema<Services> | null;
 };
 
 class PageDefinitionImpl<
   Services,
   ParamNames extends string,
   Mode extends 'Parameterized' | 'Static',
-  ParamsSchema extends Schema.Constraint | null,
+  ParamsSchema extends PageParamsSchema<unknown> | null,
 >
   implements
     ERSCStatefulMember<Services, 'Page', PageImplementationState>,
@@ -126,14 +127,17 @@ class PageDefinitionImpl<
   }
 }
 
-export const getPageState = <Services>(
+export function getPageState<Services>(
   page: AnyPageDefinition<Services>,
-): PageImplementationState => {
+): PageImplementationState<Services>;
+// The compiled destination installs the Page's complete middleware chain before decoding.
+// As with scoped middleware, its provided services are erased from the application contract.
+export function getPageState(page: AnyPageDefinition<unknown>): PageImplementationState {
   if (!isERSCMember(page, 'Page')) {
     throw new TypeError('Page must be created with ERSC.Page.make.');
   }
   return page[ERSCStateTypeId];
-};
+}
 
 type StaticPageOptions<Error, Services> = {
   readonly params?: never;
@@ -180,7 +184,10 @@ export const makePageFactory = <ApplicationServices, AvailableServices>(
       const component: PageComponent = ({ params }) =>
         identity.renderRuntime.run(
           'Page',
-          decodeParams(params).pipe(
+          (params._tag === 'Decoded'
+            ? Effect.succeed(params.value)
+            : decodeParams(params.value)
+          ).pipe(
             Effect.flatMap((decodedParams) =>
               Effect.suspend(() => render({ params: decodedParams })),
             ),

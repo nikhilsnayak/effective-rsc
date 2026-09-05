@@ -45,3 +45,40 @@ test('retains the native router response for unknown paths', async ({ request })
   expect(flight.response.status()).toBe(404);
   expect(flight.body).toBe('');
 });
+
+test('returns an empty 404 when a matched Page rejects its parameters', async ({ request }) => {
+  for (const accept of ['text/html', 'text/x-component']) {
+    const response = await request.get('/catalog/invalid', { headers: { accept } });
+    expect(response.status()).toBe(404);
+    expect(await response.text()).toBe('');
+    expect(response.headers()['vary']).toContain('Accept');
+    const head = await request.head('/catalog/invalid', { headers: { accept } });
+    expect(head.status()).toBe(404);
+    expect(await head.body()).toHaveLength(0);
+  }
+});
+
+test('falls back to a native 404 document when navigation parameters are rejected', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const link = page.getByRole('link', { name: 'Open the Primary catalog' });
+  await link.evaluate((element) => element.setAttribute('href', '/catalog/invalid'));
+  await page.evaluate(() => Reflect.set(window, '__ersc_previous_document__', true));
+  const flight = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/catalog/invalid') && !response.request().isNavigationRequest(),
+  );
+  const document = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/catalog/invalid') && response.request().isNavigationRequest(),
+  );
+  await link.click();
+  expect((await flight).status()).toBe(404);
+  expect((await document).status()).toBe(404);
+  await page.waitForURL('**/catalog/invalid');
+  expect(
+    await page.evaluate(() => Reflect.get(window, '__ersc_previous_document__')),
+  ).toBeUndefined();
+  await expect(page.getByRole('heading', { name: 'ERSC Framework Fixture' })).toHaveCount(0);
+});

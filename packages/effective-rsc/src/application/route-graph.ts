@@ -13,7 +13,7 @@ export type RouteScope<Services> = {
 
 export type CompiledDestination<Services> = {
   readonly middleware: ReadonlyArray<AnyMiddleware<Services>>;
-  readonly page: PageImplementationState;
+  readonly page: PageImplementationState<Services>;
   readonly pattern: AbsolutePath;
   readonly scopes: ReadonlyArray<RouteScope<Services>>;
 };

@@ -28,7 +28,7 @@ describe('ERSC.Page.make', () => {
     const ServiceFreeERSC = Application.ersc();
     const Page = ServiceFreeERSC.Page.make({ render: () => Effect.succeed(null) });
 
-    expect(() => getPageState(Page).component({ params: {} })).toThrow(
+    expect(() => getPageState(Page).component({ params: { _tag: 'Encoded', value: {} } })).toThrow(
       new TypeError('ERSC Page rendered outside its application request runtime.'),
     );
   });
@@ -47,7 +47,9 @@ describe('ERSC.Page.make', () => {
       });
       const rendered = yield* Effect.promise(() =>
         getERSCIdentity(PageComponent).renderRuntime.bind(runtime, [], () =>
-          getPageState(PageComponent).component({ params: { day: 'sunday' } }),
+          getPageState(PageComponent).component({
+            params: { _tag: 'Encoded', value: { day: 'sunday' } },
+          }),
         ),
       );
 
@@ -73,7 +75,7 @@ describe('ERSC.Page.make', () => {
 
       const rendered = yield* Effect.promise(() =>
         getERSCIdentity(App).renderRuntime.bind(runtime, [], () =>
-          getPageState(PageComponent).component({ params: {} }),
+          getPageState(PageComponent).component({ params: { _tag: 'Encoded', value: {} } }),
         ),
       );
 
@@ -100,7 +102,9 @@ describe('ERSC.Page.make', () => {
       });
       const rendered = yield* Effect.promise(() =>
         getERSCIdentity(PageComponent).renderRuntime.bind(runtime, [], () =>
-          getPageState(PageComponent).component({ params: { slug: 'opening-keynote' } }),
+          getPageState(PageComponent).component({
+            params: { _tag: 'Encoded', value: { slug: 'opening-keynote' } },
+          }),
         ),
       );
 
@@ -130,7 +134,7 @@ describe('ERSC.Page.make', () => {
       });
       const execution = getERSCIdentity(App)
         .renderRuntime.bind(runtime, [], () =>
-          getPageState(InterruptPage).component({ params: {} }),
+          getPageState(InterruptPage).component({ params: { _tag: 'Encoded', value: {} } }),
         )
         .then(
           () => 'completed' as const,

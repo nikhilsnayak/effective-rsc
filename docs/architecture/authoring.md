@@ -54,6 +54,12 @@ Page paths own `:parameter` segments. Mount prefixes are parameter-free. ERSC va
 paths, duplicate matcher shapes, concern identity, parameter Schema keys, and the reserved `/_ersc`
 namespace. Effect HTTP remains the only runtime matcher.
 
+On GET/HEAD, the request handler decodes the matched Page's parameters once, before
+Flight or HTML rendering begins. The Page receives those decoded values; Schema rejection returns
+an empty `404`. Decoding can use services from the application and existing route middleware and
+is interrupted with its request. Server Function POST refreshes retain parameter decoding inside
+Page rendering.
+
 Compilation flattens the graph into destinations containing the Page, middleware, and
 Layout/Loading ancestry. A graph may be mounted at several prefixes, so every destination owns its
 complete ancestry. Rendering produces one unary tree:

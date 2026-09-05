@@ -18,6 +18,21 @@ test('registers an attendee and manages the issued ticket', async ({ page }, tes
   await page.getByLabel('Discount code').fill('community20');
   await page.getByLabel('What is your role?').fill('Platform engineer');
   await page.getByLabel('Dietary preference').selectOption('Vegetarian');
+  await page.getByRole('radio', { name: 'Decline payment' }).check();
+  const checkout = page
+    .locator('form')
+    .filter({ has: page.getByRole('button', { name: 'Complete registration' }) });
+  const attemptKey = checkout.locator('input[name="idempotencyKey"]');
+  const firstAttemptKey = await attemptKey.inputValue();
+  await page.getByRole('button', { name: 'Complete registration' }).click();
+  await expect(
+    page.getByText('The simulated payment was declined. No ticket was issued.'),
+  ).toBeVisible();
+  await expect(page.getByLabel('Name', { exact: true })).toHaveValue(attendeeName);
+  await expect(page.getByLabel('Email', { exact: true })).toHaveValue(attendeeEmail);
+  await expect(page.getByLabel('What is your role?')).toHaveValue('Platform engineer');
+  await expect(attemptKey).not.toHaveValue(firstAttemptKey);
+  await page.getByRole('radio', { name: 'Approve payment' }).check();
   await page.getByRole('button', { name: 'Complete registration' }).click();
 
   await expect(page.getByRole('heading', { name: 'You’re registered' })).toBeVisible();

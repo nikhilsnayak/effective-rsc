@@ -4,19 +4,20 @@ import { Check, Plus, X } from 'lucide-react';
 import { useActionState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import type { SelectionMutationState } from '@/modules/selection/server-functions';
+import { toggleSelection } from '@/modules/selection/server-functions';
 
 type SelectionToggleProps = {
-  readonly action: () => Promise<SelectionMutationState>;
+  readonly itemId: string;
   readonly isSelected: boolean;
 };
 
-export function SelectionToggle({ action, isSelected }: SelectionToggleProps) {
-  const [state, formAction, pending] = useActionState<SelectionMutationState | null>(action, null);
+export function SelectionToggle({ itemId, isSelected }: SelectionToggleProps) {
+  const [state, formAction, pending] = useActionState(toggleSelection, null);
   const selected = state?.selected ?? isSelected;
 
   return (
     <form action={formAction} className='mt-5 flex flex-wrap items-center gap-3'>
+      <input name='itemId' type='hidden' value={itemId} />
       <Button
         aria-label={selected ? 'Remove from the selection' : 'Add to the selection'}
         disabled={pending}

@@ -5,11 +5,12 @@ import { Effect, Schema } from 'effect';
 import { ActorERSC, CurrentActor } from '@/modules/fixture/actor';
 import { FixtureService } from '@/modules/fixture/service';
 
-export type SelectionMutationState = {
-  readonly message: string;
-  readonly selected: boolean | null;
-  readonly status: 'error' | 'success';
-};
+const SelectionMutationState = Schema.Struct({
+  message: Schema.String,
+  selected: Schema.NullOr(Schema.Boolean),
+  status: Schema.Literals(['error', 'success']),
+});
+export type SelectionMutationState = typeof SelectionMutationState.Type;
 
 type ToggleSelectionSuccess = {
   readonly _tag: 'Success';
@@ -25,8 +26,8 @@ const ToggleSelectionInput = Schema.Struct({
 });
 
 export const toggleSelection = ActorERSC.ServerFn.make({
-  input: ToggleSelectionInput,
-  handler: Effect.fn('toggleSelection')(function* ({ itemId }) {
+  input: [Schema.NullOr(SelectionMutationState), Schema.fromFormData(ToggleSelectionInput)],
+  handler: Effect.fn('toggleSelection')(function* (_previousState, { itemId }) {
     const actor = yield* CurrentActor;
     const service = yield* FixtureService;
     const outcome = yield* service.toggleSelection(itemId).pipe(

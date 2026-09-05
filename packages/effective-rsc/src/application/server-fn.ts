@@ -1,4 +1,4 @@
-import { Effect, Predicate, Schema } from 'effect';
+import { Array, Effect, Predicate, Schema } from 'effect';
 
 import { attachERSCMember, type ERSCIdentity, type ERSCMember } from './ersc-identity';
 import type { AnyMiddleware } from './middleware';
@@ -27,26 +27,40 @@ type ServerFnInvocationMatch<ApplicationServices> =
       readonly middleware: ReadonlyArray<AnyMiddleware<ApplicationServices>>;
     };
 
-interface ServerFunction<Input, Output, ApplicationServices> extends ERSCMember<
+type ServerFnInput<Services> =
+  | Schema.ConstraintDecoder<unknown, Services>
+  | ReadonlyArray<Schema.ConstraintDecoder<unknown, Services>>;
+
+type ServerFnArguments<Input, Side extends 'Type' | 'Encoded'> =
+  Input extends ReadonlyArray<Schema.Constraint>
+    ? {
+        -readonly [Key in keyof Input]: Input[Key] extends Schema.Constraint
+          ? Input[Key][Side]
+          : never;
+      }
+    : Input extends Schema.Constraint
+      ? [Input[Side]]
+      : never;
+
+interface ServerFunction<
+  Args extends ReadonlyArray<unknown>,
+  Output,
   ApplicationServices,
-  'ServerFn'
-> {
-  (input: Input): Promise<Output>;
+> extends ERSCMember<ApplicationServices, 'ServerFn'> {
+  (...args: Args): Promise<Output>;
 }
 
-type ServerFnOptions<InputSchema extends Schema.Constraint, Output, Error, Services> = {
-  readonly input: InputSchema;
-  readonly handler: (input: InputSchema['Type']) => Effect.Effect<Output, Error, Services>;
+type ServerFnOptions<Input, Output, Error, Services> = {
+  readonly input: Input;
+  readonly handler: (
+    ...args: ServerFnArguments<Input, 'Type'>
+  ) => Effect.Effect<Output, Error, Services>;
 };
 
 export type ServerFnFactory<ApplicationServices, AvailableServices> = {
-  readonly make: <
-    InputSchema extends Schema.ConstraintDecoder<unknown, AvailableServices>,
-    Output,
-    Error,
-  >(
-    options: ServerFnOptions<InputSchema, Output, Error, AvailableServices>,
-  ) => ServerFunction<InputSchema['Encoded'], Output, ApplicationServices>;
+  readonly make: <const Input extends ServerFnInput<AvailableServices>, Output, Error>(
+    options: ServerFnOptions<Input, Output, Error, AvailableServices>,
+  ) => ServerFunction<ServerFnArguments<Input, 'Encoded'>, Output, ApplicationServices>;
 };
 
 const directInvocationError = () =>
@@ -82,10 +96,15 @@ export const makeServerFnFactory = <ApplicationServices, AvailableServices>(
   middleware: ReadonlyArray<AnyMiddleware<ApplicationServices>>,
 ): ServerFnFactory<ApplicationServices, AvailableServices> => ({
   make: ({ input, handler }) => {
-    const decode = Schema.decodeUnknownEffect(input);
-    const serverFunction = (untrustedInput: typeof input.Encoded) => {
-      const effect = decode(untrustedInput).pipe(
-        Effect.flatMap(handler),
+    const schemas = Array.ensure<Schema.ConstraintDecoder<unknown, AvailableServices>>(input);
+    const decode = Schema.decodeUnknownEffect(Schema.Tuple(schemas));
+    const serverFunction = (...untrustedArgs: ServerFnArguments<typeof input, 'Encoded'>) => {
+      // Unary functions still ignore extra native arguments and decode undefined when omitted.
+      const effect = decode(Array.isArray(input) ? untrustedArgs : [untrustedArgs[0]]).pipe(
+        // Normalization preserves the positional Type mapping, which the generic branch erases.
+        Effect.flatMap((args: ReadonlyArray<unknown>) =>
+          handler(...(args as ServerFnArguments<typeof input, 'Type'>)),
+        ),
         Effect.mapError((cause) => new ServerFnOperationError({ cause })),
       );
       const unavailable = Promise.reject<Effect.Success<typeof effect>>(directInvocationError());

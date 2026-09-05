@@ -73,6 +73,117 @@ describe('ServerFn.make', () => {
     }),
   );
 
+  it.effect('decodes previous state and FormData with request services', () =>
+    Effect.gen(function* () {
+      const ERSC = Application.ersc<Greeting>();
+      const greet = ERSC.ServerFn.make({
+        input: [
+          Schema.FiniteFromString,
+          Schema.fromFormData(Schema.Struct({ name: Schema.NonEmptyString })),
+        ],
+        handler: Effect.fn('greet')(function* (count, { name }) {
+          const greeting = yield* Greeting;
+          return `${greeting.prefix}, ${name}: ${count + 1}`;
+        }),
+      });
+      const form = new FormData();
+      form.set('name', 'Nikhil');
+      const invocation: Promise<string> = greet('2', form);
+      const result = yield* invocationEffect(invocation, getERSCIdentity(ERSC));
+      expect(result).toBe('Hello, Nikhil: 3');
+    }).pipe(Effect.provideService(Greeting, { prefix: 'Hello' })),
+  );
+
+  it.effect('validates every positional argument before running the handler', () =>
+    Effect.gen(function* () {
+      let invoked: 'Waiting' | 'Invoked' = 'Waiting';
+      const ERSC = Application.ersc();
+      const action = ERSC.ServerFn.make({
+        input: [Schema.Finite, Schema.fromFormData(Schema.Struct({ name: Schema.NonEmptyString }))],
+        handler: () =>
+          Effect.sync(() => {
+            invoked = 'Invoked';
+          }),
+      });
+      const form = new FormData();
+      form.set('name', 'Nikhil');
+      for (const args of [['invalid state', form], [0, new FormData()], [0], []]) {
+        const invocation = Reflect.apply(action, null, args);
+        const exit = yield* Effect.exit(invocationEffect(invocation, getERSCIdentity(ERSC)));
+        expect(exit._tag).toBe('Failure');
+      }
+      expect(invoked).toBe('Waiting');
+    }),
+  );
+
+  it.effect('keeps array and tuple Schemas as single arguments', () =>
+    Effect.gen(function* () {
+      const ERSC = Application.ersc();
+      const array = ERSC.ServerFn.make({
+        input: Schema.Array(Schema.String),
+        handler: Effect.succeed,
+      });
+      const tuple = ERSC.ServerFn.make({
+        input: Schema.Tuple([Schema.String, Schema.Finite]),
+        handler: Effect.succeed,
+      });
+      const arrayResult = yield* invocationEffect(
+        array(['first', 'second']),
+        getERSCIdentity(ERSC),
+      );
+      const tupleResult = yield* invocationEffect(tuple(['first', 2]), getERSCIdentity(ERSC));
+      expect(arrayResult).toEqual(['first', 'second']);
+      expect(tupleResult).toEqual(['first', 2]);
+    }),
+  );
+
+  it.effect('preserves unary handling of omitted and extra native arguments', () =>
+    Effect.gen(function* () {
+      const ERSC = Application.ersc();
+      const action = ERSC.ServerFn.make({
+        input: Schema.Undefined,
+        handler: () => Effect.succeed('done'),
+      });
+      for (const args of [[], [undefined, 'ignored']]) {
+        const result = yield* invocationEffect(
+          Reflect.apply(action, null, args),
+          getERSCIdentity(ERSC),
+        );
+        expect(result).toBe('done');
+      }
+    }),
+  );
+
+  it.effect('retains lazy execution and positional order after binding arguments', () =>
+    Effect.gen(function* () {
+      const values: Array<string> = [];
+      const ERSC = Application.ersc();
+      const action = ERSC.ServerFn.make({
+        input: [Schema.String, Schema.Finite, Schema.String],
+        handler: (prefix, count, suffix) =>
+          Effect.sync(() => {
+            const value = `${prefix}:${count}:${suffix}`;
+            values.push(value);
+            return value;
+          }),
+      });
+      const invocation = action.bind(null, 'bound')(2, 'tail');
+      expect(values).toEqual([]);
+      const result = yield* invocationEffect(invocation, getERSCIdentity(ERSC));
+      expect(result).toBe('bound:2:tail');
+      expect(values).toEqual(['bound:2:tail']);
+    }),
+  );
+
+  it.effect('supports an empty argument list', () =>
+    Effect.gen(function* () {
+      const ERSC = Application.ersc();
+      const action = ERSC.ServerFn.make({ input: [], handler: () => Effect.succeed('done') });
+      const result = yield* invocationEffect(action(), getERSCIdentity(ERSC));
+      expect(result).toBe('done');
+    }),
+  );
+
   it.effect('rejects untrusted input before invoking the handler', () =>
     Effect.gen(function* () {
       const invoked = yield* Ref.make(false);

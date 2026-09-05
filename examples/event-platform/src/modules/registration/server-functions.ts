@@ -3,12 +3,14 @@
 import { Effect, Schema } from 'effect';
 
 import { ERSC } from '@/ersc';
-import { RegistrationAnswerInput, type CheckoutReceipt } from '@/modules/registration/model';
+import { RegistrationAnswerInput, CheckoutReceipt } from '@/modules/registration/model';
 import { RegistrationService } from '@/modules/registration/service';
 
-export type RegistrationState =
-  | { readonly message: string; readonly status: 'error' }
-  | { readonly receipt: CheckoutReceipt; readonly status: 'success' };
+const RegistrationState = Schema.Union([
+  Schema.Struct({ message: Schema.String, status: Schema.Literal('error') }),
+  Schema.Struct({ receipt: CheckoutReceipt, status: Schema.Literal('success') }),
+]);
+export type RegistrationState = typeof RegistrationState.Type;
 
 const PersonName = Schema.String.check(
   Schema.isTrimmed(),
@@ -35,8 +37,8 @@ const RegistrationInput = Schema.fromFormData(
 );
 
 export const registerAttendee = ERSC.ServerFn.make({
-  input: RegistrationInput,
-  handler: Effect.fn('registerAttendee')(function* (input) {
+  input: [Schema.NullOr(RegistrationState), RegistrationInput],
+  handler: Effect.fn('registerAttendee')(function* (_previousState, input) {
     const service = yield* RegistrationService;
     const outcome = yield* service.checkout(input).pipe(
       Effect.map((receipt) => ({ receipt, _tag: 'Success' }) as const),

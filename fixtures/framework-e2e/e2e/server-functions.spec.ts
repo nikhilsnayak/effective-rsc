@@ -58,6 +58,14 @@ test.describe('Server Functions', () => {
       await expect(selection).toContainText(title);
       expect(await readCatalogFallbackObservation(page)).toBe(false);
 
+      // The second submission sends the previous result object, not the initial null state.
+      await item.getByRole('button', { name: 'Remove from the selection' }).click();
+      await expect(item.getByText("Removed from Integration Actor's selection.")).toBeVisible();
+      await waitForViewTransition(page, ['server-function']);
+      await item.getByRole('button', { name: 'Add to the selection' }).click();
+      await expect(item.getByText("Added to Integration Actor's selection.")).toBeVisible();
+      await waitForViewTransition(page, ['server-function']);
+
       await page.reload();
       item = itemCard(page, title);
       await expect(item.getByRole('button', { name: 'Remove from the selection' })).toBeVisible();
@@ -105,6 +113,44 @@ test.describe('Server Functions', () => {
         timeout: 15_000,
       });
       await setItemSelection(page, title, false);
+    }
+  });
+});
+
+test.describe('stateful forms without JavaScript', () => {
+  test.use({ javaScriptEnabled: false });
+
+  test('round-trips previous state and FormData across successive submissions', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    try {
+      const item = page.locator('form');
+      let previousMessage: string | null = null;
+      for (const [button, message] of [
+        ['Add to the selection', 'Added to the selection.'],
+        ['Remove from the selection', 'Removed from the selection.'],
+      ] as const) {
+        const [response] = await Promise.all([
+          page.waitForResponse(
+            (response) =>
+              response.request().isNavigationRequest() && response.request().method() === 'POST',
+          ),
+          item.getByRole('button', { name: button }).click(),
+        ]);
+        expect(response.status()).toBe(200);
+        if (previousMessage !== null) {
+          expect(response.request().postData()).toContain(previousMessage);
+        }
+        await expect(item.getByText(message)).toBeVisible();
+        previousMessage = message;
+      }
+    } finally {
+      const remove = page.getByRole('button', { name: 'Remove from the selection' });
+      if (await remove.isVisible()) {
+        await remove.click();
+        await expect(page.getByText('Removed from the selection.')).toBeVisible();
+      }
     }
   });
 });

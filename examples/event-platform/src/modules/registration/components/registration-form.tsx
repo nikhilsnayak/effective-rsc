@@ -4,7 +4,7 @@
 // oxlint-disable effecttsgo/crypto-random-uuid -- Browser-generated idempotency keys must not pull Effect into the client graph.
 
 import { CheckCircle2, CreditCard, Ticket } from 'lucide-react';
-import { useState, useTransition } from 'react';
+import { startTransition, useActionState, useState } from 'react';
 
 import { RevealTransition } from '@/components/navigation-transition';
 import { Button } from '@/components/ui/button';
@@ -42,8 +42,16 @@ export function RegistrationForm({
 }) {
   // oxlint-disable-next-line effecttsgo/crypto-random-uuid -- The browser owns this checkout-attempt key before invoking the Server Function.
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
-  const [state, setState] = useState<RegistrationState | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [state, submit, pending] = useActionState<RegistrationState | null, FormData>(
+    async (previousState, form) => {
+      const result = await registerAttendee(previousState, form);
+      if (result.status === 'error') {
+        setIdempotencyKey(crypto.randomUUID());
+      }
+      return result;
+    },
+    null,
+  );
   const firstAvailableTicket = tickets.find((ticket) => ticket.available > 0);
 
   if (state?.status === 'success') {
@@ -110,16 +118,8 @@ export function RegistrationForm({
               }),
             ),
           );
-          startTransition(async () => {
-            const result = await registerAttendee(formData);
-            startTransition(() => {
-              setState(result);
-              if (result.status === 'error') {
-                // oxlint-disable-next-line effecttsgo/crypto-random-uuid -- A known failed attempt receives a fresh browser-owned idempotency key.
-                setIdempotencyKey(crypto.randomUUID());
-              }
-            });
-          });
+          // Keep values on expected failures instead of triggering the native form-action reset.
+          startTransition(() => submit(formData));
         }}
       >
         <input name='eventId' type='hidden' value={eventId} />

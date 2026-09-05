@@ -37,6 +37,13 @@ Component Effects remain attached to the HTTP request.
 Server Function handlers execute directly in the HTTP request fiber. If a Server Function refreshes
 the current route, the refreshed Page, Layout, and Component Effects use the render runtime.
 
+`ServerFn.make` accepts one Schema for a single argument, or a readonly list of Schemas for
+positional arguments. The caller passes each Schema's encoded value and the handler receives each
+decoded value in the same position. An empty list declares no arguments. Array and Tuple Schemas
+remain single-argument inputs. A state Schema followed by a FormData decoder supports native
+`useActionState` actions with `(previousState, payload)` arguments without changing React's
+transport or binding.
+
 ## Routes
 
 `Routes.make` creates immutable scopes. `page(path, page)` adds an Effect HTTP pattern;

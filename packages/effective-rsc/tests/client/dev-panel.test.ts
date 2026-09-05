@@ -92,4 +92,15 @@ describe('development panel state', () => {
       _tag: 'Inactive',
     });
   });
+
+  it('replaces build diagnostics when the replacement reaches React but still fails', () => {
+    const state = apply(
+      { _tag: 'BuildFailed', diagnostics: 'Compilation failed' },
+      { _tag: 'RenderFailed', failure: runtimeFailure('replacement still fails') },
+    );
+    expect(state).toEqual({
+      _tag: 'Visible',
+      content: { _tag: 'RuntimeFailed', failures: [runtimeFailure('replacement still fails')] },
+    });
+  });
 });

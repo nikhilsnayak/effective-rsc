@@ -24,6 +24,7 @@ export type DevPanelState =
 export type DevPanelEvent =
   | { readonly _tag: 'BuildFailed'; readonly diagnostics: string }
   | { readonly _tag: 'RuntimeFailed'; readonly failure: DevRuntimeFailure }
+  | { readonly _tag: 'RenderFailed'; readonly failure: DevRuntimeFailure }
   | { readonly _tag: 'Reconciled' }
   | { readonly _tag: 'Opened' }
   | { readonly _tag: 'Dismissed' };
@@ -48,6 +49,11 @@ const appendRuntimeFailure = (
 
 export const applyDevPanelEvent = (state: DevPanelState, event: DevPanelEvent): DevPanelState => {
   switch (event._tag) {
+    case 'RenderFailed':
+      return {
+        _tag: 'Visible',
+        content: { _tag: 'RuntimeFailed', failures: [event.failure] },
+      };
     case 'BuildFailed':
       return {
         _tag: 'Visible',

@@ -2,11 +2,12 @@ import * as BrowserSocket from '@effect/platform-browser/BrowserSocket';
 import { Effect, Layer, Ref, Semaphore, Stream } from 'effect';
 import { RpcClient, RpcSerialization } from 'effect/unstable/rpc';
 
+import { BrowserRenderStatus } from '../client/browser-render-status';
 import { RouteRefresher } from '../client/route-refresh';
 import { DevChannelPath, DevRpcs, type DevUpdate } from './channel';
 import { decideHotUpdate, type HotUpdateCheck, type PendingDevUpdate } from './hmr-update';
 import { makeDevPanel } from './panel';
-import { reportBrowserFailures } from './runtime-failure';
+import { fromRenderError, reportBrowserFailures } from './runtime-failure';
 
 const socketProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
 const socketUrl = `${socketProtocol}//${location.host}${DevChannelPath}`;
@@ -71,6 +72,7 @@ const settlePendingUpdate = Effect.fnUntraced(function* (pendingUpdate: Ref.Ref<
 
 export const startDevClient = Effect.gen(function* () {
   const routeRefresher = yield* RouteRefresher;
+  const renderStatus = yield* BrowserRenderStatus;
   const panel = yield* makeDevPanel;
   const pendingUpdate = yield* Ref.make<PendingDevUpdate>({
     acknowledgedClientHash: import.meta.rspackHash,
@@ -84,11 +86,30 @@ export const startDevClient = Effect.gen(function* () {
     if (action === 'Reloading') {
       return;
     }
-    if (action === 'Refresh') {
+    const status = yield* renderStatus.get;
+    if (action === 'Refresh' || status._tag === 'Failed') {
       yield* routeRefresher.refreshCurrentRoute('hmr-refresh');
+      // Starting a refresh is not evidence that the replacement rendered successfully.
+      return;
     }
     yield* panel.dispatch({ _tag: 'Reconciled' });
   });
+  yield* renderStatus.changes.pipe(
+    Stream.runForEach((status) => {
+      switch (status._tag) {
+        case 'Waiting':
+          return Effect.void;
+        case 'Rendered':
+          return panel.dispatch({ _tag: 'Reconciled' });
+        case 'Failed':
+          return panel.dispatch({
+            _tag: 'RenderFailed',
+            failure: fromRenderError(status.error, status.componentStack),
+          });
+      }
+    }),
+    Effect.forkScoped,
+  );
   yield* reportBrowserFailures((failure) =>
     panel.dispatch({ _tag: 'RuntimeFailed', failure }),
   ).pipe(Effect.forkScoped);

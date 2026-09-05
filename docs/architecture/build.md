@@ -55,6 +55,11 @@ the document; successful client-navigation activation replaces it with streamed 
 The initial successful socket snapshot reconciles when its hash differs from the loaded browser
 bundle.
 
+Caught React render errors include their component stack in the development panel. Later
+HMR or explicit navigation can recover the framework error boundary; starting a refresh alone does
+not clear the error. Healthy trees retain their React state, application error boundaries retain
+their own policy, and recovery never replays a Server Function or retries unchanged code on a timer.
+
 React Server Components Performance Tracks remain native. Initial hydration uses the document
 timeline origin; navigation and Server Function decoding receive a timestamp captured before HTTP
 execution. Production compilation removes the timing metadata. React Debug Channel transport and

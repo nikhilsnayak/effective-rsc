@@ -1,17 +1,12 @@
-import { Context, Effect, FiberMap, Layer, Ref, Schema } from 'effect';
+import { Context, Effect, FiberMap, Layer, Ref } from 'effect';
 import { addTransitionType, startTransition } from 'react';
 
-import { BrowserEffectRunner } from './browser-effect-runner';
 import { BrowserRenderer } from './browser-renderer';
 import { NavigationApi } from './navigation-api';
 import { isRoutedNavigation, preserveRequestedHash } from './navigation-routing';
 import { RouteLoader } from './route-loader';
 
 const CurrentRouteRefreshKey = 'CurrentRouteRefresh';
-
-class RouteRefreshError extends Schema.TaggedError<RouteRefreshError>()('RouteRefreshError', {
-  cause: Schema.Defect(),
-}) {}
 
 export type RouteRefreshTransitionType = 'hmr-refresh' | 'server-function';
 
@@ -60,7 +55,6 @@ export const installRouteRefresh = Effect.gen(function* () {
   const navigationApi = yield* NavigationApi;
   const routeLoader = yield* RouteLoader;
   const routeRefresher = yield* RouteRefresher;
-  const run = yield* BrowserEffectRunner;
   const refreshes = yield* FiberMap.make<typeof CurrentRouteRefreshKey>();
 
   const waitForNavigationIdle = Effect.suspend(() => {
@@ -123,22 +117,15 @@ export const installRouteRefresh = Effect.gen(function* () {
     }).pipe(Effect.andThen(Effect.sync(commitRefresh)), Effect.ensuring(resource.release));
   });
 
-  const refreshInReactTransition = (transitionType: RouteRefreshTransitionType) =>
-    Effect.callback<void, RouteRefreshError>((resume, signal) => {
-      startTransition(() =>
-        run(refreshRoute(transitionType), { signal }).then(
-          () => resume(Effect.void),
-          (cause) => resume(Effect.fail(new RouteRefreshError({ cause }))),
-        ),
-      );
-    });
-
   const refreshCurrentRoute = Effect.fnUntraced(
     function* (transitionType: RouteRefreshTransitionType) {
       routeLoader.invalidate();
       yield* waitForNavigationIdle;
-      yield* Effect.raceFirst(refreshInReactTransition(transitionType), waitForRoutedNavigation);
+      // Only publication belongs to a React Transition. An async Action waiting for this
+      // effect would prevent the very UI commit that completes the refresh.
+      yield* Effect.raceFirst(refreshRoute(transitionType), waitForRoutedNavigation);
     },
+    Effect.scoped,
     Effect.catch((cause) => Effect.logError('Failed to refresh the current route.', cause)),
   );
 

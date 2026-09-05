@@ -205,7 +205,7 @@ function DevPanelContent({ state }: { readonly state: DevPanelState }) {
             {isBuildFailure ? (
               <section className='build-failure'>
                 <div className='section-heading'>
-                  <span>Compiler output</span>
+                  <span>Build diagnostics</span>
                   <span>Fix the error and save to retry</span>
                 </div>
                 <pre className='build-output'>{state.content.diagnostics}</pre>

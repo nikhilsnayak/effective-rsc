@@ -75,12 +75,19 @@ Callers pass the Schema's encoded type and the handler receives its decoded type
 input; a function returning `void` can then be passed directly to `<form action>`. Let the Schema
 infer the handler parameter.
 
+For form feedback with `useActionState`, use `input: [StateSchema, FormSchema]` and
+`handler: (previousState, form) => ...`. React supplies both arguments; ERSC validates and decodes
+each one. Keep the native Server Function reference intact when passing it to `useActionState`
+to retain progressive enhancement. A single Array or Tuple Schema still describes one argument.
+
 A successful invocation refreshes the current route.
 
 - **[Creating the Server Function authoring module](./docs/02-guides/01-server-functions/10_ersc.ts)**
 - **[Defining a Server Function](./docs/02-guides/01-server-functions/20_follow-author.ts)**: ERSC decodes FormData before running the Effect handler.
 - **[Rendering a direct form action](./docs/02-guides/01-server-functions/30_follow-author-button.tsx)**: A FormData Server Function can be passed directly to form action.
 - **[Closing the Server Function application](./docs/02-guides/01-server-functions/40_application.tsx)**
+- **[Defining a stateful form action](./docs/02-guides/01-server-functions/50_greet.ts)**: A schema list decodes React's previous state and submitted FormData separately.
+- **[Rendering a stateful form](./docs/02-guides/01-server-functions/60_greeting-form.tsx)**: Pass the native reference to useActionState so React also owns progressive form submission.
 
 ## Services
 
@@ -352,6 +359,12 @@ decodes the invocation payload and infers the handler parameter; do not annotate
 returns an Effect whose requirements fit the ERSC service universe. The client reference accepts the
 Schema's encoded type and resolves `Promise<Output>`; the handler receives its decoded type.
 
+For multiple positional arguments, supply a readonly schema list as `input`. Each caller argument
+uses its Schema's encoded type; each handler argument uses its decoded type, in the same order.
+Inline lists infer their tuple shape without `as const`. Use `input: []` for no arguments.
+`input: Schema.Array(...)` and `input: Schema.Tuple(...)` still describe one argument, not a
+positional argument list.
+
 ```ts
 const followAuthor = ERSC.ServerFn.make({
   input: Schema.Struct({ authorId: Schema.NonEmptyString }),
@@ -376,6 +389,23 @@ const followAuthorForm = ERSC.ServerFn.make({
 
 A ServerFn created from a derived view activates its middleware for the POST. The Middleware
 reference defines refresh reach and ordering.
+
+For a `useActionState` form, declare both the previous state and submitted FormData:
+
+```ts
+const StateSchema = Schema.Struct({ message: Schema.String });
+const FormSchema = Schema.fromFormData(Schema.Struct({ name: Schema.NonEmptyString }));
+
+const greet = ERSC.ServerFn.make({
+  input: [StateSchema, FormSchema],
+  handler: (_previousState, { name }) => Effect.succeed({ message: `Hello, ${name}` }),
+});
+```
+
+Pass the native reference directly to `useActionState(greet, { message: '' })` and its returned
+action to `<form action>`. React supplies previous state and FormData for hydrated and progressive
+submissions. Previous state is client input: validate it, but never trust it for authorization or
+authoritative application state. Native `.bind` can prefill leading arguments.
 
 Direct server invocation throws. Encode expected failure in a discriminated output union; unexpected
 failures reject the Promise. Browser requests require an Origin matching the application host and

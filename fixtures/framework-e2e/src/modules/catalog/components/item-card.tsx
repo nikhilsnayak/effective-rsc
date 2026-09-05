@@ -7,11 +7,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ItemDetail } from '@/modules/catalog/components/item-detail';
 import type { Item } from '@/modules/fixture/model';
 import { SelectionToggle } from '@/modules/selection/components/selection-toggle';
-import { toggleSelection } from '@/modules/selection/server-functions';
 
 export function ItemCard({ item }: { readonly item: Item }) {
-  const toggleSelectionAction = toggleSelection.bind(null, { itemId: item.id });
-
   return (
     <Card className='gap-0 rounded-lg py-0 shadow-none'>
       <article className='grid sm:grid-cols-[7.5rem_minmax(0,1fr)]'>
@@ -41,7 +38,7 @@ export function ItemCard({ item }: { readonly item: Item }) {
           >
             <ItemDetail detailId={item.detailId} />
           </Suspense>
-          <SelectionToggle action={toggleSelectionAction} isSelected={item.isSelected} />
+          <SelectionToggle itemId={item.id} isSelected={item.isSelected} />
         </CardContent>
       </article>
     </Card>

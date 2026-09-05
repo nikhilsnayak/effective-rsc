@@ -6,9 +6,11 @@ import type { OrdersError } from '@/modules/orders/service';
 import { OrdersService } from '@/modules/orders/service';
 import { CurrentOrganizer, OrganizerERSC } from '@/modules/organizer/current-organizer';
 
-export type OrderMutationState =
-  | { readonly message: string; readonly status: 'success' }
-  | { readonly message: string; readonly status: 'error' };
+const OrderMutationState = Schema.Union([
+  Schema.Struct({ message: Schema.String, status: Schema.Literal('success') }),
+  Schema.Struct({ message: Schema.String, status: Schema.Literal('error') }),
+]);
+export type OrderMutationState = typeof OrderMutationState.Type;
 
 const RefundInput = Schema.fromFormData(
   Schema.Struct({
@@ -30,8 +32,8 @@ const failureState = (error: OrdersError): OrderMutationState => {
 };
 
 export const refundOrder = OrganizerERSC.ServerFn.make({
-  input: RefundInput,
-  handler: Effect.fn('refundOrder')(function* ({ eventId, orderId, reason }) {
+  input: [Schema.NullOr(OrderMutationState), RefundInput],
+  handler: Effect.fn('refundOrder')(function* (_previousState, { eventId, orderId, reason }) {
     const { userId } = yield* CurrentOrganizer;
     const service = yield* OrdersService;
     return yield* service.refund(userId, eventId, orderId, reason).pipe(

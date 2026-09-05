@@ -13,10 +13,17 @@ test('checks in a credential and reverses the operation', async ({ page }) => {
   await expect(
     page.getByText('Arrived', { exact: true }).locator('..').getByText('0', { exact: true }),
   ).toBeVisible();
+  await page.getByLabel('Ticket code').fill('GTH-MISSING');
+  await page.getByRole('button', { name: 'Check in' }).click();
+  await expect(page.getByText('No ticket matched this credential for the event.')).toBeVisible();
+  await expect(page.getByLabel('Ticket code')).toHaveValue('GTH-MISSING');
+  await expect(page.getByLabel('Ticket code')).toBeFocused();
   await page.getByLabel('Ticket code').fill('GTH-DEMOADA0001');
   await page.getByRole('button', { name: 'Check in' }).click();
 
   await expect(page.getByText('Ada Lovelace is checked in.')).toBeVisible();
+  await expect(page.getByLabel('Ticket code')).toHaveValue('GTH-DEMOADA0001');
+  await expect(page.getByLabel('Ticket code')).toBeFocused();
   await expect(
     page.getByText('Arrived', { exact: true }).locator('..').getByText('1', { exact: true }),
   ).toBeVisible();

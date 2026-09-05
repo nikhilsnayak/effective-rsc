@@ -6,9 +6,11 @@ import { CurrentOrganizer, OrganizerERSC } from '@/modules/organizer/current-org
 import type { RegistrationSettingsError } from '@/modules/registration-settings/service';
 import { RegistrationSettingsService } from '@/modules/registration-settings/service';
 
-export type RegistrationSettingsMutationState =
-  | { readonly message: string; readonly status: 'success' }
-  | { readonly message: string; readonly status: 'error' };
+const RegistrationSettingsMutationState = Schema.Union([
+  Schema.Struct({ message: Schema.String, status: Schema.Literal('success') }),
+  Schema.Struct({ message: Schema.String, status: Schema.Literal('error') }),
+]);
+export type RegistrationSettingsMutationState = typeof RegistrationSettingsMutationState.Type;
 
 const RequiredText = (maximum: number) =>
   Schema.String.check(Schema.isTrimmed(), Schema.isMinLength(1), Schema.isMaxLength(maximum));
@@ -44,8 +46,8 @@ const failureState = (error: RegistrationSettingsError): RegistrationSettingsMut
 };
 
 export const createRegistrationQuestion = OrganizerERSC.ServerFn.make({
-  input: CreateInput,
-  handler: Effect.fn('createRegistrationQuestion')(function* (input) {
+  input: [Schema.NullOr(RegistrationSettingsMutationState), CreateInput],
+  handler: Effect.fn('createRegistrationQuestion')(function* (_previousState, input) {
     const { userId } = yield* CurrentOrganizer;
     const service = yield* RegistrationSettingsService;
     return yield* service
@@ -62,8 +64,11 @@ export const createRegistrationQuestion = OrganizerERSC.ServerFn.make({
 });
 
 export const archiveRegistrationQuestion = OrganizerERSC.ServerFn.make({
-  input: ArchiveInput,
-  handler: Effect.fn('archiveRegistrationQuestion')(function* ({ eventId, questionId }) {
+  input: [Schema.NullOr(RegistrationSettingsMutationState), ArchiveInput],
+  handler: Effect.fn('archiveRegistrationQuestion')(function* (
+    _previousState,
+    { eventId, questionId },
+  ) {
     const { userId } = yield* CurrentOrganizer;
     const service = yield* RegistrationSettingsService;
     return yield* service.archive(userId, eventId, questionId).pipe(

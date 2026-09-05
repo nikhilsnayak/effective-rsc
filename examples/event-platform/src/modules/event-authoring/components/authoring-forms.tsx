@@ -1,9 +1,7 @@
 'use client';
 
-// oxlint-disable effecttsgo/async-function -- React Transition Actions are native Promise boundaries.
-
 import { Eye, EyeOff, Save, Ticket, WandSparkles } from 'lucide-react';
-import { type ReactNode, useState, useTransition } from 'react';
+import { type ReactNode, startTransition, useActionState } from 'react';
 
 import { RevealTransition } from '@/components/navigation-transition';
 import { Button } from '@/components/ui/button';
@@ -52,7 +50,7 @@ function MutationMessage({ state }: { readonly state: AuthoringMutationState | n
         }
       >
         <span>{state.message}</span>
-        {state.status === 'success' && state.editPath !== undefined ? (
+        {state.status === 'success' && state.editPath !== null ? (
           <a
             className='text-foreground font-medium underline underline-offset-4'
             href={state.editPath}
@@ -97,9 +95,8 @@ export function EventDetailsForm({
   readonly defaults?: EditableEvent;
   readonly organizationId: string;
 }) {
-  const [pending, startTransition] = useTransition();
-  const [state, setState] = useState<AuthoringMutationState | null>(null);
   const editing = defaults !== undefined;
+  const [state, submit, pending] = useActionState(editing ? updateEvent : createEvent, null);
 
   return (
     <form
@@ -107,10 +104,7 @@ export function EventDetailsForm({
       onSubmit={(event) => {
         event.preventDefault();
         const formData = new FormData(event.currentTarget);
-        startTransition(async () => {
-          const next = await (editing ? updateEvent(formData) : createEvent(formData));
-          startTransition(() => setState(next));
-        });
+        startTransition(() => submit(formData));
       }}
     >
       {editing ? (
@@ -255,6 +249,10 @@ export function EventDetailsForm({
   );
 }
 
+type TicketTypeAction =
+  | { readonly _tag: 'Save'; readonly form: FormData }
+  | { readonly _tag: 'SetStatus'; readonly input: Parameters<typeof setTicketTypeStatus>[0] };
+
 export function TicketTypeForm({
   eventId,
   ticket,
@@ -262,8 +260,13 @@ export function TicketTypeForm({
   readonly eventId: string;
   readonly ticket?: ManagedTicketType;
 }) {
-  const [pending, startTransition] = useTransition();
-  const [state, setState] = useState<AuthoringMutationState | null>(null);
+  const [state, submit, pending] = useActionState<AuthoringMutationState | null, TicketTypeAction>(
+    (previousState, action) =>
+      action._tag === 'Save'
+        ? saveTicketType(previousState, action.form)
+        : setTicketTypeStatus(action.input),
+    null,
+  );
   const fieldPrefix = ticket?.ticketTypeId ?? 'new-ticket';
   const fieldId = (name: string) => `${fieldPrefix}-${name}`;
 
@@ -273,10 +276,7 @@ export function TicketTypeForm({
       onSubmit={(event) => {
         event.preventDefault();
         const formData = new FormData(event.currentTarget);
-        startTransition(async () => {
-          const next = await saveTicketType(formData);
-          startTransition(() => setState(next));
-        });
+        startTransition(() => submit({ _tag: 'Save', form: formData }));
       }}
     >
       <input name='eventId' type='hidden' value={eventId} />
@@ -381,14 +381,16 @@ export function TicketTypeForm({
           <Button
             disabled={pending}
             onClick={() => {
-              startTransition(async () => {
-                const next = await setTicketTypeStatus({
-                  eventId,
-                  status: ticket.status === 'active' ? 'hidden' : 'active',
-                  ticketTypeId: ticket.ticketTypeId,
-                });
-                startTransition(() => setState(next));
-              });
+              startTransition(() =>
+                submit({
+                  _tag: 'SetStatus',
+                  input: {
+                    eventId,
+                    status: ticket.status === 'active' ? 'hidden' : 'active',
+                    ticketTypeId: ticket.ticketTypeId,
+                  },
+                }),
+              );
             }}
             size='sm'
             type='button'

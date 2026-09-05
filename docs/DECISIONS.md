@@ -71,6 +71,7 @@ entry; read Git history for what it said.
 | D-065 | Let hydrated Server Functions execute concurrently; only the latest applicable response may render its embedded tree, while other completions refresh the current route and newer response trees interrupt older refreshes.                                       |
 | D-066 | Finish native Navigation at first UI commit. The client router retains Flight until EOF or render retirement, preserves visible UI while successors prepare, discards precommit renders before release, and uses React errors without history rollback.           |
 | D-067 | Keep React `<ViewTransition>` boundaries and styles application-owned. At publication, tag routes with additive kind, direction, and UA visual-transition types, and tag Server Function and HMR refreshes with dedicated types.                                  |
+| D-068 | Let ServerFn input be one Schema for one argument or a readonly schema list for positional arguments, including previous state and FormData for native useActionState. A Tuple or Array Schema remains a single argument. Resolves OQ-008.                        |
 
 ## Deferred
 

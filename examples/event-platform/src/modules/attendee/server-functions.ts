@@ -5,10 +5,11 @@ import { Effect, Schema } from 'effect';
 import { AttendeeHubERSC, CurrentAttendeeSession } from '@/modules/attendee/current-attendee';
 import { AttendeeService } from '@/modules/attendee/service';
 
-export type TicketHolderMutationState = {
-  readonly message: string;
-  readonly status: 'error' | 'success';
-};
+const TicketHolderMutationState = Schema.Union([
+  Schema.Struct({ message: Schema.String, status: Schema.Literal('success') }),
+  Schema.Struct({ message: Schema.String, status: Schema.Literal('error') }),
+]);
+export type TicketHolderMutationState = typeof TicketHolderMutationState.Type;
 
 const HolderName = Schema.String.check(
   Schema.isTrimmed(),
@@ -23,8 +24,8 @@ const UpdateTicketHolderInput = Schema.fromFormData(
 );
 
 export const updateTicketHolder = AttendeeHubERSC.ServerFn.make({
-  input: UpdateTicketHolderInput,
-  handler: Effect.fn('updateTicketHolder')(function* ({ holderName, ticketId }) {
+  input: [Schema.NullOr(TicketHolderMutationState), UpdateTicketHolderInput],
+  handler: Effect.fn('updateTicketHolder')(function* (_previousState, { holderName, ticketId }) {
     const { token } = yield* CurrentAttendeeSession;
     const service = yield* AttendeeService;
     const outcome = yield* service.updateHolderName(token, ticketId, holderName).pipe(

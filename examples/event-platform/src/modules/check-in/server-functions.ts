@@ -2,18 +2,20 @@
 
 import { Effect, Schema } from 'effect';
 
-import type { CheckInTicket } from '@/modules/check-in/model';
+import { CheckInTicket } from '@/modules/check-in/model';
 import { type CheckInError, type CheckInResult, CheckInService } from '@/modules/check-in/service';
 import { CurrentOrganizer, OrganizerERSC } from '@/modules/organizer/current-organizer';
 
-export type CheckInMutationState =
-  | {
-      readonly message: string;
-      readonly outcome: 'already_checked_in' | 'checked_in' | 'reopened';
-      readonly status: 'success';
-      readonly ticket: CheckInTicket;
-    }
-  | { readonly message: string; readonly status: 'error' };
+const CheckInMutationState = Schema.Union([
+  Schema.Struct({
+    message: Schema.String,
+    outcome: Schema.Literals(['already_checked_in', 'checked_in', 'reopened']),
+    status: Schema.Literal('success'),
+    ticket: CheckInTicket,
+  }),
+  Schema.Struct({ message: Schema.String, status: Schema.Literal('error') }),
+]);
+export type CheckInMutationState = typeof CheckInMutationState.Type;
 
 const successState = (result: CheckInResult): CheckInMutationState => {
   switch (result._tag) {
@@ -79,8 +81,11 @@ const CredentialInput = Schema.fromFormData(
 );
 
 export const mutateCheckIn = OrganizerERSC.ServerFn.make({
-  input: CredentialInput,
-  handler: Effect.fn('mutateCheckIn')(function* ({ eventId, operation, ticketCode }) {
+  input: [Schema.NullOr(CheckInMutationState), CredentialInput],
+  handler: Effect.fn('mutateCheckIn')(function* (
+    _previousState,
+    { eventId, operation, ticketCode },
+  ) {
     const { userId } = yield* CurrentOrganizer;
     const service = yield* CheckInService;
     if (operation === 'check_in') {

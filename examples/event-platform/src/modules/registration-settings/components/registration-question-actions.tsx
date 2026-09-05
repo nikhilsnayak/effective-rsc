@@ -4,7 +4,7 @@
 // oxlint-disable effecttsgo/crypto-random-uuid -- Browser-generated mutation identifiers must not pull Effect into the client graph.
 
 import { Archive, Plus } from 'lucide-react';
-import { useState, useTransition } from 'react';
+import { startTransition, useActionState, useRef, useState } from 'react';
 
 import { RevealTransition } from '@/components/navigation-transition';
 import { Button } from '@/components/ui/button';
@@ -34,27 +34,27 @@ function MutationMessage({ state }: { state: RegistrationSettingsMutationState |
 export function CreateRegistrationQuestion({ eventId }: { readonly eventId: string }) {
   // oxlint-disable-next-line effecttsgo/crypto-random-uuid -- The browser owns the question identifier before invoking the Server Function.
   const [questionId, setQuestionId] = useState(() => crypto.randomUUID());
-  const [pending, startTransition] = useTransition();
-  const [state, setState] = useState<RegistrationSettingsMutationState | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const [state, submit, pending] = useActionState<
+    RegistrationSettingsMutationState | null,
+    FormData
+  >(async (previousState, form) => {
+    const result = await createRegistrationQuestion(previousState, form);
+    if (result.status === 'success') {
+      formRef.current?.reset();
+      setQuestionId(crypto.randomUUID());
+    }
+    return result;
+  }, null);
 
   return (
     <form
       className='grid gap-5'
+      ref={formRef}
       onSubmit={(event) => {
         event.preventDefault();
-        const form = event.currentTarget;
-        const formData = new FormData(form);
-        startTransition(async () => {
-          const result = await createRegistrationQuestion(formData);
-          startTransition(() => {
-            setState(result);
-            if (result.status === 'success') {
-              form.reset();
-              // oxlint-disable-next-line effecttsgo/crypto-random-uuid -- Each new question receives a browser-owned identifier.
-              setQuestionId(crypto.randomUUID());
-            }
-          });
-        });
+        const formData = new FormData(event.currentTarget);
+        startTransition(() => submit(formData));
       }}
     >
       <input name='eventId' type='hidden' value={eventId} />
@@ -111,21 +111,10 @@ export function ArchiveRegistrationQuestion({
   readonly eventId: string;
   readonly questionId: string;
 }) {
-  const [pending, startTransition] = useTransition();
-  const [state, setState] = useState<RegistrationSettingsMutationState | null>(null);
+  const [state, formAction, pending] = useActionState(archiveRegistrationQuestion, null);
 
   return (
-    <form
-      className='grid justify-items-end gap-2'
-      onSubmit={(event) => {
-        event.preventDefault();
-        const formData = new FormData(event.currentTarget);
-        startTransition(async () => {
-          const result = await archiveRegistrationQuestion(formData);
-          startTransition(() => setState(result));
-        });
-      }}
-    >
+    <form action={formAction} className='grid justify-items-end gap-2'>
       <input name='eventId' type='hidden' value={eventId} />
       <input name='questionId' type='hidden' value={questionId} />
       <Button disabled={pending} size='sm' type='submit' variant='outline'>

@@ -6,13 +6,15 @@ import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ERSC } from '@/ersc';
 import { cn } from '@/lib/utils';
-import type { FixtureMetadata, ObservedQuery } from '@/modules/fixture/model';
+import type { FixtureMetadata, ObservedQuery, SelectionItem } from '@/modules/fixture/model';
 import { FixtureService } from '@/modules/fixture/service';
+import { SelectionToggle } from '@/modules/selection/components/selection-toggle';
 
 import RuntimeProbe from './runtime-probe';
 
 type FixtureHomeProps = {
   readonly fixture: ObservedQuery<FixtureMetadata>;
+  readonly selection: ObservedQuery<ReadonlyArray<SelectionItem>>;
 };
 
 const groups = [
@@ -30,7 +32,7 @@ const groups = [
   },
 ] as const;
 
-function FixtureHomeView({ fixture }: FixtureHomeProps) {
+function FixtureHomeView({ fixture, selection }: FixtureHomeProps) {
   return (
     <main className='mx-auto max-w-7xl px-5 py-12 sm:px-8 lg:py-16'>
       <header className='max-w-3xl border-b pb-9'>
@@ -54,6 +56,11 @@ function FixtureHomeView({ fixture }: FixtureHomeProps) {
       </header>
 
       <RuntimeProbe />
+      {/* Outside Suspense so native forms remain visible even without reveal scripts. */}
+      <SelectionToggle
+        itemId='service-layer'
+        isSelected={selection.data.some((item) => item.id === 'service-layer')}
+      />
       <section className='grid gap-4 py-9 sm:grid-cols-2' aria-label='Fixture route groups'>
         {groups.map((group) => (
           <Card key={group.href}>
@@ -83,7 +90,8 @@ export const FixtureHomePage = ERSC.Page.make({
   render: Effect.fn('FixtureHomePage')(function* () {
     const service = yield* FixtureService;
     const fixture = yield* service.fixture;
+    const selection = yield* service.selection;
 
-    return <FixtureHomeView fixture={fixture} />;
+    return <FixtureHomeView fixture={fixture} selection={selection} />;
   }),
 });

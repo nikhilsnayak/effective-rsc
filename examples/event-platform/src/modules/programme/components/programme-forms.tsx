@@ -1,9 +1,7 @@
 'use client';
 
-// oxlint-disable effecttsgo/async-function -- React Transition Actions are native Promise boundaries.
-
 import { Eye, EyeOff, Save, Undo2 } from 'lucide-react';
-import { type ReactNode, useState, useTransition } from 'react';
+import { type ReactNode, startTransition, useActionState, useState } from 'react';
 
 import { RevealTransition } from '@/components/navigation-transition';
 import { Button } from '@/components/ui/button';
@@ -56,8 +54,7 @@ export function RoomForm({
   readonly eventId: string;
   readonly room?: ProgrammeRoom;
 }) {
-  const [pending, startTransition] = useTransition();
-  const [state, setState] = useState<ProgrammeMutationState | null>(null);
+  const [state, submit, pending] = useActionState(saveRoom, null);
   const prefix = room?.roomId ?? 'new-room';
 
   return (
@@ -66,10 +63,7 @@ export function RoomForm({
       onSubmit={(event) => {
         event.preventDefault();
         const formData = new FormData(event.currentTarget);
-        startTransition(async () => {
-          const next = await saveRoom(formData);
-          startTransition(() => setState(next));
-        });
+        startTransition(() => submit(formData));
       }}
     >
       <input name='eventId' type='hidden' value={eventId} />
@@ -114,8 +108,7 @@ export function SpeakerForm({
   readonly eventId: string;
   readonly speaker?: ProgrammeSpeaker;
 }) {
-  const [pending, startTransition] = useTransition();
-  const [state, setState] = useState<ProgrammeMutationState | null>(null);
+  const [state, submit, pending] = useActionState(saveSpeaker, null);
   const prefix = speaker?.speakerId ?? 'new-speaker';
 
   return (
@@ -124,10 +117,7 @@ export function SpeakerForm({
       onSubmit={(event) => {
         event.preventDefault();
         const formData = new FormData(event.currentTarget);
-        startTransition(async () => {
-          const next = await saveSpeaker(formData);
-          startTransition(() => setState(next));
-        });
+        startTransition(() => submit(formData));
       }}
     >
       <input name='eventId' type='hidden' value={eventId} />
@@ -185,6 +175,10 @@ export function SpeakerForm({
   );
 }
 
+type SessionAction =
+  | { readonly _tag: 'Save'; readonly form: FormData }
+  | { readonly _tag: 'SetStatus'; readonly input: Parameters<typeof setSessionStatus>[0] };
+
 export function SessionForm({
   event,
   rooms,
@@ -196,8 +190,13 @@ export function SessionForm({
   readonly session?: ProgrammeSession;
   readonly speakers: ReadonlyArray<ProgrammeSpeaker>;
 }) {
-  const [pending, startTransition] = useTransition();
-  const [state, setState] = useState<ProgrammeMutationState | null>(null);
+  const [state, submit, pending] = useActionState<ProgrammeMutationState | null, SessionAction>(
+    (previousState, action) =>
+      action._tag === 'Save'
+        ? saveSession(previousState, action.form)
+        : setSessionStatus(action.input),
+    null,
+  );
   const prefix = session?.sessionId ?? 'new-session';
   const canCreate = rooms.length > 0 && speakers.length > 0;
   const [capacity, setCapacity] = useState(() =>
@@ -210,10 +209,7 @@ export function SessionForm({
       onSubmit={(submitEvent) => {
         submitEvent.preventDefault();
         const formData = new FormData(submitEvent.currentTarget);
-        startTransition(async () => {
-          const next = await saveSession(formData);
-          startTransition(() => setState(next));
-        });
+        startTransition(() => submit({ _tag: 'Save', form: formData }));
       }}
     >
       <input name='eventId' type='hidden' value={event.eventId} />
@@ -324,14 +320,16 @@ export function SessionForm({
           <Button
             disabled={pending}
             onClick={() => {
-              startTransition(async () => {
-                const next = await setSessionStatus({
-                  eventId: event.eventId,
-                  sessionId: session.sessionId,
-                  status: session.status === 'published' ? 'draft' : 'published',
-                });
-                startTransition(() => setState(next));
-              });
+              startTransition(() =>
+                submit({
+                  _tag: 'SetStatus',
+                  input: {
+                    eventId: event.eventId,
+                    sessionId: session.sessionId,
+                    status: session.status === 'published' ? 'draft' : 'published',
+                  },
+                }),
+              );
             }}
             size='sm'
             type='button'
@@ -349,14 +347,16 @@ export function SessionForm({
           <Button
             disabled={pending}
             onClick={() => {
-              startTransition(async () => {
-                const next = await setSessionStatus({
-                  eventId: event.eventId,
-                  sessionId: session.sessionId,
-                  status: 'cancelled',
-                });
-                startTransition(() => setState(next));
-              });
+              startTransition(() =>
+                submit({
+                  _tag: 'SetStatus',
+                  input: {
+                    eventId: event.eventId,
+                    sessionId: session.sessionId,
+                    status: 'cancelled',
+                  },
+                }),
+              );
             }}
             size='sm'
             type='button'

@@ -4,7 +4,7 @@
 // oxlint-disable effecttsgo/crypto-random-uuid -- Browser-generated idempotency keys must not pull Effect into the client graph.
 
 import { Save, Send } from 'lucide-react';
-import { useState, useTransition } from 'react';
+import { startTransition, useActionState, useRef, useState } from 'react';
 
 import { RevealTransition } from '@/components/navigation-transition';
 import { Button } from '@/components/ui/button';
@@ -32,26 +32,27 @@ function MutationMessage({ state }: { readonly state: CommunicationsMutationStat
 
 export function AnnouncementComposer({ eventId }: { readonly eventId: string }) {
   const [announcementId, setAnnouncementId] = useState(() => crypto.randomUUID());
-  const [pending, startTransition] = useTransition();
-  const [state, setState] = useState<CommunicationsMutationState | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const [state, submit, pending] = useActionState<CommunicationsMutationState | null, FormData>(
+    async (previousState, form) => {
+      const next = await saveAnnouncement(previousState, form);
+      if (next.status === 'success') {
+        formRef.current?.reset();
+        setAnnouncementId(crypto.randomUUID());
+      }
+      return next;
+    },
+    null,
+  );
 
   return (
     <form
       className='grid gap-5'
+      ref={formRef}
       onSubmit={(event) => {
         event.preventDefault();
-        const form = event.currentTarget;
-        const formData = new FormData(form);
-        startTransition(async () => {
-          const next = await saveAnnouncement(formData);
-          startTransition(() => {
-            setState(next);
-            if (next.status === 'success') {
-              form.reset();
-              setAnnouncementId(crypto.randomUUID());
-            }
-          });
-        });
+        const formData = new FormData(event.currentTarget);
+        startTransition(() => submit(formData));
       }}
     >
       <input name='announcementId' type='hidden' value={announcementId} />
@@ -106,21 +107,10 @@ export function SendAnnouncementButton({
   readonly eventId: string;
   readonly retry?: boolean;
 }) {
-  const [pending, startTransition] = useTransition();
-  const [state, setState] = useState<CommunicationsMutationState | null>(null);
+  const [state, formAction, pending] = useActionState(sendAnnouncement, null);
 
   return (
-    <form
-      className='flex flex-wrap items-center gap-3'
-      onSubmit={(event) => {
-        event.preventDefault();
-        const formData = new FormData(event.currentTarget);
-        startTransition(async () => {
-          const next = await sendAnnouncement(formData);
-          startTransition(() => setState(next));
-        });
-      }}
-    >
+    <form action={formAction} className='flex flex-wrap items-center gap-3'>
       <input name='announcementId' type='hidden' value={announcementId} />
       <input name='eventId' type='hidden' value={eventId} />
       <Button disabled={pending} size='sm' type='submit'>

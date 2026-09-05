@@ -31,7 +31,6 @@ import { EventStatusAction } from '@/modules/organizer/components/event-status-a
 import { CurrentOrganizer, OrganizerERSC } from '@/modules/organizer/current-organizer';
 import type { ManagedEvent, ManagedEventStatus, OrganizationRole } from '@/modules/organizer/model';
 import { OrganizerAccessDenied } from '@/modules/organizer/model';
-import { transitionEventStatus } from '@/modules/organizer/server-functions';
 import { availableEventTransitions, OrganizerService } from '@/modules/organizer/service';
 
 const statusVariant = (status: ManagedEventStatus) => {
@@ -161,22 +160,16 @@ function ManagedEventCard({
           <p className='text-muted-foreground mt-5 text-sm'>This lifecycle is final.</p>
         ) : canManage ? (
           <div className='mt-5 grid gap-3'>
-            {transitions.map((targetStatus) => {
-              const action = transitionEventStatus.bind(null, {
-                eventId: event.eventId,
-                targetStatus,
-              });
-
-              return (
-                <EventStatusAction
-                  action={action}
-                  id={`event-status-${event.eventId}-${targetStatus}`}
-                  key={targetStatus}
-                  label={transitionLabel(targetStatus)}
-                  variant={targetStatus === 'cancelled' ? 'destructive' : 'default'}
-                />
-              );
-            })}
+            {transitions.map((targetStatus) => (
+              <EventStatusAction
+                eventId={event.eventId}
+                id={`event-status-${event.eventId}-${targetStatus}`}
+                key={targetStatus}
+                label={transitionLabel(targetStatus)}
+                targetStatus={targetStatus}
+                variant={targetStatus === 'cancelled' ? 'destructive' : 'default'}
+              />
+            ))}
           </div>
         ) : null}
       </CardContent>

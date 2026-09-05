@@ -14,8 +14,16 @@ fi
 tag="v$version"
 branch="$(git branch --show-current)"
 if [[ "$branch" != "main" ]]; then
-  echo "Release must run from main; currently on $branch." >&2
-  exit 1
+  if [[ ! "$branch" =~ ^([0-9]+\.[0-9]+)\.x$ ]]; then
+    echo "Release must run from main or a maintenance branch such as 0.1.x; currently on $branch." >&2
+    exit 1
+  fi
+
+  maintenance_version="${BASH_REMATCH[1]}"
+  if [[ "$version" != "$maintenance_version."* ]]; then
+    echo "Release $version does not belong to maintenance branch $branch." >&2
+    exit 1
+  fi
 fi
 
 if [[ -n "$(git status --porcelain)" ]]; then
@@ -23,10 +31,10 @@ if [[ -n "$(git status --porcelain)" ]]; then
   exit 1
 fi
 
-git fetch origin main --tags
+git fetch origin "$branch" --tags
 
-if [[ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]]; then
-  echo "Local main must exactly match origin/main." >&2
+if [[ "$(git rev-parse HEAD)" != "$(git rev-parse "origin/$branch")" ]]; then
+  echo "Local $branch must exactly match origin/$branch." >&2
   exit 1
 fi
 

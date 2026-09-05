@@ -17,9 +17,7 @@ import { ServerConfig } from '../../src/server/server-config';
 const decodeAction = vi.fn((..._args: Array<unknown>): Promise<null | (() => Promise<string>)> =>
   Promise.resolve(null),
 );
-const decodeReply = vi.fn((..._args: Array<unknown>): Promise<ReadonlyArray<unknown>> =>
-  Promise.resolve([]),
-);
+const decodeReply = vi.fn((..._args: Array<unknown>): Promise<unknown> => Promise.resolve([]));
 let scopedServerAction: ((input: string) => Promise<string>) | undefined;
 
 vi.doMock('react-server-dom-rspack/server.node', () => ({
@@ -415,6 +413,19 @@ describe('ServerApplication.httpLayer', () => {
         expect(events).toEqual([]);
         expect(decodeAction).not.toHaveBeenCalled();
         expect(decodeReply).toHaveBeenCalledTimes(1);
+      }),
+    ),
+  );
+
+  it.effect('rejects decoded non-array action envelopes before invoking application code', () =>
+    withHarness(({ call, events }) =>
+      Effect.gen(function* () {
+        for (const envelope of [null, undefined, 'hello', 42, {}, { length: 1, 0: 'hello' }]) {
+          decodeReply.mockResolvedValueOnce(envelope);
+          const response = yield* call(serverFnRequest('scoped-action'));
+          expect(response.status).toBe(400);
+          expect(events).toEqual([]);
+        }
       }),
     ),
   );

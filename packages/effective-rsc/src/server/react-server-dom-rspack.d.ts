@@ -22,7 +22,7 @@ declare module 'react-server-dom-rspack/server.node' {
       readonly arraySizeLimit?: number;
       readonly temporaryReferences?: TemporaryReferenceSet;
     },
-  ): Promise<ReadonlyArray<unknown>>;
+  ): Promise<unknown>;
 
   export function loadServerAction(actionId: string): (...args: ReadonlyArray<unknown>) => unknown;
 

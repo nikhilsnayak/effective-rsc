@@ -4,7 +4,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -39,7 +38,7 @@ jobs:
         run: bun run check
 
       - name: Install Playwright browser
-        run: bunx playwright install --with-deps chromium
+        run: bun run playwright install --with-deps chromium
 
       - name: Test
         run: bun run test

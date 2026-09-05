@@ -27,6 +27,7 @@
   },
   "devDependencies": {
     "@effect/tsgo": "0.41.0",
+    "@playwright/test": "catalog:",
     "@types/bun": "catalog:",
     "oxfmt": "^0.66.0",
     "oxlint": "1.81.0",

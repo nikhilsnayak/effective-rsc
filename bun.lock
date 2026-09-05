@@ -6,6 +6,7 @@
       "name": "effective-rsc-monorepo",
       "devDependencies": {
         "@effect/tsgo": "0.41.0",
+        "@playwright/test": "catalog:",
         "@types/bun": "catalog:",
         "oxfmt": "^0.66.0",
         "oxlint": "1.81.0",
@@ -594,7 +595,7 @@
 
     "find-up": ["find-up@4.1.0", "", { "dependencies": { "locate-path": "^5.0.0", "path-exists": "^4.0.0" } }, "sha512-PpOwAdQ/YlXQ2vj8a3h8IipDuYRi3wceVQQGYWxNINccq40Anw7BlsEXCMbt1Zt+OLA6Fq9suIpIWD0OsnISlw=="],
 
-    "fsevents": ["fsevents@2.3.3", "", { "os": "darwin" }, "sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw=="],
+    "fsevents": ["fsevents@2.3.2", "", { "os": "darwin" }, "sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA=="],
 
     "get-caller-file": ["get-caller-file@2.0.5", "", {}, "sha512-DyFP3BM/3YHTQOCUL/w0OZHR0lpKeGrxotcHWcqNEdnltqFwXVfhEBQ94eIo34AfQpo0rGki4cyIiftY06h2Fg=="],
 
@@ -782,13 +783,13 @@
 
     "lucide-react/react": ["react@19.3.0-canary-eb8feb71-20260814", "", {}, "sha512-4CF6VVbInQ54749LzFJ6POm1SREXQmNZ6yFjTq67yCL3NrYlK+aO6nzO3i1Fe7szu/fXUr3NRzitdHj+l/O5EQ=="],
 
-    "playwright/fsevents": ["fsevents@2.3.2", "", { "os": "darwin" }, "sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA=="],
-
     "react-server-dom-rspack/react": ["react@19.3.0-canary-eb8feb71-20260814", "", {}, "sha512-4CF6VVbInQ54749LzFJ6POm1SREXQmNZ6yFjTq67yCL3NrYlK+aO6nzO3i1Fe7szu/fXUr3NRzitdHj+l/O5EQ=="],
 
     "react-server-dom-rspack/react-dom": ["react-dom@19.3.0-canary-eb8feb71-20260814", "", { "dependencies": { "scheduler": "0.28.0-canary-eb8feb71-20260814" }, "peerDependencies": { "react": "19.3.0-canary-eb8feb71-20260814" } }, "sha512-sURKF6v4XliFLgl9+lT3S9zM9EEqJFDzYwE7+BtHdUesovByKQbM9dm4WqGr/b3kiTq6jw7ASIYG10j/t2pbbQ=="],
 
     "use-sync-external-store/react": ["react@19.3.0-canary-eb8feb71-20260814", "", {}, "sha512-4CF6VVbInQ54749LzFJ6POm1SREXQmNZ6yFjTq67yCL3NrYlK+aO6nzO3i1Fe7szu/fXUr3NRzitdHj+l/O5EQ=="],
+
+    "vite/fsevents": ["fsevents@2.3.3", "", { "os": "darwin" }, "sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw=="],
 
     "@base-ui/react/react-dom/scheduler": ["scheduler@0.28.0-canary-eb8feb71-20260814", "", {}, "sha512-TjXQVWDPcNnqesHvbi5WB587WPFr8to90JVhOIO0szb0GFgg0fF0PPJCWoxi0poyxJ98OThXb22akDHfZyXG6A=="],
 

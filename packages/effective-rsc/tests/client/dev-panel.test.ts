@@ -88,7 +88,7 @@ describe('development panel state', () => {
   it('clears failures only after reconciliation', () => {
     const failed = apply({ _tag: 'RuntimeFailed', failure: runtimeFailure('render failed') });
 
-    expect(applyDevPanelEvent(failed, { _tag: 'Reconciled' })).toEqual({
+    expect(applyDevPanelEvent(failed, { _tag: 'RuntimeReconciled' })).toEqual({
       _tag: 'Inactive',
     });
   });
@@ -96,11 +96,38 @@ describe('development panel state', () => {
   it('replaces build diagnostics when the replacement reaches React but still fails', () => {
     const state = apply(
       { _tag: 'BuildFailed', diagnostics: 'Compilation failed' },
+      { _tag: 'BuildSucceeded' },
       { _tag: 'RenderFailed', failure: runtimeFailure('replacement still fails') },
     );
     expect(state).toEqual({
       _tag: 'Visible',
       content: { _tag: 'RuntimeFailed', failures: [runtimeFailure('replacement still fails')] },
     });
+  });
+
+  it('keeps visible and dismissed build failures until the build succeeds', () => {
+    const failed = apply({ _tag: 'BuildFailed', diagnostics: 'Compilation failed' });
+    const dismissed = applyDevPanelEvent(failed, { _tag: 'Dismissed' });
+    for (const state of [failed, dismissed]) {
+      expect(applyDevPanelEvent(state, { _tag: 'RuntimeReconciled' })).toBe(state);
+      expect(
+        applyDevPanelEvent(state, {
+          _tag: 'RenderFailed',
+          failure: runtimeFailure('old tree failed'),
+        }),
+      ).toBe(state);
+      expect(applyDevPanelEvent(state, { _tag: 'BuildSucceeded' })).toEqual({ _tag: 'Inactive' });
+    }
+  });
+
+  it('does not treat build success as runtime recovery', () => {
+    const failed = apply({ _tag: 'RenderFailed', failure: runtimeFailure('render failed') });
+    const dismissed = applyDevPanelEvent(failed, { _tag: 'Dismissed' });
+    for (const state of [failed, dismissed]) {
+      expect(applyDevPanelEvent(state, { _tag: 'BuildSucceeded' })).toBe(state);
+      expect(applyDevPanelEvent(state, { _tag: 'RuntimeReconciled' })).toEqual({
+        _tag: 'Inactive',
+      });
+    }
   });
 });

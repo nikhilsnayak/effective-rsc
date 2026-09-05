@@ -92,7 +92,7 @@ export const startDevClient = Effect.gen(function* () {
       // Starting a refresh is not evidence that the replacement rendered successfully.
       return;
     }
-    yield* panel.dispatch({ _tag: 'Reconciled' });
+    yield* panel.dispatch({ _tag: 'RuntimeReconciled' });
   });
   yield* renderStatus.changes.pipe(
     Stream.runForEach((status) => {
@@ -100,7 +100,7 @@ export const startDevClient = Effect.gen(function* () {
         case 'Waiting':
           return Effect.void;
         case 'Rendered':
-          return panel.dispatch({ _tag: 'Reconciled' });
+          return panel.dispatch({ _tag: 'RuntimeReconciled' });
         case 'Failed':
           return panel.dispatch({
             _tag: 'RenderFailed',
@@ -119,8 +119,11 @@ export const startDevClient = Effect.gen(function* () {
     const handleUpdate = Effect.fnUntraced(function* (phase: DevUpdatePhase, message: DevUpdate) {
       if (message._tag === 'BuildFailed') {
         yield* panel.dispatch(message);
-      } else if (phase === 'Live' || message.clientHash !== import.meta.rspackHash) {
-        yield* handleHotUpdate(message);
+      } else {
+        yield* panel.dispatch({ _tag: 'BuildSucceeded' });
+        if (phase === 'Live' || message.clientHash !== import.meta.rspackHash) {
+          yield* handleHotUpdate(message);
+        }
       }
 
       return 'Live' as const;

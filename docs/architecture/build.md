@@ -59,6 +59,9 @@ Caught React render errors include their component stack in the development pane
 HMR or explicit navigation can recover the framework error boundary; starting a refresh alone does
 not clear the error. Healthy trees retain their React state, application error boundaries retain
 their own policy, and recovery never replays a Server Function or retries unchanged code on a timer.
+Build diagnostics clear only when the server reports a successful replacement. A successful render
+or a cached history traversal does not clear a compilation failure, and build success alone does
+not clear a runtime failure.
 
 React Server Components Performance Tracks remain native. Initial hydration uses the document
 timeline origin; navigation and Server Function decoding receive a timestamp captured before HTTP

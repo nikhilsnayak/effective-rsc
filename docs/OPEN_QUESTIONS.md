@@ -80,3 +80,19 @@ IDs are append-only and never reused, including after a question is resolved.
 - **Resolution:** Keep native behavior initially. A future design must key positions by history
   entry and choose a restoration point that accounts for later streamed reveals.
 - **Status:** Deferred; native behavior remains the initial policy.
+
+### OQ-010 — Typed application navigation transition APIs
+
+- **Question:** How should public client navigation APIs provide type-safe application transition
+  names for both links and programmatic navigation?
+- **Why:** Plain data attributes provide navigation intent without committing to a Link component,
+  helper factory, or global type-registration API.
+- **Affected:** Client public exports, native links, programmatic navigation, and React View
+  Transition type maps.
+- **Evidence:** D-071 supports `data-ersc-transition-types` on native links. The documentation site
+  uses application types to distinguish Previous, Next, and unordered navigation from history
+  direction, but plain attribute values do not catch misspelled application types.
+- **Related:** D-018, D-047, D-067, D-071.
+- **Resolution:** Use plain data attributes now; revisit naming, API shape, and type safety together
+  with framework-level public client APIs.
+- **Status:** Deferred until public client APIs are designed.

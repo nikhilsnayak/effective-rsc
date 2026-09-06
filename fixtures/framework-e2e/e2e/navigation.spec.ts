@@ -66,6 +66,40 @@ test('moves between route groups through the composed catalog', async ({ page })
   expect(browserErrors).toEqual([]);
 });
 
+test('publishes native link types once without replaying them on history traversal', async ({
+  page,
+}) => {
+  const browserErrors = observeBrowserErrors(page);
+  await observeViewTransitions(page);
+  await page.goto('/catalog/primary');
+  const link = page.getByRole('link', { name: 'Open Secondary' });
+  await link.evaluate((element: HTMLAnchorElement) => {
+    element.dataset['erscTransitionTypes'] = 'docs-previous docs-previous section-change';
+    const child = document.createElement('span');
+    child.textContent = 'Nested link content';
+    element.append(child);
+  });
+  await link.getByText('Nested link content').click();
+  await expect(page).toHaveURL('/catalog/secondary');
+  await waitForViewTransition(page, [
+    'navigation',
+    'navigation-push',
+    'navigation-forward',
+    'docs-previous',
+    'section-change',
+  ]);
+  await expect(page.locator('[data-detail-id="secondary-slow-stream"]')).toBeVisible();
+
+  await page.evaluate(() => window.navigation.back().finished);
+  await waitForViewTransition(page, ['navigation', 'navigation-traverse', 'navigation-backward']);
+  await page.evaluate(() => window.navigation.forward().finished);
+  await waitForViewTransition(page, ['navigation', 'navigation-traverse', 'navigation-forward']);
+
+  await page.evaluate(() => window.navigation.navigate('/catalog/primary').finished);
+  await waitForViewTransition(page, ['navigation', 'navigation-push', 'navigation-forward']);
+  expect(browserErrors).toEqual([]);
+});
+
 test('types a replace navigation without inventing a direction', async ({ page }) => {
   const browserErrors = observeBrowserErrors(page);
   await observeViewTransitions(page);

@@ -1,6 +1,6 @@
 # Client router
 
-Status: **Current** under [D-063, D-066, and D-067](../DECISIONS.md).
+Status: **Current** under [D-063, D-066, D-067, and D-071](../DECISIONS.md).
 
 ## Purpose
 
@@ -86,6 +86,27 @@ Transition types are additive:
 A replace navigation has no direction type. A traversal also has no direction type when its source
 index is unavailable or equal to its destination index. Applications may use the UA visual and HMR
 types to suppress author animation, but ERSC does not impose that styling policy.
+
+For routed push and replace navigations, a native `<a href>` may supply a whitespace-separated
+`data-ersc-transition-types` attribute. When `NavigateEvent.sourceElement` is an `HTMLAnchorElement`,
+the router reads its `dataset.erscTransitionTypes` once, synchronously when accepting the event,
+and appends its unique types after the built-in types at route publication. Changing or removing the link while Flight
+loads cannot change that navigation's types. Types stay local to that navigation, including an
+intercepted Flight redirect; they are not stored in URLs, history entries, or router state.
+Superseded loading work cannot publish its types. A full-document fallback carries no custom types.
+
+Only ERSC-owned names are reserved: `navigation`, `navigation-*`, `server-function`, and
+`hmr-refresh`. These names are matched case-sensitively and ignored in the attribute. All other
+non-whitespace tokens pass through unchanged; ERSC does not validate React or CSS naming rules.
+Duplicate tokens are added once, preserving attribute order. Absent attributes or source links
+contribute no types. Traversal never reads or
+replays link metadata, and ineligible navigations retain native behavior.
+
+Application types are additive context, not overrides of history facts: a Previous link can carry
+both `navigation-forward` (a push) and `docs-previous` (document order). React combines matching
+classes from a `<ViewTransition>` type map; applications resolve animation precedence in their CSS.
+Typed authoring helpers and public client navigation APIs remain deferred in
+[OQ-010](../OPEN_QUESTIONS.md).
 
 These types describe the first publication only. Nested Suspense content can reveal in later React
 Transitions after native navigation has finished; React does not carry the router's types into those

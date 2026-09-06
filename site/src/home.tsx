@@ -3,6 +3,7 @@ import { ArrowRight, ArrowUpRight } from 'lucide-react';
 
 import { CodeBlock } from './components/code-block';
 import { PageMetadata } from './components/page-metadata';
+import { PageTransition } from './components/page-transition';
 import { buttonVariants } from './components/ui/button';
 import { DocumentationError } from './docs/files';
 import { readRequiredDocument } from './docs/service';
@@ -47,7 +48,7 @@ const HomeExample = ERSC.Component.make({
 
 export function Home() {
   return (
-    <>
+    <PageTransition>
       <PageMetadata
         title='effective-rsc · React Server Components with Effect and Bun'
         description='An Effect-native React Server Components framework for Bun. Explicit routes, request-scoped services, streaming, and native Server Functions.'
@@ -166,6 +167,6 @@ export function Home() {
           ))}
         </section>
       </div>
-    </>
+    </PageTransition>
   );
 }

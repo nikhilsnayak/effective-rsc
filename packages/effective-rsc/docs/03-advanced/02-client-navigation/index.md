@@ -62,3 +62,20 @@ but ERSC does not impose that policy.
 These types describe only the first publication. Suspense content that resolves later renders in a
 separate, untyped React Transition. Applications should use their own Suspense-specific
 `<ViewTransition>` boundaries and styling for those reveals.
+
+#### Application transition types
+
+Add whitespace-separated application transition types to a native link with
+`data-ersc-transition-types`:
+
+```tsx
+<a href='/photos/2' data-ersc-transition-types='photo-next'>
+  Next photo
+</a>
+```
+
+These are added alongside ERSC's built-in types for that push or replace navigation and can be
+used in your `<ViewTransition>` type maps. They are not replayed on Back/Forward.
+
+The names `navigation`, `navigation-*`, `server-function`, and `hmr-refresh` are reserved for ERSC
+and ignored in the attribute.

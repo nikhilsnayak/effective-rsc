@@ -37,6 +37,11 @@
 }
 
 :root {
+  --transition-enter: 210ms;
+  --transition-exit: 140ms;
+  --transition-move: var(--transition-enter);
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   color-scheme: light;
   --background: oklch(1 0 0);
   --foreground: oklch(0.147 0 0);
@@ -83,5 +88,82 @@
 @layer base {
   * {
     border-color: var(--border);
+  }
+}
+
+::view-transition-old(root) {
+  animation-duration: var(--transition-exit);
+}
+
+::view-transition-old(.navigation-forward) {
+  --transition-offset: -2rem;
+  animation:
+    var(--transition-exit) var(--ease-out) both view-transition-fade-out,
+    var(--transition-move) var(--ease-in-out) both view-transition-slide reverse;
+}
+
+::view-transition-new(.navigation-forward) {
+  --transition-offset: 2rem;
+  animation:
+    var(--transition-enter) var(--ease-out) both view-transition-fade,
+    var(--transition-move) var(--ease-in-out) both view-transition-slide;
+}
+
+/* Previous links also carry navigation-forward from their history push. */
+::view-transition-old(.navigation-backward) {
+  --transition-offset: 2rem;
+  animation:
+    var(--transition-exit) var(--ease-out) both view-transition-fade-out,
+    var(--transition-move) var(--ease-in-out) both view-transition-slide reverse;
+}
+
+::view-transition-new(.navigation-backward) {
+  --transition-offset: -2rem;
+  animation:
+    var(--transition-enter) var(--ease-out) both view-transition-fade,
+    var(--transition-move) var(--ease-in-out) both view-transition-slide;
+}
+
+/* Unordered docs links take precedence over either history direction. */
+::view-transition-old(.navigation-jump) {
+  animation: var(--transition-exit) var(--ease-out) both view-transition-fade-out;
+}
+
+::view-transition-new(.navigation-jump) {
+  animation: var(--transition-enter) var(--ease-out) both view-transition-fade;
+}
+
+@keyframes view-transition-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes view-transition-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes view-transition-slide {
+  from {
+    translate: var(--transition-offset);
+  }
+  to {
+    translate: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
   }
 }

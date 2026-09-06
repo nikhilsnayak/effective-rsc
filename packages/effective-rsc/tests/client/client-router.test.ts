@@ -1,4 +1,4 @@
-import { beforeEach, expect, it } from '@effect/vitest';
+import { afterEach, beforeEach, expect, it } from '@effect/vitest';
 import { Deferred, Effect, Exit, Fiber, Layer, Scope } from 'effect';
 import { HttpClient, HttpClientResponse } from 'effect/unstable/http';
 import { vi } from 'vitest';
@@ -44,6 +44,14 @@ import { RouteLoader, type RouteLoad } from '../../src/client/route-loader';
 import type { RouteTreeModel } from '../../src/rsc/route-tree';
 
 const FlightClientLayer = FlightClient.layer.pipe(Layer.provide(InitialFlightStream.layer));
+
+class TestAnchor {
+  readonly dataset: DOMStringMap;
+
+  constructor(dataset: DOMStringMap) {
+    this.dataset = dataset;
+  }
+}
 
 type TestNavigateEvent = Event &
   Pick<
@@ -135,6 +143,7 @@ type TestNavigateEventOverrides = Partial<
 > & {
   readonly cancelable?: boolean;
   readonly destination?: { readonly id?: string; readonly key?: string; readonly url: string };
+  readonly sourceElement?: Pick<HTMLAnchorElement, 'dataset'> | null;
 };
 
 const makeNavigationEvent = (overrides: TestNavigateEventOverrides = {}) => {
@@ -179,7 +188,10 @@ const makeNavigationEvent = (overrides: TestNavigateEventOverrides = {}) => {
 
 beforeEach(() => {
   react.transitionTypes.length = 0;
+  vi.stubGlobal('HTMLAnchorElement', TestAnchor);
 });
+
+afterEach(() => vi.unstubAllGlobals());
 
 const makeHttpClient = (requestedUrls: Array<string> = [], contentType = 'text/x-component') =>
   HttpClient.make((request) =>
@@ -418,6 +430,120 @@ it.effect('splits a cancelable navigation between React commit and Flight comple
       }),
     );
   }),
+);
+
+it.effect('snapshots link types before loading and keeps them local to the navigation', () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const navigation = new TestNavigationApi();
+      yield* listen(navigation);
+      const anchor = new TestAnchor({
+        erscTransitionTypes: ' docs-previous\tsection-change docs-previous\n',
+      });
+      const pending = makeNavigationEvent({ sourceElement: anchor });
+      navigation.dispatch(pending.event);
+      anchor.dataset['erscTransitionTypes'] = 'docs-next';
+      expect(react.transitionTypes).toEqual([]);
+
+      const handler = pending.interception()?.precommitHandler;
+      if (handler === undefined) {
+        return yield* Effect.die('Expected a precommit handler.');
+      }
+      yield* Effect.promise(() => invokePrecommitHandler(handler, makePrecommitController()));
+      expect(react.transitionTypes).toEqual([
+        'navigation',
+        'navigation-push',
+        'navigation-forward',
+        'docs-previous',
+        'section-change',
+      ]);
+
+      react.transitionTypes.length = 0;
+      yield* prepareNavigation(navigation, 'https://effective-rsc.test/schedule/day-two');
+      expect(react.transitionTypes).toEqual([
+        'navigation',
+        'navigation-push',
+        'navigation-forward',
+      ]);
+    }),
+  ),
+);
+
+it.effect('reserves only ERSC-owned types and preserves application tokens unchanged', () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const navigation = new TestNavigationApi();
+      const renders: Array<BrowserRenderRequest> = [];
+      yield* listen(navigation, makeBrowserRenderer(renders));
+      const applicationTypes = [
+        'docs-jump',
+        'NAVIGATION-BACKWARD',
+        'none',
+        'initial',
+        'default',
+        'constructor',
+        'toString',
+        '1custom',
+        'custom/type',
+        'étape-suivante',
+      ];
+      const pending = makeNavigationEvent({
+        navigationType: 'replace',
+        sourceElement: new TestAnchor({
+          erscTransitionTypes: [
+            'navigation',
+            'navigation-backward',
+            'navigation-custom',
+            'server-function',
+            'hmr-refresh',
+            ...applicationTypes,
+          ].join(' '),
+        }),
+      });
+      navigation.dispatch(pending.event);
+      const handler = pending.interception()?.precommitHandler;
+      if (handler === undefined) {
+        return yield* Effect.die('Expected a precommit handler.');
+      }
+      yield* Effect.promise(() => invokePrecommitHandler(handler, makePrecommitController()));
+      expect(renders).toHaveLength(1);
+      expect(react.transitionTypes).toEqual([
+        'navigation',
+        'navigation-replace',
+        ...applicationTypes,
+      ]);
+    }),
+  ),
+);
+
+it.effect('does not read link types for a history traversal', () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const navigation = new TestNavigationApi();
+      yield* listen(navigation);
+      const readTypes = vi.fn(() => 'docs-next');
+      const pending = makeNavigationEvent({
+        navigationType: 'traverse',
+        sourceElement: new TestAnchor({
+          get erscTransitionTypes() {
+            return readTypes();
+          },
+        }),
+      });
+      navigation.dispatch(pending.event);
+      const handler = pending.interception()?.precommitHandler;
+      if (handler === undefined) {
+        return yield* Effect.die('Expected a precommit handler.');
+      }
+      yield* Effect.promise(() => invokePrecommitHandler(handler, makePrecommitController()));
+      expect(readTypes).not.toHaveBeenCalled();
+      expect(react.transitionTypes).toEqual([
+        'navigation',
+        'navigation-traverse',
+        'navigation-backward',
+      ]);
+    }),
+  ),
 );
 
 it.effect('settles the post-commit handler before the Flight stream reaches EOF', () =>

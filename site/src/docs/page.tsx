@@ -2,6 +2,7 @@ import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { Fragment } from 'react';
 
 import { PageMetadata } from '../components/page-metadata';
+import { PageTransition } from '../components/page-transition';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -40,7 +41,7 @@ export function DocumentationPage({
   );
   const breadcrumbs = page.kind === 'Example' ? [...ancestors, page] : ancestors;
   return (
-    <>
+    <PageTransition key={page.href}>
       <PageMetadata
         title={
           page.href === '/docs' ? 'Documentation · effective-rsc' : `${page.title} · effective-rsc`
@@ -66,7 +67,7 @@ export function DocumentationPage({
                           {entry.href === '/docs' ? 'Docs' : entry.title}
                         </BreadcrumbPage>
                       ) : (
-                        <BreadcrumbLink href={entry.href}>
+                        <BreadcrumbLink href={entry.href} data-ersc-transition-types='docs-jump'>
                           {entry.href === '/docs' ? 'Docs' : entry.title}
                         </BreadcrumbLink>
                       )}
@@ -90,6 +91,7 @@ export function DocumentationPage({
           ) : (
             <a
               href={previous.href}
+              data-ersc-transition-types='docs-previous'
               className={buttonVariants({
                 variant: 'ghost',
                 className:
@@ -106,6 +108,7 @@ export function DocumentationPage({
           {next !== undefined && (
             <a
               href={next.href}
+              data-ersc-transition-types='docs-next'
               className={buttonVariants({
                 variant: 'ghost',
                 className:
@@ -121,6 +124,6 @@ export function DocumentationPage({
           )}
         </nav>
       </div>
-    </>
+    </PageTransition>
   );
 }

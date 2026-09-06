@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from '@effect/vitest';
 import { Effect, Exit, Layer, Logger, Scope } from 'effect';
-import { Children, Fragment, isValidElement, type ReactNode } from 'react';
+import { isValidElement, type ReactNode } from 'react';
 import type { ReactFormState } from 'react-dom/client';
 import type { RenderToReadableStreamOptions } from 'react-dom/server';
 
@@ -53,6 +53,7 @@ vi.doMock('react-dom/server.bun', () => ({
   renderToReadableStream: renderDocument,
 }));
 const { HtmlRenderError, HtmlRenderer } = await import('../../src/server/html-renderer');
+const fizz = await vi.importActual<typeof import('react-dom/server.bun')>('react-dom/server.bun');
 const FlightHtmlInjectorTestLayer = FlightHtmlInjector.layerTest({ inject: injectPayload });
 const HtmlRendererTestLayer = HtmlRenderer.layer.pipe(
   Layer.provide(FlightHtmlInjectorTestLayer),
@@ -68,6 +69,24 @@ beforeEach(() => {
 });
 
 describe('HtmlRenderer', () => {
+  it.effect('emits compiler stylesheets through the native Fizz resource API', () =>
+    Effect.gen(function* () {
+      renderDocument.mockImplementationOnce((root, options) =>
+        fizz.renderToReadableStream(root, options),
+      );
+      const renderer = yield* HtmlRenderer;
+      const signal = yield* Effect.abortSignal;
+      const stream = yield* renderer.render({
+        flight: makeFlightRender(signal),
+        formState: null,
+      });
+      const html = yield* Effect.promise(() => new Response(stream).text());
+      expect(html).toContain(
+        'rel="stylesheet" href="/_ersc/assets/main.css" data-precedence="default"',
+      );
+    }).pipe(Effect.provide(HtmlRendererTestLayer)),
+  );
+
   it.effect('passes the request form state to Fizz without eagerly decoding Flight', () => {
     const logs: Array<unknown> = [];
     const logged = Promise.withResolvers<void>();
@@ -97,16 +116,8 @@ describe('HtmlRenderer', () => {
         return;
       }
 
-      expect(renderedRoot.type).toBe(Fragment);
-      const resources = Children.toArray(renderedRoot.props.children);
-      expect(resources[0]).toMatchObject({
-        props: {
-          href: '/_ersc/assets/main.css',
-          precedence: 'default',
-          rel: 'stylesheet',
-        },
-        type: 'link',
-      });
+      expect(typeof renderedRoot.type).toBe('function');
+      expect(renderedRoot.props.children).toBeUndefined();
       expect(renderOptions?.bootstrapScripts).toEqual(clientBootstrapScripts);
       expect(renderOptions?.formState).toBe(formState);
       expect(injectPayload).toHaveBeenCalledWith(expect.any(ReadableStream));

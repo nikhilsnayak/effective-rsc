@@ -1,0 +1,87 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+@import './typeset.css';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --font-sans: Geist, ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--primary);
+  --color-input: var(--border);
+  --color-card: var(--background);
+  --color-card-foreground: var(--foreground);
+  --color-popover: var(--background);
+  --color-popover-foreground: var(--foreground);
+  --color-secondary: var(--muted);
+  --color-secondary-foreground: var(--foreground);
+  --color-accent: var(--muted);
+  --color-accent-foreground: var(--foreground);
+  --color-destructive: oklch(0.577 0.245 27.325);
+  --color-sidebar: var(--background);
+  --color-sidebar-foreground: var(--foreground);
+  --color-sidebar-primary: var(--primary);
+  --color-sidebar-primary-foreground: var(--primary-foreground);
+  --color-sidebar-accent: var(--muted);
+  --color-sidebar-accent-foreground: var(--foreground);
+  --color-sidebar-border: var(--border);
+  --color-sidebar-ring: var(--primary);
+}
+
+:root {
+  color-scheme: light;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.147 0 0);
+  --primary: oklch(0.57 0.15 45);
+  --primary-foreground: oklch(0.97 0.012 70);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.48 0 0);
+  --border: oklch(0.923 0 0);
+  --radius: 0rem;
+  --secondary: var(--muted);
+  --sidebar-border: var(--border);
+  --sidebar-accent: var(--muted);
+  --sh-class: #7854a0;
+  --sh-identifier: #293b4c;
+  --sh-sign: #666870;
+  --sh-property: #ad382c;
+  --sh-entity: #92521b;
+  --sh-jsxliterals: #7854a0;
+  --sh-string: #257a42;
+  --sh-keyword: #9f4215;
+  --sh-comment: #6b7075;
+}
+
+.dark {
+  color-scheme: dark;
+  --background: oklch(0.147 0 0);
+  --foreground: oklch(0.985 0 0);
+  --primary: oklch(0.68 0.15 48);
+  --primary-foreground: oklch(0.2 0.02 45);
+  --muted: oklch(0.216 0 0);
+  --muted-foreground: oklch(0.709 0 0);
+  --border: oklch(1 0 0 / 12%);
+  --sh-class: #b98bd9;
+  --sh-identifier: #d9eff1;
+  --sh-sign: #aabdc8;
+  --sh-property: #e6a15e;
+  --sh-entity: #dfb958;
+  --sh-jsxliterals: #75b7db;
+  --sh-string: #78ca8a;
+  --sh-keyword: #ef8c7a;
+  --sh-comment: #929aa0;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+}

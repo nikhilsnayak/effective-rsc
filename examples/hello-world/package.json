@@ -1,0 +1,29 @@
+{
+  "name": "@effective-rsc/example-hello-world",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "ersc dev --port 18214",
+    "build": "ersc build --adapter @ersc/vercel",
+    "start": "bun server.ts"
+  },
+  "dependencies": {
+    "@effect/platform-browser": "catalog:",
+    "@effect/platform-bun": "catalog:",
+    "effect": "catalog:",
+    "effective-rsc": "workspace:*",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-server-dom-rspack": "catalog:"
+  },
+  "devDependencies": {
+    "@ersc/vercel": "workspace:*",
+    "@types/bun": "catalog:",
+    "@types/react": "catalog:",
+    "typescript": "catalog:"
+  },
+  "engines": {
+    "bun": ">=1.4.0"
+  }
+}

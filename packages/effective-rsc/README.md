@@ -203,10 +203,12 @@ The package-root API is available only under the `react-server` condition. The f
 enables that condition for application authoring modules; importing `effective-rsc` from another
 runtime, including a Client Component, throws immediately.
 
-## Example and documentation
+## Examples and documentation
 
-The [event platform](https://github.com/nikhilsnayak/effective-rsc/tree/main/examples/event-platform)
-is the complete application example.
+- [Hello world](https://github.com/nikhilsnayak/effective-rsc/tree/main/examples/hello-world): a small
+  example with streaming, navigation, a counter, and a Server Function form.
+- [Event platform](https://github.com/nikhilsnayak/effective-rsc/tree/main/examples/event-platform):
+  the complete application example, using local SQLite persistence.
 
 - [Getting started](https://github.com/nikhilsnayak/effective-rsc/blob/main/packages/effective-rsc/docs/01-getting-started/index.md)
 - [Guides](https://github.com/nikhilsnayak/effective-rsc/blob/main/packages/effective-rsc/docs/02-guides/index.md)

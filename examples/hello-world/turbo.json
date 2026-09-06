@@ -1,0 +1,6 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": { "outputs": [".ersc/**", ".vercel/output/**"] }
+  }
+}

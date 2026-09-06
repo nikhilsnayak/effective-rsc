@@ -43,20 +43,16 @@ if git rev-parse --verify --quiet "refs/tags/$tag" >/dev/null; then
   exit 1
 fi
 
-effective_rsc_version="$(bun -e 'console.log(require("./packages/effective-rsc/package.json").version)')"
-create_ersc_app_version="$(bun -e 'console.log(require("./packages/create-ersc-app/package.json").version)')"
+packages=(effective-rsc vercel create-ersc-app)
+for package in "${packages[@]}"; do
+  package_version="$(bun -e 'console.log(require(process.argv[1]).version)' "./packages/$package/package.json")"
+  if [[ "$package_version" != "$version" ]]; then
+    echo "packages/$package is $package_version, expected $version." >&2
+    exit 1
+  fi
+done
+
 template_framework_version="$(bun -e 'console.log(require("./packages/create-ersc-app/template/package.json").dependencies["effective-rsc"])')"
-
-if [[ "$effective_rsc_version" != "$version" ]]; then
-  echo "effective-rsc is $effective_rsc_version, expected $version." >&2
-  exit 1
-fi
-
-if [[ "$create_ersc_app_version" != "$version" ]]; then
-  echo "create-ersc-app is $create_ersc_app_version, expected $version." >&2
-  exit 1
-fi
-
 if [[ "$template_framework_version" != "$version" ]]; then
   echo "The create-ersc-app template uses effective-rsc $template_framework_version, expected $version." >&2
   exit 1
@@ -66,17 +62,19 @@ bun run check
 bun run build
 bun run test
 
-bun publish --cwd packages/effective-rsc --dry-run
-bun publish --cwd packages/create-ersc-app --dry-run
+for package in "${packages[@]}"; do
+  bun publish --cwd "packages/$package" --dry-run
+done
 
-read -r -p "Publish effective-rsc and create-ersc-app $version, then push $tag? Type release: " confirmation
+read -r -p "Publish effective-rsc, @ersc/vercel, and create-ersc-app $version, then push $tag? Type release: " confirmation
 if [[ "$confirmation" != "release" ]]; then
   echo "Release canceled." >&2
   exit 1
 fi
 
-bun publish --cwd packages/effective-rsc
-bun publish --cwd packages/create-ersc-app
+for package in "${packages[@]}"; do
+  bun publish --cwd "packages/$package"
+done
 
 git tag --annotate "$tag" --message "Release $version"
 git push origin "$tag"

@@ -50,7 +50,8 @@ Details:
   Other runtime and build modules remain private.
 - `src/application.tsx` is the only application filename with framework semantics.
 - Generated application artifacts live under `.ersc/` and are consumed only through their generated
-  entry points. Build hooks may package their supplied output directories without modifying them.
+  entry points. Build hooks may package their supplied output directories without modifying them;
+  the separate `@ersc/vercel` package owns `.vercel/output/`.
 - React owns the RSC and Server Function protocols. ERSC adds Effect typing, validation, and
   lifetimes without replacing those transports.
 - Applications own React `<ViewTransition>` boundaries and animation policy. ERSC publishes UI in
@@ -68,6 +69,8 @@ Details:
 
 ## Examples and integration fixture
 
+[`examples/hello-world`](../examples/hello-world) is the introductory example for streaming,
+hydration, navigation, and Server Functions. It is also the Bun deployment example for Vercel.
 [`examples/event-platform`](../examples/event-platform) is the real-world product example.
 [`fixtures/framework-e2e`](../fixtures/framework-e2e) is the neutral framework integration fixture;
 its routes, data, artificial latency, and UI exist to expose protocol and lifecycle behavior.

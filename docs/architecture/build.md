@@ -52,6 +52,24 @@ There is no autodetection, installation, or upload. Omitting the flag leaves pri
 inputs as read-only and provide their dependencies; core owns scope/cancellation. Adapter code
 is trusted. Compilation and packaging report separately; success follows scoped cleanup.
 
+### Vercel package
+
+`@ersc/vercel` generates `.vercel/output/` with one Bun 1.4 function using the existing router.
+Its entry sets the application cwd before importing `effective-rsc/server`. It traces every server
+JavaScript chunk with Bun/Node/native-addon conditions, widening the trace root for hoisted
+dependencies. Tracing failures preserve prior output; packaging does not modify `.ersc/`.
+
+Traced dependency symlinks are relocated; client/public asset symlinks are materialized.
+Broken, cyclic, or destination-containing asset links fail. Everything linked from `public/`
+is public. Computed file reads may escape tracing; local databases are not made persistent.
+Vercel project settings and deployment remain separate setup; see [the adapter README](../../packages/vercel/README.md).
+
+## Releases
+
+`bun run release <version>` checks aligned framework, adapter, CLI, and template versions,
+runs verification and package dry runs, then asks before publishing and pushing the release tag.
+GitHub creates a draft release.
+
 ## Development
 
 `ersc dev` watches the same browser and server compiler graphs. A replacement generation is fully

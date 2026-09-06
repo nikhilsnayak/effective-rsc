@@ -1,0 +1,140 @@
+:root {
+  --paper: #f7f5f1;
+  --ink: #14131a;
+  --muted: #56535f;
+  --accent: #5b3ff0;
+  --border: #dedbe5;
+  color-scheme: light dark;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+  line-height: 1.6;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0e0e15;
+    --ink: #f2f0f6;
+    --muted: #a5a1b2;
+    --accent: #a18cff;
+    --border: #302d3b;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.shell {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+header,
+nav,
+.brand,
+.form-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+header {
+  justify-content: space-between;
+  margin-bottom: 64px;
+}
+
+a {
+  color: var(--accent);
+  text-underline-offset: 4px;
+}
+
+.brand {
+  gap: 10px;
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+p {
+  color: var(--muted);
+}
+
+h1 {
+  font-size: clamp(2rem, 7vw, 3rem);
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+  font-weight: 600;
+}
+
+h2 {
+  margin-top: 0;
+  font-size: 1.15rem;
+}
+
+.card {
+  margin-top: 24px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+label {
+  display: block;
+  margin-bottom: 8px;
+}
+
+button,
+input {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+  font: inherit;
+}
+
+input {
+  background: var(--paper);
+  color: var(--ink);
+  min-width: 0;
+  width: 100%;
+  flex: 1 1 180px;
+}
+
+button {
+  background: var(--ink);
+  color: var(--paper);
+  cursor: pointer;
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+footer {
+  margin: 40px 0 16px;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.response {
+  display: block;
+  min-height: 1.6em;
+  margin: 1em 0;
+  color: var(--muted);
+}

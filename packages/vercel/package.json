@@ -1,0 +1,62 @@
+{
+  "name": "@ersc/vercel",
+  "version": "0.0.0",
+  "description": "Vercel deployment adapter for effective-rsc",
+  "keywords": [
+    "bun",
+    "effect",
+    "react-server-components",
+    "vercel"
+  ],
+  "homepage": "https://github.com/nikhilsnayak/effective-rsc/tree/main/packages/vercel#readme",
+  "bugs": {
+    "url": "https://github.com/nikhilsnayak/effective-rsc/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nikhilsnayak/effective-rsc.git",
+    "directory": "packages/vercel"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "type": "module",
+  "exports": {
+    "./build": {
+      "types": "./dist/build.d.ts",
+      "default": "./dist/build.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "rslib build",
+    "prepack": "bun run build",
+    "test": "bun run --bun vitest run"
+  },
+  "dependencies": {
+    "@vercel/nft": "1.11.0"
+  },
+  "devDependencies": {
+    "@effect/platform-bun": "catalog:",
+    "@effect/vitest": "catalog:",
+    "@rslib/core": "catalog:",
+    "@types/bun": "catalog:",
+    "effect": "catalog:",
+    "effective-rsc": "workspace:*",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "@effect/platform-bun": "catalog:",
+    "effect": "catalog:",
+    "effective-rsc": "workspace:*"
+  },
+  "engines": {
+    "bun": ">=1.4.0"
+  }
+}

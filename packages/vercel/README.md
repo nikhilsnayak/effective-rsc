@@ -9,8 +9,9 @@ ersc build --adapter @ersc/vercel
 ```
 
 This generates `.vercel/output/` with a Bun function, traced dependencies, and copied assets.
-No custom server entry or `vercel.json` is needed. Configure the Vercel project with the Other
-preset and your monorepo build settings, then deploy with `vercel deploy --prebuilt`.
+No custom server entry or `vercel.json` is needed. Connect the repository in the Vercel dashboard
+with the Other preset. See the [deployment guide](https://effective-rsc.nikhilsnayak.dev/docs/guides/deploying-to-vercel)
+for build settings and monorepos.
 
 Public asset symlinks are copied as content, including targets outside the app. Broken or cyclic
 links fail packaging. Computed file reads may escape tracing; local databases are not persistent.

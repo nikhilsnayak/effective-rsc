@@ -1,6 +1,7 @@
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { Fragment } from 'react';
 
+import { PageMetadata } from '../components/page-metadata';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -11,6 +12,7 @@ import {
 } from '../components/ui/breadcrumb';
 import { buttonVariants } from '../components/ui/button';
 import { Separator } from '../components/ui/separator';
+import { documentDescription } from './description';
 import { Markdown } from './markdown';
 import type { DocEntry, DocPage } from './model';
 
@@ -39,10 +41,16 @@ export function DocumentationPage({
   const breadcrumbs = page.kind === 'Example' ? [...ancestors, page] : ancestors;
   return (
     <>
-      <title>{`${page.title} · effective-rsc`}</title>
-      <meta
-        name='description'
-        content={`${page.title}. Guides and executable examples for effective-rsc, the Effect-native React Server Components framework for Bun.`}
+      <PageMetadata
+        title={
+          page.href === '/docs' ? 'Documentation · effective-rsc' : `${page.title} · effective-rsc`
+        }
+        description={
+          page.href === '/docs'
+            ? 'Guides, API reference, and executable examples for building React Server Components applications with Effect and Bun.'
+            : documentDescription(page.markdown, page.title)
+        }
+        path={page.href}
       />
       <div className='min-w-0 flex-1 pb-20 md:pt-10'>
         <article>

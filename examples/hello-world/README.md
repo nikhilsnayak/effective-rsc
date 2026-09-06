@@ -16,5 +16,7 @@ Open `http://localhost:18214`. For production, stop dev and run
 Client navigation preserves the layout counter; full-page loads reset it. The greeting form also
 works without JavaScript. Browser coverage lives in the framework fixture.
 
-The build includes `@ersc/vercel` packaging. To deploy, run `vercel deploy --prebuilt` from the
-linked example directory after building.
+The build includes `@ersc/vercel` packaging. Follow the
+[deployment guide](../../packages/effective-rsc/docs/02-guides/06-deploying-to-vercel/index.md)
+with `examples/hello-world` as the Root Directory and
+`bun run --bun turbo run build --filter=@effective-rsc/example-hello-world` as the Build Command.

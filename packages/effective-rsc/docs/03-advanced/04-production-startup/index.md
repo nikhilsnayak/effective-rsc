@@ -16,3 +16,7 @@ Adapters export `build: BuildHook` from `./build`, with types from `effective-rs
 The hook receives absolute `root`, `serverDir`, `clientDir`, and `publicDir` paths and returns
 `Effect<void, Error, Scope>`. Inputs are read-only; adapters provide dependencies and ERSC owns
 cleanup/cancellation. Failures stop the build.
+
+<!-- source-navigation -->
+
+- [Deploying to Vercel](../../02-guides/06-deploying-to-vercel/index.md)

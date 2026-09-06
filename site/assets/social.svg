@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title description">
+  <title id="title">effective-rsc</title>
+  <desc id="description">React owns the UI. Effect owns the runtime. React Server Components with Effect and Bun.</desc>
+  <rect width="1200" height="630" fill="#121212" />
+  <path d="M64 148H1136M64 536H1136" stroke="#333333" />
+  <g transform="translate(52 58)">
+    <rect x="16" y="27.5" width="26" height="9" rx="4.5" fill="#8B75FF" />
+    <rect x="16" y="11" width="9" height="42" rx="4.5" fill="#F5F5F5" />
+    <rect x="16" y="11" width="32" height="9" rx="4.5" fill="#F5F5F5" />
+    <rect x="16" y="44" width="32" height="9" rx="4.5" fill="#F5F5F5" />
+  </g>
+  <g font-family="Geist, Arial, sans-serif">
+    <text x="126" y="101" fill="#F5F5F5" font-size="34" font-weight="600" letter-spacing="-1">effective-rsc</text>
+    <text x="64" y="277" fill="#F5F5F5" font-size="68" font-weight="600" letter-spacing="-3">React owns the UI.</text>
+    <text x="64" y="365" fill="#A6A6A6" font-size="68" letter-spacing="-3">Effect owns the runtime.</text>
+    <text x="64" y="453" fill="#CECECE" font-size="25">React Server Components with Effect and Bun.</text>
+    <text x="64" y="583" fill="#999999" font-size="22">effective-rsc.nikhilsnayak.dev</text>
+  </g>
+  <circle cx="1126" cy="574" r="6" fill="#C57B4A" />
+</svg>

@@ -1,6 +1,14 @@
 {
   "extends": ["//"],
   "tasks": {
-    "build": { "outputs": [".ersc/**", ".vercel/output/**", "public/generated/**"] }
+    "build": {
+      "outputs": [
+        ".ersc/**",
+        ".vercel/output/**",
+        "public/generated/**",
+        "public/robots.txt",
+        "public/sitemap.xml"
+      ]
+    }
   }
 }

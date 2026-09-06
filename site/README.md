@@ -13,12 +13,17 @@ affects Markdown rendering in dev. Rebuild and restart after changes.
 
 ## Content
 
-The build copies installed package docs, logos, `LLMS.md`, and fonts into `public/generated/`.
+The build copies installed package docs, logos, `LLMS.md`, and fonts into `public/generated/`
+and generates `sitemap.xml` and `robots.txt` from the documentation index.
 The server indexes titles and validates links at startup, then reads each requested document.
 Numeric prefixes control ordering; examples are displayed, not executed. Rendering, highlighting,
 and shadcn/Base UI controls are site-owned.
 
 ## Deployment
+
+Follow the [Vercel guide](../packages/effective-rsc/docs/02-guides/06-deploying-to-vercel/index.md)
+with `site` as the Root Directory and `bun run --bun turbo run build --filter=@ersc/site`
+as the Build Command.
 
 Production GET/HEAD page responses with status 200 request one year of Vercel CDN caching.
 Browsers revalidate; HTML and Flight stay separate through `Vary: Accept`. Query strings and

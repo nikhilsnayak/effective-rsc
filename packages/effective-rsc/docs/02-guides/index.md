@@ -9,3 +9,4 @@ Familiarity with React Server Components and Effect is assumed.
 - [Routing](./03-routing/index.md)
 - [Middleware](./04-middleware/index.md)
 - [Userland HTTP](./05-http/index.md)
+- [Deploying to Vercel](./06-deploying-to-vercel/index.md)

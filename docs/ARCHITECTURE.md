@@ -67,7 +67,11 @@ Details:
   Client Component does not progressively enhance without JavaScript because the upstream React
   protocol does not serialize that client-created binding.
 
-## Examples and integration fixture
+## Site, examples, and integration fixture
+
+[`site`](../site) serves installed package docs through ERSC on Vercel. UI dependencies and
+deployment-scoped CDN caching are site-owned; native streaming is unchanged. See
+[site deployment](../site/README.md#deployment) for cache limits, including late stream errors.
 
 [`examples/hello-world`](../examples/hello-world) is the introductory example for streaming,
 hydration, navigation, and Server Functions. It is also the Bun deployment example for Vercel.

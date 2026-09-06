@@ -4,6 +4,7 @@
   "private": true,
   "license": "MIT",
   "workspaces": [
+    "site",
     "examples/*",
     "fixtures/*",
     "packages/*"
@@ -36,6 +37,10 @@
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
+  "overrides": {
+    "react": "catalog:",
+    "react-dom": "catalog:"
+  },
   "packageManager": "bun@1.4.1",
   "catalog": {
     "@base-ui/react": "^1.8.0",
@@ -49,13 +54,12 @@
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.7",
     "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
+    "cn": "0.2.5",
     "effect": "4.0.0-rc.112",
     "lucide-react": "^1.41.0",
     "react": "19.3.0-canary-8425b691-20260904",
     "react-dom": "19.3.0-canary-8425b691-20260904",
     "react-server-dom-rspack": "0.1.0",
-    "tailwind-merge": "^3.6.0",
     "tailwindcss": "4.3.3",
     "typescript": "7.0.2",
     "vitest": "^4.1.11"

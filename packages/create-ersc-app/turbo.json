@@ -2,7 +2,7 @@
   "extends": ["//"],
   "tasks": {
     "test": {
-      "inputs": ["$TURBO_EXTENDS$", "$TURBO_ROOT$/packages/effective-rsc/package.json"]
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/effective-rsc/package.json"]
     },
     "test:e2e": {
       "extends": false

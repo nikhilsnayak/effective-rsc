@@ -46,9 +46,11 @@ Details:
 
 - `effective-rsc` exposes its authoring API only under the `react-server` condition and throws in
   other runtimes. Types remain unconditional.
+- `effective-rsc/server` exposes Bun startup; `effective-rsc/build` exports adapter contract types.
+  Other runtime and build modules remain private.
 - `src/application.tsx` is the only application filename with framework semantics.
 - Generated application artifacts live under `.ersc/` and are consumed only through their generated
-  entry points.
+  entry points. Build hooks may package their supplied output directories without modifying them.
 - React owns the RSC and Server Function protocols. ERSC adds Effect typing, validation, and
   lifetimes without replacing those transports.
 - Applications own React `<ViewTransition>` boundaries and animation policy. ERSC publishes UI in

@@ -21,7 +21,7 @@ fallbacks.
 ## Non-goals — Accepted for v0
 
 - Production stability or backward compatibility.
-- Alternative bundlers, runtimes, adapters, route models, or legacy-browser routing.
+- Alternative bundlers, runtimes, runtime adapters, route models, or legacy-browser routing.
 - SPA-only rendering, per-route SSR, SSG, ISR, or partial prerendering.
 - Replacing Server Functions with custom RPC.
 - Partial-route or slot-specific Flight before whole-tree navigation is measured.

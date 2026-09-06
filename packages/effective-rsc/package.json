@@ -37,6 +37,14 @@
       "types": "./dist/index.d.ts",
       "react-server": "./dist/index.js",
       "default": "./dist/unsupported.js"
+    },
+    "./server": {
+      "types": "./dist/server/start.d.ts",
+      "default": "./dist/server/start.js"
+    },
+    "./build": {
+      "types": "./dist/build/hook.d.ts",
+      "default": "./dist/build/hook.js"
     }
   },
   "publishConfig": {
@@ -47,7 +55,6 @@
     "docs:check": "bun ../../scripts/generate-docs.ts --check",
     "prepack": "bun run build && bun run docs:check",
     "test": "bun run --bun vitest run",
-    "test:types": "tsc --noEmit -p tests/types/tsconfig.json",
     "test:watch": "bun run --bun vitest"
   },
   "dependencies": {

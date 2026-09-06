@@ -32,6 +32,26 @@ for these compiler-owned assets skip the per-request logger; public assets and a
 remain logged. The compiled server bundle keeps a stable name instead, because `ersc start`
 resolves it by path.
 
+## Production entry
+
+`effective-rsc/server` exports `start({ root, hostname, port })`. Its Promise resolves after
+the application Layer and HTTP server are ready; failure rejects before process exit. ERSC owns
+signals and scoped cleanup. Imports are inert, and `ersc start` shares the same initialization.
+
+Deployments retain `.ersc/`, `public/`, and external runtime dependencies. This is Bun startup,
+not a request-handler API or alternate runtime adapter.
+
+## Deployment adapters
+
+`ersc build --adapter <package>` resolves `<package>/build` from the app root and runs its
+exported `build` hook after compilation. Resolution, contract, and hook failures fail the build.
+There is no autodetection, installation, or upload. Omitting the flag leaves prior output intact.
+
+`effective-rsc/build` exports `BuildContext` and `BuildHook` types: absolute `root`, `serverDir`,
+`clientDir`, and `publicDir` inputs, and an `Effect<void, Error, Scope>` result. Adapters treat
+inputs as read-only and provide their dependencies; core owns scope/cancellation. Adapter code
+is trusted. Compilation and packaging report separately; success follows scoped cleanup.
+
 ## Development
 
 `ersc dev` watches the same browser and server compiler graphs. A replacement generation is fully

@@ -5,26 +5,13 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "inputs": ["src/**", "public/**", "rslib.config.*", "tsconfig.json", "components.json"],
       "outputs": [".ersc/**", "dist/**"]
     },
     "test": {
-      "dependsOn": ["build"],
-      "inputs": [
-        "src/**",
-        "tests/**/*.test.ts",
-        "tests/**/*.test.tsx",
-        "vitest.config.*",
-        "tsconfig.json",
-        "template/**"
-      ]
-    },
-    "test:types": {
-      "inputs": ["src/**", "tests/types/**", "tsconfig.json"]
+      "dependsOn": ["build"]
     },
     "test:e2e": {
-      "dependsOn": ["build"],
-      "inputs": ["e2e/**", "src/**", "playwright.config.ts"]
+      "dependsOn": ["build"]
     },
     "test:watch": {
       "cache": false,

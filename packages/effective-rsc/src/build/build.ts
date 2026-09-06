@@ -1,8 +1,10 @@
-import { Effect, Path, Schema } from 'effect';
+import { Effect, Option, Path, Schema } from 'effect';
 
-import { ApplicationEntryPath } from './contract';
+import { ApplicationEntryPath, EnvironmentConfig, PublicAssetsDir } from './contract';
+import { runDeploymentBuild } from './deployment';
 import { Rspack } from './rspack';
 import { makeRspackBuildConfig } from './rspack-config';
+import { Terminal } from './terminal';
 
 export type BuildOptions = {
   readonly root: string;
@@ -68,7 +70,18 @@ export const build = Effect.fn('ersc/rspack/build')(function* (options: BuildOpt
 });
 
 export const buildApplication = Effect.fn('ersc/build/buildApplication')(function* (
-  options: BuildOptions,
+  options: BuildOptions & { readonly adapter: Option.Option<string> },
 ) {
   yield* build(options).pipe(Effect.provide(Rspack.layer), Effect.scoped);
+  if (Option.isSome(options.adapter)) {
+    const path = yield* Path.Path;
+    const root = path.resolve(options.root);
+    yield* runDeploymentBuild(options.adapter.value, {
+      root,
+      serverDir: path.join(root, EnvironmentConfig.production.serverOutputDir),
+      clientDir: path.join(root, EnvironmentConfig.production.clientOutputDir),
+      publicDir: path.join(root, PublicAssetsDir),
+    });
+  }
+  yield* Effect.logInfo(`${Terminal.green('✓')} Build finished successfully.`);
 });

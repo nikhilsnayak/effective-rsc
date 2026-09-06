@@ -262,8 +262,8 @@ const reportStats = Effect.fnUntraced(function* (stats: RspackStats) {
 
   yield* Effect.logInfo(
     duration === undefined
-      ? `${Terminal.green('✓')} Build finished successfully.`
-      : `${Terminal.green('✓')} Build finished successfully in ${formatDuration(duration)}.`,
+      ? `${Terminal.green('✓')} Compiled application.`
+      : `${Terminal.green('✓')} Compiled application in ${formatDuration(duration)}.`,
   );
 });
 

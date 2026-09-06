@@ -1,13 +1,12 @@
 import * as BunHttpServer from '@effect/platform-bun/BunHttpServer';
 import * as BunRuntime from '@effect/platform-bun/BunRuntime';
 import * as BunServices from '@effect/platform-bun/BunServices';
-import { Config, Effect, Layer, Schema } from 'effect';
+import { Config, Effect, Option, Schema } from 'effect';
 import * as Command from 'effect/unstable/cli/Command';
 import * as Flag from 'effect/unstable/cli/Flag';
 
 import PackageJson from '../package.json' with { type: 'json' };
-import { loadCompiledServer, makeRunnableServerLayer } from './build/compiled-server';
-import { EnvironmentConfig } from './build/contract';
+import { serve } from './server/serve';
 import {
   ApplicationIdleTimeoutSeconds,
   ApplicationMaxRequestBodySizeBytes,
@@ -31,29 +30,11 @@ export class DevModuleLoadError extends Schema.TaggedError<DevModuleLoadError>()
   },
 ) {}
 
-const start = Effect.fn('ersc/cli/start')(function* ({
-  hostname,
-  port,
-  root,
+const runBuild = Effect.fnUntraced(function* ({
+  adapter,
 }: {
-  readonly hostname: string;
-  readonly port: number;
-  readonly root: string;
+  readonly adapter: Option.Option<string>;
 }) {
-  const bundle = yield* loadCompiledServer(root);
-  const ServerLayer = yield* makeRunnableServerLayer({
-    bundle,
-    clientAssetsCacheControl: EnvironmentConfig.production.clientAssetsCacheControl,
-    clientOutputDir: EnvironmentConfig.production.clientOutputDir,
-    hostname,
-    port,
-    root,
-  });
-
-  return yield* Layer.launch(ServerLayer);
-});
-
-const runBuild = Effect.fnUntraced(function* () {
   const { buildApplication } = yield* Effect.tryPromise({
     try: () => import('./build/build'),
     catch: (cause) =>
@@ -63,10 +44,16 @@ const runBuild = Effect.fnUntraced(function* () {
       }),
   });
 
-  yield* buildApplication({ root: process.cwd() });
+  yield* buildApplication({ root: process.cwd(), adapter });
 });
 
-const buildCommand = Command.make('build').pipe(
+const adapter = Flag.string('adapter').pipe(
+  Flag.withDescription('Installed deployment adapter package to run after compilation'),
+  Flag.withSchema(Schema.NonEmptyString),
+  Flag.optional,
+);
+
+const buildCommand = Command.make('build', { adapter }).pipe(
   Command.withDescription('Compile an effective-rsc application with Rspack.'),
   Command.withHandler(runBuild),
 );
@@ -135,7 +122,12 @@ const devCommand = Command.make('dev', { hostname, port }).pipe(
 
 const startCommand = Command.make('start', { hostname, port }).pipe(
   Command.withDescription('Start the compiled application with Bun.'),
-  Command.withHandler(({ hostname, port }) => start({ hostname, port, root: process.cwd() })),
+  Command.withHandler(({ hostname, port }) =>
+    serve({ hostname, port, root: process.cwd() }).pipe(
+      Effect.andThen(Effect.never),
+      Effect.scoped,
+    ),
+  ),
 );
 
 const cli = Command.make('ersc').pipe(

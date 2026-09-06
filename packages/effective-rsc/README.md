@@ -154,6 +154,10 @@ Run `bun run dev`, then open `http://localhost:18193`. For a production run, use
 For deployment, `ersc start` accepts `--hostname` and `--port`. Command-line flags take precedence
 over `HOST` and `PORT`; the defaults are `localhost` and `18193`.
 
+For a custom Bun entry, await `start({ root, hostname, port })` from `effective-rsc/server`.
+Use `ersc build --adapter <package>` to package deployment output without uploading it.
+See the [production startup guide](https://github.com/nikhilsnayak/effective-rsc/blob/main/packages/effective-rsc/docs/03-advanced/04-production-startup/index.md).
+
 ## Styling
 
 Import stylesheets from the modules that use them; there is no framework stylesheet entry point:

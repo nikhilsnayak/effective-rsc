@@ -9,3 +9,4 @@ before adopting them.
 - [Request runtime and lifetimes](./01-request-runtime-and-lifetimes/index.md)
 - [Client navigation](./02-client-navigation/index.md)
 - [Server Function execution and refresh](./03-server-function-execution-and-refresh/index.md)
+- [Production startup](./04-production-startup/index.md)

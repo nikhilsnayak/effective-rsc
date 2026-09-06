@@ -2,10 +2,12 @@ import { Effect } from 'effect';
 import { ArrowRight, ArrowUpRight } from 'lucide-react';
 
 import { CodeBlock } from './components/code-block';
+import { PageMetadata } from './components/page-metadata';
 import { buttonVariants } from './components/ui/button';
 import { DocumentationError } from './docs/files';
 import { readRequiredDocument } from './docs/service';
 import { ERSC } from './ersc';
+import { introductionUrl } from './seo';
 
 const features = [
   {
@@ -46,10 +48,10 @@ const HomeExample = ERSC.Component.make({
 export function Home() {
   return (
     <>
-      <title>effective-rsc · React owns the UI. Effect owns the runtime.</title>
-      <meta
-        name='description'
-        content='An Effect-native React Server Components framework for Bun. Explicit routes, request-scoped services, streaming, and native Server Functions.'
+      <PageMetadata
+        title='effective-rsc · React Server Components with Effect and Bun'
+        description='An Effect-native React Server Components framework for Bun. Explicit routes, request-scoped services, streaming, and native Server Functions.'
+        path='/'
       />
       <div className='mx-auto max-w-270 px-5 pb-12 md:px-8 md:pb-20'>
         <section className='pt-14 pb-12 md:pt-24 md:pb-20'>
@@ -103,6 +105,12 @@ export function Home() {
               Browser support and navigation <ArrowUpRight size={12} aria-hidden='true' />
             </a>
           </p>
+          <a
+            className='text-muted-foreground hover:text-foreground mt-5 inline-flex items-center gap-1 text-sm underline-offset-4 hover:underline'
+            href={introductionUrl}
+          >
+            Read the introduction <ArrowUpRight size={14} aria-hidden='true' />
+          </a>
         </section>
         <section
           className='grid items-start gap-6 border-t py-10 md:grid-cols-[0.8fr_1.3fr] md:gap-12 md:py-14'

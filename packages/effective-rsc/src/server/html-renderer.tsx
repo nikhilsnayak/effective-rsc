@@ -1,5 +1,6 @@
 import { Context, Effect, FiberSet, Layer, Schema, type Scope } from 'effect';
 import { use } from 'react';
+import { preinit } from 'react-dom';
 import { renderToReadableStream } from 'react-dom/server.bun';
 import { createFromReadableStream } from 'react-server-dom-rspack/client';
 
@@ -36,6 +37,10 @@ export class HtmlRenderer extends Context.Service<HtmlRenderer>()(
           let payload: PromiseLike<FlightPayload> | null = null;
 
           function SsrRoot() {
+            // Emit CSS without server-only siblings that shift hydration's useId paths.
+            for (const href of clientStylesheets) {
+              preinit(href, { as: 'style', precedence: 'default' });
+            }
             const { routeTree } = use(
               (payload ??= createFromReadableStream<FlightPayload>(ssrFlightStream)),
             );
@@ -44,26 +49,18 @@ export class HtmlRenderer extends Context.Service<HtmlRenderer>()(
 
           const htmlStream = yield* Effect.tryPromise({
             try: () =>
-              renderToReadableStream(
-                <>
-                  {clientStylesheets.map((href) => (
-                    <link key={href} rel='stylesheet' href={href} precedence='default' />
-                  ))}
-                  <SsrRoot />
-                </>,
-                {
-                  bootstrapScripts: [...clientBootstrapScripts],
-                  formState,
-                  onError: (error, errorInfo) => {
-                    if (!signal.aborted && !flight.signal.aborted) {
-                      void runtime(
-                        Effect.logError('HTML render failed.', error, errorInfo.componentStack),
-                      );
-                    }
-                  },
-                  signal,
+              renderToReadableStream(<SsrRoot />, {
+                bootstrapScripts: [...clientBootstrapScripts],
+                formState,
+                onError: (error, errorInfo) => {
+                  if (!signal.aborted && !flight.signal.aborted) {
+                    void runtime(
+                      Effect.logError('HTML render failed.', error, errorInfo.componentStack),
+                    );
+                  }
                 },
-              ),
+                signal,
+              }),
             catch: (cause) => new HtmlRenderError({ cause }),
           });
 

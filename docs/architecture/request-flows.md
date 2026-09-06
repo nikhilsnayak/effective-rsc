@@ -20,6 +20,9 @@ sequenceDiagram
 The browser makes no second initial Flight request. It hydrates `document`, not a framework
 container. Closing the response cancels both stream branches and interrupts request Effects.
 
+SSR registers compiler stylesheets with React DOM's `preinit` while rendering. It does not add
+server-only siblings around the route tree, which would change React's `useId` paths during hydration.
+
 Hydration and Server Function setup also run when client-navigation APIs are missing. In that case,
 links load complete documents while Server Functions and HMR can still refresh the current page
 through Flight. Without JavaScript, forms retain the native progressive submission path.

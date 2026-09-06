@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 
 export default function RuntimeProbe() {
+  const descriptionId = useId();
   const [count, setCount] = useState(0);
   const [phase, setPhase] = useState<'Ready' | 'Failed'>('Ready');
 
@@ -12,8 +13,12 @@ export default function RuntimeProbe() {
 
   return (
     <section aria-label='Runtime recovery probe'>
-      <p>Runtime probe original</p>
-      <button onClick={() => setCount((value) => value + 1)} type='button'>
+      <p id={descriptionId}>Runtime probe original</p>
+      <button
+        aria-describedby={descriptionId}
+        onClick={() => setCount((value) => value + 1)}
+        type='button'
+      >
         Probe count: {count}
       </button>
       <button onClick={() => setPhase('Failed')} type='button'>

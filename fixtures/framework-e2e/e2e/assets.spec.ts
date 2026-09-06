@@ -3,6 +3,31 @@ import { expect, test, type Response } from '@playwright/test';
 
 import { getText } from './support/http';
 
+test('preserves useId associations through hydration and a client update', async ({ page }) => {
+  const errors: Array<string> = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') {
+      errors.push(message.text());
+    }
+  });
+  page.on('pageerror', (error) => errors.push(error.message));
+
+  await page.goto('/');
+  const description = page.getByText('Runtime probe original', { exact: true });
+  const descriptionId = await description.getAttribute('id');
+  if (descriptionId === null) {
+    throw new Error('Missing server-rendered useId.');
+  }
+  const button = page.getByRole('button', { name: 'Probe count: 0' });
+  await expect(button).toHaveAttribute('aria-describedby', descriptionId);
+  await button.click();
+  await expect(page.getByRole('button', { name: 'Probe count: 1' })).toHaveAttribute(
+    'aria-describedby',
+    descriptionId,
+  );
+  expect(errors).toEqual([]);
+});
+
 test('loads every compiler asset needed by the hydrated document', async ({ page }, testInfo) => {
   const assetResponses: Array<Response> = [];
   page.on('response', (response) => {

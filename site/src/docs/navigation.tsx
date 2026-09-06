@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useSyncExternalStore } from 'react';
+import { useEffect } from 'react';
 
 import {
   SidebarGroup,
@@ -11,24 +11,11 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from '../components/ui/sidebar';
+import { usePathname } from '../hooks/use-pathname';
 import type { DocEntry } from './model';
 
-function subscribe(callback: () => void) {
-  const navigation = window.navigation;
-  navigation?.addEventListener('currententrychange', callback);
-  return () => navigation?.removeEventListener('currententrychange', callback);
-}
-
-function getPathname() {
-  return window.location.pathname;
-}
-
-function getServerPathname() {
-  return null;
-}
-
 export function DocsNavigation({ entries }: { readonly entries: ReadonlyArray<DocEntry> }) {
-  const pathname = useSyncExternalStore(subscribe, getPathname, getServerPathname);
+  const pathname = usePathname();
   const { setOpenMobile } = useSidebar();
   useEffect(() => {
     const navigation = window.navigation;
@@ -62,6 +49,7 @@ export function DocsNavigation({ entries }: { readonly entries: ReadonlyArray<Do
                     render={
                       <a
                         href={page.href}
+                        data-ersc-transition-types='docs-jump'
                         aria-current={page.href === currentHref ? 'page' : undefined}
                       >
                         {page.href.split('/').length <= 3 ? 'Overview' : page.title}

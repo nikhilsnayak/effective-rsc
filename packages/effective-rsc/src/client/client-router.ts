@@ -14,6 +14,22 @@ import { RouteLoader, type RouteLoad } from './route-loader';
 type NavigationGeneration = symbol;
 type RouteResource = Extract<RouteLoad, { readonly _tag: 'Route' }>;
 
+const reservedTransitionTypes = new Set(['navigation', 'server-function', 'hmr-refresh']);
+
+const isApplicationTransitionType = (type: string) =>
+  !reservedTransitionTypes.has(type) && !type.startsWith('navigation-');
+
+const getLinkTransitionTypes = (event: NavigateEvent): ReadonlyArray<string> => {
+  if (
+    (event.navigationType !== 'push' && event.navigationType !== 'replace') ||
+    !(event.sourceElement instanceof HTMLAnchorElement)
+  ) {
+    return [];
+  }
+  const types = event.sourceElement.dataset['erscTransitionTypes']?.match(/\S+/g) ?? [];
+  return [...new Set(types.filter(isApplicationTransitionType))];
+};
+
 const getNavigationTransitionTypes = (
   event: NavigateEvent,
   fromIndex: number | null,
@@ -431,6 +447,7 @@ export const installClientRouter = Effect.gen(function* () {
     }
 
     const destination = new URL(event.destination.url);
+    const linkTransitionTypes = getLinkTransitionTypes(event);
     const generation: NavigationGeneration = Symbol('NavigationGeneration');
     const lifetime = new AbortController();
     const navigationSignal = AbortSignal.any([event.signal, lifetime.signal]);
@@ -498,6 +515,9 @@ export const installClientRouter = Effect.gen(function* () {
                 navigationApi.getCurrentEntry()?.index ??
                 null;
               for (const type of getNavigationTransitionTypes(event, fromIndex)) {
+                addTransitionType(type);
+              }
+              for (const type of linkTransitionTypes) {
                 addTransitionType(type);
               }
               navigation = browserRenderer.navigate(command.resource.routeTree);

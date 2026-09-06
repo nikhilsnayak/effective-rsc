@@ -74,6 +74,7 @@ entry; read Git history for what it said.
 | D-068 | Let ServerFn input be one Schema for one argument or a readonly schema list for positional arguments, including previous state and FormData for native useActionState. A Tuple or Array Schema remains a single argument. Resolves OQ-008.                        |
 | D-069 | Decode Page params once in the request handler before GET/HEAD rendering; rejection returns an empty 404, including Flight. POST keeps render-time decoding and completed Server Function outcomes. Resolves OQ-003.                                              |
 | D-070 | Select one installed deployment adapter with ersc build --adapter <package>; invoke its fixed ./build export after compilation. No dependency scanning, manifest marker, automatic installation, or upload. Core remains host-independent.                        |
+| D-071 | Read additive application transition types from native links via data-ersc-transition-types at navigation start; publish them with the route and do not persist them in history. Typed client navigation APIs remain deferred.                                    |
 
 ## Deferred
 

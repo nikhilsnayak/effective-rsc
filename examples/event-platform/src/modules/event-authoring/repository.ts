@@ -5,6 +5,7 @@ import {
   AuthoringOrganization,
   type CreateEventInput,
   EditableEvent,
+  EventProgrammeInvalid,
   type EventDetailsInput,
   type EventEditor,
   ManagedTicketType,
@@ -270,7 +271,15 @@ export class EventAuthoringRepository extends Context.Service<EventAuthoringRepo
                   AND role IN ('owner', 'admin', 'event_manager')
               )
             RETURNING id AS eventId
-          `;
+          `.pipe(
+            Effect.mapError((error) =>
+              error.reason._tag === 'ConstraintError' &&
+              error.reason.cause instanceof Error &&
+              error.reason.cause.message === 'event would invalidate programme'
+                ? new EventProgrammeInvalid({ eventId })
+                : error,
+            ),
+          );
 
           return rows.length === 1;
         }),

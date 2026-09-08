@@ -283,6 +283,22 @@ export class ProgrammeRepository extends Context.Service<ProgrammeRepository>()(
                     RETURNING id AS sessionId
                   `;
               } else {
+                // Remove the old assignment before checking the new schedule. The transaction
+                // restores it if either the schedule or the replacement speaker conflicts.
+                yield* sql`
+                  DELETE FROM programme_session_speakers
+                  WHERE session_id IN (
+                    SELECT programme_sessions.id
+                    FROM programme_sessions
+                    INNER JOIN events ON events.id = programme_sessions.event_id
+                    INNER JOIN organization_memberships
+                      ON organization_memberships.organization_id = events.organization_id
+                    WHERE programme_sessions.id = ${input.sessionId}
+                      AND events.id = ${input.eventId}
+                      AND organization_memberships.user_id = ${userId}
+                      AND organization_memberships.role IN ('owner', 'admin', 'event_manager')
+                  )
+                `;
                 rows = yield* sql<{ readonly sessionId: string }>`
                     UPDATE programme_sessions
                     SET
@@ -312,10 +328,6 @@ export class ProgrammeRepository extends Context.Service<ProgrammeRepository>()(
                 return null;
               }
 
-              yield* sql`
-                DELETE FROM programme_session_speakers
-                WHERE session_id = ${sessionId}
-              `;
               const speakerRows = yield* sql<{ readonly speakerId: string }>`
                 INSERT INTO programme_session_speakers (session_id, speaker_id)
                 SELECT ${sessionId}, id

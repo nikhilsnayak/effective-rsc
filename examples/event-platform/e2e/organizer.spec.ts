@@ -1,7 +1,6 @@
 // oxlint-disable effecttsgo/async-function -- Playwright owns this Promise-based browser-test boundary.
-import { expect, test } from '@playwright/test';
-
 import { observeBrowserErrors } from './support/browser-errors';
+import { expect, test } from './support/test';
 
 test('authors, publishes, discovers, and registers for an event', async ({ page }, testInfo) => {
   const browserErrors = observeBrowserErrors(page);
@@ -48,6 +47,8 @@ test('authors, publishes, discovers, and registers for an event', async ({ page 
   const authoredTicket = page
     .locator('form')
     .filter({ has: page.getByRole('heading', { name: 'Standard admission' }) });
+  await expect(authoredTicket.getByLabel('Sales start')).toHaveValue('2026-01-01T00:00');
+  await expect(authoredTicket.getByLabel('Sales end')).toHaveValue('2099-02-11T08:00');
   await authoredTicket.getByRole('button', { name: 'Hide from sale' }).click();
   await expect(authoredTicket.getByText('Ticket is hidden.')).toBeVisible();
   await authoredTicket.getByLabel('Quantity').fill('101');
@@ -129,6 +130,20 @@ test('authors, publishes, discovers, and registers for an event', async ({ page 
   await expect(page.getByRole('heading', { name: 'You’re registered' })).toBeVisible();
 
   expect(browserErrors).toEqual([]);
+});
+
+test('rejects event dates that would leave a session outside the event', async ({ page }) => {
+  await page.goto('/organizer/events/event-rsc-workshop-lab-2026/edit');
+  await page.getByLabel('Starts', { exact: true }).fill('2026-12-05T11:00');
+  await page.getByRole('button', { name: 'Save event', exact: true }).click();
+  await expect(
+    page.getByText(
+      'Existing sessions must fit within the event dates and capacity. Update the programme first.',
+    ),
+  ).toBeVisible();
+  await expect(page.getByLabel('Starts', { exact: true })).toHaveValue('2026-12-05T11:00');
+  await page.reload();
+  await expect(page.getByLabel('Starts', { exact: true })).toHaveValue('2026-12-05T09:30');
 });
 
 test('reviews event sales and attendance as an organization owner', async ({ page }) => {

@@ -12,6 +12,8 @@ import Migration010 from '@/persistence/Migrations/010_DiscountCodes';
 import Migration011 from '@/persistence/Migrations/011_Waitlists';
 import Migration012 from '@/persistence/Migrations/012_RegistrationQuestions';
 import Migration013 from '@/persistence/Migrations/013_ReleaseHardening';
+import Migration014 from '@/persistence/Migrations/014_ProgrammeEventConstraints';
+import Migration015 from '@/persistence/Migrations/015_TicketSaleInstants';
 
 const loader = SqliteMigrator.fromRecord({
   '2_EventPlatform': Migration002,
@@ -26,6 +28,8 @@ const loader = SqliteMigrator.fromRecord({
   '11_Waitlists': Migration011,
   '12_RegistrationQuestions': Migration012,
   '13_ReleaseHardening': Migration013,
+  '14_ProgrammeEventConstraints': Migration014,
+  '15_TicketSaleInstants': Migration015,
 });
 
 export const runMigrations = SqliteMigrator.run({ loader });

@@ -1,7 +1,6 @@
 // oxlint-disable effecttsgo/async-function -- Playwright owns this Promise-based browser-test boundary.
-import { expect, test } from '@playwright/test';
-
 import { observeBrowserErrors } from './support/browser-errors';
+import { expect, test } from './support/test';
 
 test('registers an attendee and manages the issued ticket', async ({ page }, testInfo) => {
   const browserErrors = observeBrowserErrors(page);

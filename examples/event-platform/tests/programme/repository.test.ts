@@ -124,6 +124,103 @@ describe('ProgrammeRepository', () => {
     }).pipe(Effect.provide(RepositoryLayer)),
   );
 
+  it.effect('moves a session and changes its speaker using the final assignment', () =>
+    Effect.gen(function* () {
+      const repository = yield* ProgrammeRepository;
+      const eventId = 'event-rsc-workshop-lab-2026';
+      // Priya has a second booking at 09:00 in the clinic.
+      yield* repository.saveSession(
+        'user-nikhil',
+        {
+          eventId,
+          roomId: 'room-workshop-clinic',
+          speakerId: 'speaker-workshop-priya',
+          startsAt: '2026-12-05T09:00:00.000Z',
+          endsAt: '2026-12-05T10:00:00.000Z',
+          capacity: 28,
+          title: 'Priya’s next session',
+          summary: 'A separate booking.',
+        },
+        '2026-09-08T10:01:00.000Z',
+      );
+      // Move her studio session to the same time, with Daniel replacing her.
+      const sessionId = yield* repository.saveSession(
+        'user-nikhil',
+        {
+          sessionId: 'session-workshop-flight',
+          eventId,
+          roomId: 'room-workshop-studio',
+          speakerId: 'speaker-workshop-daniel',
+          startsAt: '2026-12-05T09:00:00.000Z',
+          endsAt: '2026-12-05T10:00:00.000Z',
+          capacity: 80,
+          title: 'Flight workshop',
+          summary: 'Rescheduled with Daniel.',
+        },
+        '2026-09-08T10:02:00.000Z',
+      );
+      const editor = yield* repository.loadEditor('user-nikhil', eventId);
+      expect(editor?.sessions.find((session) => session.sessionId === sessionId)).toMatchObject({
+        startsAt: '2026-12-05T09:00:00.000Z',
+        speakerId: 'speaker-workshop-daniel',
+      });
+    }).pipe(Effect.provide(RepositoryLayer)),
+  );
+
+  it.effect('rolls back both the schedule and speaker when the final assignment conflicts', () =>
+    Effect.gen(function* () {
+      const repository = yield* ProgrammeRepository;
+      const eventId = 'event-rsc-workshop-lab-2026';
+      const before = yield* repository.loadEditor('user-nikhil', eventId);
+      const failed = yield* repository
+        .saveSession(
+          'user-nikhil',
+          {
+            sessionId: 'session-workshop-debugging',
+            eventId,
+            roomId: 'room-workshop-clinic',
+            speakerId: 'speaker-workshop-priya',
+            startsAt: '2026-12-05T05:00:00.000Z',
+            endsAt: '2026-12-05T06:00:00.000Z',
+            capacity: 28,
+            title: 'Conflicting edit',
+            summary: 'Priya is already speaking in the studio.',
+          },
+          '2026-09-08T10:00:00.000Z',
+        )
+        .pipe(Effect.flip);
+      expect(failed.reason.cause).toMatchObject({ message: 'programme speaker conflict' });
+      const after = yield* repository.loadEditor('user-nikhil', eventId);
+      expect(after?.sessions).toEqual(before?.sessions);
+    }).pipe(Effect.provide(RepositoryLayer)),
+  );
+
+  it.effect('leaves the speaker assignment intact when the editor is unauthorized', () =>
+    Effect.gen(function* () {
+      const repository = yield* ProgrammeRepository;
+      const eventId = 'event-rsc-workshop-lab-2026';
+      const before = yield* repository.loadEditor('user-nikhil', eventId);
+      const sessionId = yield* repository.saveSession(
+        'user-maya',
+        {
+          sessionId: 'session-workshop-debugging',
+          eventId,
+          roomId: 'room-workshop-clinic',
+          speakerId: 'speaker-workshop-priya',
+          startsAt: '2026-12-05T09:00:00.000Z',
+          endsAt: '2026-12-05T10:00:00.000Z',
+          capacity: 28,
+          title: 'Unauthorized edit',
+          summary: 'This must not be saved.',
+        },
+        '2026-09-08T10:00:00.000Z',
+      );
+      expect(sessionId).toBeNull();
+      const after = yield* repository.loadEditor('user-nikhil', eventId);
+      expect(after?.sessions).toEqual(before?.sessions);
+    }).pipe(Effect.provide(RepositoryLayer)),
+  );
+
   it.effect('only exposes published sessions for a public event', () =>
     Effect.gen(function* () {
       const repository = yield* ProgrammeRepository;

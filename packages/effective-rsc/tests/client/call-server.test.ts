@@ -4,7 +4,7 @@ import { HttpClient } from 'effect/unstable/http';
 import { vi } from 'vitest';
 
 import { BrowserEffectRunner } from '../../src/client/browser-effect-runner';
-import { BrowserRenderer } from '../../src/client/browser-renderer';
+import { type BrowserRender, BrowserRenderer } from '../../src/client/browser-renderer';
 import { FlightClient } from '../../src/client/flight-client';
 import { NavigationApi } from '../../src/client/navigation-api';
 import { RouteLoader } from '../../src/client/route-loader';
@@ -136,7 +136,9 @@ it.effect('releases an incomplete Server Function response', () =>
             navigate: () => {
               throw new TypeError('Unexpected navigation render.');
             },
-            refresh: () => Promise.reject(new TypeError('Unexpected route refresh.')),
+            refresh: () => {
+              throw new TypeError('Unexpected route refresh.');
+            },
           }),
           flightClientLayer,
           navigationApiLayer,
@@ -177,7 +179,9 @@ const staleResponseScenario = (
       const currentRouteRefresh = yield* Deferred.make<void>();
       const refreshTransitionTypes: Array<string> = [];
       const released = vi.fn();
-      const rendered = vi.fn(() => Promise.resolve());
+      const rendered = vi.fn(() => {
+        throw new TypeError('Unexpected response render.');
+      });
       const navigationState: TestNavigationState = {
         currentEntry: MutableRef.make(firstEntry),
         transition: MutableRef.make(null),
@@ -327,7 +331,11 @@ it.effect('does not let an older invocation response overwrite a newer response'
         },
         refresh: (routeTree) => {
           rendered.push(routeTree.id);
-          return Promise.resolve();
+          return {
+            committed: Promise.resolve(),
+            retired: Promise.withResolvers<void>().promise,
+            discard: () => Promise.resolve(),
+          };
         },
       });
       const routeLoaderLayer = RouteLoader.layerTest({
@@ -384,6 +392,66 @@ it.effect('does not let an older invocation response overwrite a newer response'
         HttpClient.HttpClient,
         HttpClient.make(() => Effect.die('Unexpected HTTP request.')),
       ),
+    ),
+  ),
+);
+
+it.effect('releases a visible Server Function refresh when its replacement commits', () =>
+  Effect.gen(function* () {
+    const browserRenderer = yield* BrowserRenderer.make;
+    let published = Promise.withResolvers<BrowserRender>();
+    browserRenderer.initialize(makeRouteTree('initial'), (render) => published.resolve(render));
+    const released = vi.fn();
+    const cached = vi.fn();
+    yield* listen(
+      Layer.mergeAll(
+        BrowserEffectRunner.layer,
+        BrowserRenderer.layerTest(browserRenderer),
+        FlightClient.layerTest({
+          load: () =>
+            Effect.succeed({
+              ...makeFlight('refreshed', 'saved', Effect.sync(released)),
+              completed: Effect.never,
+            }),
+        }),
+        NavigationApi.layerTest({
+          getCurrentEntry: () => firstEntry,
+          getCurrentUrl: () => firstEntry.url,
+          getTransition: () => null,
+          navigate: () => {
+            throw new TypeError('Unexpected document navigation.');
+          },
+          reloadDocument: () => undefined,
+          replaceDocument: () => undefined,
+          subscribe: () => () => undefined,
+        }),
+        RouteLoader.layerTest({ invalidate: () => undefined, prepareRefresh: () => cached }),
+        RouteRefresher.layerTest({ interruptCurrentRouteRefresh: Effect.void }),
+      ),
+    );
+
+    const result = yield* Effect.promise(() => invokeServerFn('save'));
+    expect(result).toBe('saved');
+    const refresh = yield* Effect.promise(() => published.promise);
+    browserRenderer.commit(refresh);
+
+    // The refreshed page is still streaming while its replacement prepares.
+    published = Promise.withResolvers<BrowserRender>();
+    const replacement = browserRenderer.navigate(makeRouteTree('replacement'));
+    const nextRender = yield* Effect.promise(() => published.promise);
+    yield* Effect.yieldNow;
+    expect(released).not.toHaveBeenCalled();
+
+    browserRenderer.commit(nextRender);
+    yield* Effect.promise(() => replacement.committed);
+    yield* Effect.yieldNow;
+    expect(released).toHaveBeenCalledOnce();
+    expect(cached).not.toHaveBeenCalled();
+  }).pipe(
+    Effect.scoped,
+    Effect.provideService(
+      HttpClient.HttpClient,
+      HttpClient.make(() => Effect.die('Unexpected HTTP request.')),
     ),
   ),
 );

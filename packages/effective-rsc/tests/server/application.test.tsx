@@ -238,6 +238,55 @@ const progressiveServerFnRequest = (body: FormData) =>
   });
 
 describe('ServerApplication.httpLayer', () => {
+  it.effect(
+    'releases route middleware resources when the response finishes, before server shutdown',
+    () =>
+      Effect.gen(function* () {
+        const events: Array<string> = [];
+        const ERSC = Application.ersc();
+        const ResourceMiddleware = ERSC.Middleware.make(() =>
+          Effect.acquireRelease(
+            Effect.sync(() => {
+              events.push('acquired');
+            }),
+            () =>
+              Effect.sync(() => {
+                events.push('released');
+              }),
+          ).pipe(Effect.as(HttpServerResponse.text('response'))),
+        );
+        const RootLayout = ERSC.Layout.make({
+          render: ({ children }) => Effect.succeed(<html lang='en'>{children}</html>),
+        });
+        const Page = ERSC.Page.make({
+          render: () => Effect.die('Resource middleware should answer without rendering the Page.'),
+        });
+        const App = ERSC.make({
+          routes: ERSC.withMiddleware(ResourceMiddleware)
+            .Routes.make({ layout: RootLayout })
+            .page('/', Page),
+        });
+        const { handler, dispose } = HttpRouter.toWebHandler(
+          ServerApplication.httpLayer(App).pipe(
+            Layer.provide(ServerConfigLayer),
+            Layer.provide(
+              Layer.mergeAll(BunFileSystem.layer, BunHttpPlatform.layer, BunPath.layer),
+            ),
+          ),
+          { disableLogger: true },
+        );
+        yield* Effect.addFinalizer(() => Effect.promise(dispose));
+
+        const response = yield* Effect.promise(() => handler(new Request(`${Origin}/`)));
+        const body = yield* Effect.promise(() => response.text());
+
+        expect(response.status).toBe(200);
+        expect(body).toBe('response');
+        // Request cleanup must happen while the application is still running.
+        expect([...events]).toEqual(['acquired', 'released']);
+      }).pipe(Effect.scoped),
+  );
+
   it.effect('disables request logging for compiled assets only', () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;

@@ -251,11 +251,11 @@ const httpLayer = <Services, ApplicationError>(
 
   const RequestLayer = Layer.mergeAll(RenderersLayer, applicationState.layer);
   const ApplicationRoutesLayer = Layer.unwrap(
-    Effect.map(Effect.context<Services | FlightRenderer | HtmlRenderer>(), (requestContext) => {
+    Effect.map(Layer.build(RequestLayer), (applicationServices) => {
       const RequestContextMiddleware = HttpRouter.middleware<{
         provides: Services | FlightRenderer | HtmlRenderer;
       }>()((httpEffect): Effect.Effect<HttpServerResponse.HttpServerResponse, Types.unhandled> =>
-        httpEffect.pipe(Effect.provideContext(requestContext)),
+        httpEffect.pipe(Effect.provideContext(applicationServices)),
       );
       const makeRouteLayer = (destination: CompiledDestination<Services>) => {
         const GetLayer = HttpRouter.add('GET', destination.pattern, (request) =>
@@ -299,7 +299,7 @@ const httpLayer = <Services, ApplicationError>(
         ...remainingDestinations.map(makeRouteLayer),
       );
     }),
-  ).pipe(Layer.provide(RequestLayer));
+  );
 
   return Layer.mergeAll(StaticAssetsLayer, PublicAssetsLayer).pipe(
     Layer.provideMerge(ApplicationRoutesLayer),

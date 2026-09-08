@@ -51,5 +51,7 @@ jobs:
           path: |
             fixtures/framework-e2e/playwright-report
             fixtures/framework-e2e/test-results
+            examples/event-platform/playwright-report
+            examples/event-platform/test-results
           if-no-files-found: ignore
           retention-days: 7

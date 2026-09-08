@@ -8,26 +8,21 @@ export type BrowserRendererNavigation = {
   readonly retired: Promise<void>;
 };
 
-type BrowserRenderNavigationState = {
+type BrowserRenderUpdate = {
   readonly committed: PromiseWithResolvers<void>;
   readonly retired: PromiseWithResolvers<void>;
   readonly routeTree: RouteTreeModel;
 };
 
-type BrowserRenderNavigationPhase =
-  | 'Scheduled'
-  | 'DiscardRequested'
-  | 'Visible'
-  | 'Completed'
-  | 'Retired';
+type BrowserRenderPhase = 'Scheduled' | 'DiscardRequested' | 'Visible' | 'Completed' | 'Retired';
 
 type BrowserRenderOwner =
   | { readonly _tag: 'Stable' }
-  | { readonly _tag: 'Navigation'; readonly navigation: BrowserRenderNavigationState };
+  | { readonly _tag: 'Update'; readonly update: BrowserRenderUpdate };
 
 type BrowserRendererLifecycle = {
   active: BrowserRenderOwner;
-  readonly phases: WeakMap<BrowserRenderNavigationState, BrowserRenderNavigationPhase>;
+  readonly phases: WeakMap<BrowserRenderUpdate, BrowserRenderPhase>;
   stableRouteTree: RouteTreeModel;
   visible: BrowserRenderOwner;
 };
@@ -43,40 +38,29 @@ type BrowserRendererState =
 export type BrowserRender =
   | { readonly _tag: 'Initial'; readonly routeTree: RouteTreeModel }
   | {
-      readonly _tag: 'Navigation';
-      readonly navigation: BrowserRenderNavigationState;
+      readonly _tag: 'Navigation' | 'Refresh';
+      readonly update: BrowserRenderUpdate;
       readonly routeTree: RouteTreeModel;
     }
   | {
       readonly _tag: 'Discard';
-      readonly navigation: BrowserRenderNavigationState;
+      readonly update: BrowserRenderUpdate;
       readonly routeTree: RouteTreeModel;
       readonly visible: BrowserRenderOwner;
-    }
-  | {
-      readonly _tag: 'Refresh';
-      readonly committed: PromiseWithResolvers<void>;
-      readonly routeTree: RouteTreeModel;
     };
 
-const getNavigationPhase = (
-  lifecycle: BrowserRendererLifecycle,
-  navigation: BrowserRenderNavigationState,
-) => {
-  const phase = lifecycle.phases.get(navigation);
+const getRenderPhase = (lifecycle: BrowserRendererLifecycle, update: BrowserRenderUpdate) => {
+  const phase = lifecycle.phases.get(update);
   if (phase === undefined) {
-    throw new TypeError('Browser navigation does not belong to this root.');
+    throw new TypeError('Browser render does not belong to this root.');
   }
   return phase;
 };
 
-const retireNavigation = (
-  lifecycle: BrowserRendererLifecycle,
-  navigation: BrowserRenderNavigationState,
-) => {
-  if (getNavigationPhase(lifecycle, navigation) !== 'Retired') {
-    lifecycle.phases.set(navigation, 'Retired');
-    navigation.retired.resolve();
+const retireUpdate = (lifecycle: BrowserRendererLifecycle, update: BrowserRenderUpdate) => {
+  if (getRenderPhase(lifecycle, update) !== 'Retired') {
+    lifecycle.phases.set(update, 'Retired');
+    update.retired.resolve();
   }
 };
 
@@ -109,7 +93,7 @@ export class BrowserRenderer extends Context.Service<BrowserRenderer>()(
           _tag: 'Ready',
           lifecycle: {
             active: { _tag: 'Stable' },
-            phases: new WeakMap<BrowserRenderNavigationState, BrowserRenderNavigationPhase>(),
+            phases: new WeakMap<BrowserRenderUpdate, BrowserRenderPhase>(),
             stableRouteTree: initialRouteTree,
             visible: { _tag: 'Stable' },
           },
@@ -117,99 +101,89 @@ export class BrowserRenderer extends Context.Service<BrowserRenderer>()(
         });
       };
 
-      const navigate = (routeTree: RouteTreeModel) => {
+      const schedule = (routeTree: RouteTreeModel, kind: 'Navigation' | 'Refresh') => {
         const { lifecycle, publish } = getReadyState();
-        const navigation: BrowserRenderNavigationState = {
+        const update: BrowserRenderUpdate = {
           committed: Promise.withResolvers<void>(),
           retired: Promise.withResolvers<void>(),
           routeTree,
         };
-        lifecycle.phases.set(navigation, 'Scheduled');
-        lifecycle.active = { _tag: 'Navigation', navigation };
-        publish({ _tag: 'Navigation', navigation, routeTree: navigation.routeTree });
+        lifecycle.phases.set(update, 'Scheduled');
+        lifecycle.active = { _tag: 'Update', update };
+        publish({ _tag: kind, update, routeTree });
 
         return {
-          committed: navigation.committed.promise,
+          committed: update.committed.promise,
           discard: () => {
-            if (getNavigationPhase(lifecycle, navigation) !== 'Scheduled') {
+            if (getRenderPhase(lifecycle, update) !== 'Scheduled') {
+              // Refresh cancellation can arrive just after React commits. Its visible tree
+              // must survive until a successor commits, even if the caller has moved on.
+              if (kind === 'Refresh') {
+                return update.retired.promise;
+              }
               throw new TypeError('Only a scheduled browser navigation can be discarded.');
             }
-            lifecycle.phases.set(navigation, 'DiscardRequested');
-            if (
-              lifecycle.active._tag === 'Navigation' &&
-              lifecycle.active.navigation === navigation
-            ) {
+            lifecycle.phases.set(update, 'DiscardRequested');
+            if (lifecycle.active._tag === 'Update' && lifecycle.active.update === update) {
               const visible = lifecycle.visible;
               lifecycle.active =
-                visible._tag === 'Navigation' &&
-                getNavigationPhase(lifecycle, visible.navigation) === 'Visible'
+                visible._tag === 'Update' && getRenderPhase(lifecycle, visible.update) === 'Visible'
                   ? visible
                   : { _tag: 'Stable' };
             }
             publish({
               _tag: 'Discard',
-              navigation,
+              update,
               routeTree:
-                lifecycle.visible._tag === 'Navigation'
-                  ? lifecycle.visible.navigation.routeTree
+                lifecycle.visible._tag === 'Update'
+                  ? lifecycle.visible.update.routeTree
                   : lifecycle.stableRouteTree,
               visible: lifecycle.visible,
             });
-            return navigation.retired.promise;
+            return update.retired.promise;
           },
-          retired: navigation.retired.promise,
+          retired: update.retired.promise,
         };
       };
 
-      const refresh = (routeTree: RouteTreeModel) => {
-        const { lifecycle, publish } = getReadyState();
-        const committed = Promise.withResolvers<void>();
-        lifecycle.active = { _tag: 'Stable' };
-        publish({ _tag: 'Refresh', committed, routeTree });
-        return committed.promise;
-      };
+      const navigate = (routeTree: RouteTreeModel) => schedule(routeTree, 'Navigation');
+      const refresh = (routeTree: RouteTreeModel) => schedule(routeTree, 'Refresh');
 
       const commit = (render: BrowserRender) => {
         const { lifecycle } = getReadyState();
         const previousVisible = lifecycle.visible;
         const visible: BrowserRenderOwner =
-          render._tag === 'Navigation'
-            ? { _tag: 'Navigation', navigation: render.navigation }
+          render._tag === 'Navigation' || render._tag === 'Refresh'
+            ? { _tag: 'Update', update: render.update }
             : render._tag === 'Discard'
               ? render.visible
               : { _tag: 'Stable' };
         lifecycle.visible = visible;
 
         if (
-          previousVisible._tag === 'Navigation' &&
-          (visible._tag !== 'Navigation' || visible.navigation !== previousVisible.navigation)
+          previousVisible._tag === 'Update' &&
+          (visible._tag !== 'Update' || visible.update !== previousVisible.update)
         ) {
-          retireNavigation(lifecycle, previousVisible.navigation);
+          retireUpdate(lifecycle, previousVisible.update);
         }
 
         switch (render._tag) {
           case 'Initial':
             break;
           case 'Discard':
-            retireNavigation(lifecycle, render.navigation);
+            retireUpdate(lifecycle, render.update);
             break;
           case 'Navigation':
-            if (getNavigationPhase(lifecycle, render.navigation) === 'Scheduled') {
-              lifecycle.phases.set(render.navigation, 'Visible');
+          case 'Refresh':
+            if (getRenderPhase(lifecycle, render.update) === 'Scheduled') {
+              lifecycle.phases.set(render.update, 'Visible');
             }
-            if (
-              lifecycle.active._tag === 'Navigation' &&
-              lifecycle.active.navigation === render.navigation
-            ) {
+            if (lifecycle.active._tag === 'Update' && lifecycle.active.update === render.update) {
               lifecycle.active = { _tag: 'Stable' };
               lifecycle.stableRouteTree = render.routeTree;
-              lifecycle.phases.set(render.navigation, 'Completed');
+              lifecycle.phases.set(render.update, 'Completed');
             }
-            render.navigation.committed.resolve();
-            break;
-          case 'Refresh':
-            lifecycle.stableRouteTree = render.routeTree;
-            render.committed.resolve();
+            render.update.committed.resolve();
             break;
         }
       };

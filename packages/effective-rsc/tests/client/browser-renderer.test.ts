@@ -109,7 +109,7 @@ it.effect('retires a visible navigation when a refresh commits', () =>
     expect(retirementObserved).toBe(false);
 
     renderer.commit(refreshRender);
-    yield* Effect.promise(() => Promise.all([navigation.retired, refresh]));
+    yield* Effect.promise(() => Promise.all([navigation.retired, refresh.committed]));
 
     expect(retirementObserved).toBe(true);
   }).pipe(Effect.provide(BrowserRenderer.layer)),
@@ -199,7 +199,7 @@ it.effect('uses a committed Server Function refresh as the next discard target',
       return yield* Effect.die('Expected a refresh render.');
     }
     renderer.commit(refreshRender);
-    yield* Effect.promise(() => refreshed);
+    yield* Effect.promise(() => refreshed.committed);
 
     const navigation = renderer.navigate(makeRouteTree('destination'));
     const navigationRender = nextRender(renders);

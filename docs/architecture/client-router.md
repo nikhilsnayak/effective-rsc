@@ -217,7 +217,7 @@ delivers its supersession abort.
 
 ## Renderer interface
 
-Navigation publication returns only UI lifecycle facts:
+Navigation and refresh publication return only UI lifecycle facts:
 
 ```ts
 type RendererNavigation = {
@@ -230,6 +230,9 @@ type RendererNavigation = {
 - `committed` resolves from the framework root's layout effect after the render becomes visible.
 - `retired` resolves when any different render commits and the navigation tree is no longer visible.
 - `discard` is legal only before commit and resolves once the scheduled tree cannot commit.
+
+Refresh cancellation may race with its UI commit. A refresh's `discard` therefore leaves an
+already-visible tree intact and waits for its retirement instead.
 
 The router must finish `discard` before releasing that candidate's Flight resource. The renderer
 does not expose Flight completion, a stable-tree snapshot, history rollback, or navigation status.
@@ -289,8 +292,10 @@ postcommit Flight lifetime or a global busy flag.
 - A visible navigation stream may coexist with a route refresh or Server Function request.
 - A different successful renderer commit retires the visible navigation regardless of its source.
 - A failed refresh leaves the visible navigation and its stream intact.
-- A routed navigation may preempt an in-progress refresh through the existing render race; the
-  router does not serialize them.
+- A routed navigation may preempt refresh preparation. Published refreshes retain their response
+  scope in the browser runtime until EOF or renderer-confirmed retirement. Cancelling a pending
+  refresh requests a discard before releasing its response; cancelling a committed refresh leaves
+  its visible stream intact. The router does not serialize refreshes and navigations.
 
 ## Verification contract
 

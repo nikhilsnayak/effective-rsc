@@ -136,7 +136,9 @@ it.effect('releases an incomplete Server Function response', () =>
             navigate: () => {
               throw new TypeError('Unexpected navigation render.');
             },
-            refresh: () => Promise.reject(new TypeError('Unexpected route refresh.')),
+            refresh: () => {
+              throw new TypeError('Unexpected route refresh.');
+            },
           }),
           flightClientLayer,
           navigationApiLayer,
@@ -177,7 +179,9 @@ const staleResponseScenario = (
       const currentRouteRefresh = yield* Deferred.make<void>();
       const refreshTransitionTypes: Array<string> = [];
       const released = vi.fn();
-      const rendered = vi.fn(() => Promise.resolve());
+      const rendered = vi.fn(() => {
+        throw new TypeError('Unexpected response render.');
+      });
       const navigationState: TestNavigationState = {
         currentEntry: MutableRef.make(firstEntry),
         transition: MutableRef.make(null),
@@ -327,7 +331,11 @@ it.effect('does not let an older invocation response overwrite a newer response'
         },
         refresh: (routeTree) => {
           rendered.push(routeTree.id);
-          return Promise.resolve();
+          return {
+            committed: Promise.resolve(),
+            retired: Promise.withResolvers<void>().promise,
+            discard: () => Promise.resolve(),
+          };
         },
       });
       const routeLoaderLayer = RouteLoader.layerTest({

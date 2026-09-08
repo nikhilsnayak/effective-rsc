@@ -21,6 +21,7 @@ Bun server scope
 | Authored render Effects            | Request render-runtime FiberSet | Flight completion or request interruption              |
 | Preparing browser navigation       | Client-router candidate         | First UI commit, native abort, or supersession         |
 | Visible navigation Flight stream   | Client-router generation        | Flight EOF or renderer-confirmed retirement            |
+| Published current-route refresh    | Browser scope                   | Flight EOF, render retirement, or browser shutdown     |
 | Completed history-entry route tree | Browser route cache             | Cache invalidation or history-entry disposal           |
 
 Effect interruption and Web Stream cancellation propagate across these boundaries. Work is not

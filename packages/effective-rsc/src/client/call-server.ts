@@ -144,7 +144,7 @@ export const installCallServer = Effect.gen(function* () {
         addTransitionType('server-function');
         // Do not return the commit Promise from React's Transition Action. React cannot commit the
         // render until that Action ends.
-        renderCommitted = browserRenderer.refresh(resource.payload.routeTree);
+        renderCommitted = browserRenderer.refresh(resource.payload.routeTree).committed;
       });
     });
     yield* Effect.all([resource.completed, Effect.promise(() => renderCommitted)], {

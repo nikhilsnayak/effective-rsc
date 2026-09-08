@@ -251,7 +251,11 @@ const makeBrowserRenderer = (renders: Array<BrowserRenderRequest> = []) => {
       const previousNavigation = visibleNavigation;
       visibleNavigation = null;
       renders.push({ _tag: 'ServerFunction', routeTree });
-      return Promise.resolve().then(() => previousNavigation?.resolve());
+      return {
+        committed: Promise.resolve().then(() => previousNavigation?.resolve()),
+        retired: Promise.withResolvers<void>().promise,
+        discard: () => Promise.resolve(),
+      };
     },
   });
 };
@@ -968,7 +972,9 @@ it.effect('cancels a streaming Flight response abandoned before React commits', 
             retired: Promise.resolve(),
           };
         },
-        refresh: () => Promise.resolve(),
+        refresh: () => {
+          throw new TypeError('Unexpected refresh.');
+        },
       });
       const httpClient = HttpClient.make((request, _url, signal) =>
         Effect.sync(() => {
@@ -1115,7 +1121,9 @@ it.effect('discards and releases a scheduled candidate when a newer navigation s
             retired: Promise.resolve(),
           };
         },
-        refresh: () => Promise.resolve(),
+        refresh: () => {
+          throw new TypeError('Unexpected refresh.');
+        },
       });
       const httpClient = HttpClient.make((request, _url, signal) =>
         Effect.sync(() => {
@@ -1243,7 +1251,9 @@ it.effect('retains a committed Flight response until its render retires', () => 
           discard: () => Promise.resolve(),
           retired: renderRetired.promise,
         }),
-        refresh: () => Promise.resolve(),
+        refresh: () => {
+          throw new TypeError('Unexpected refresh.');
+        },
       });
       yield* listen(navigation, browserRenderer, httpClient);
       const pendingNavigation = makeNavigationEvent({ signal: navigationAbort.signal });

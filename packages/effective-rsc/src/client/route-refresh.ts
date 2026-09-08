@@ -1,12 +1,10 @@
-import { Context, Effect, FiberMap, Layer, Ref } from 'effect';
+import { Context, Effect, Exit, FiberHandle, Layer, Ref, Scope } from 'effect';
 import { addTransitionType, startTransition } from 'react';
 
 import { BrowserRenderer } from './browser-renderer';
 import { NavigationApi } from './navigation-api';
 import { isRoutedNavigation, preserveRequestedHash } from './navigation-routing';
 import { RouteLoader } from './route-loader';
-
-const CurrentRouteRefreshKey = 'CurrentRouteRefresh';
 
 export type RouteRefreshTransitionType = 'hmr-refresh' | 'server-function';
 
@@ -55,7 +53,8 @@ export const installRouteRefresh = Effect.gen(function* () {
   const navigationApi = yield* NavigationApi;
   const routeLoader = yield* RouteLoader;
   const routeRefresher = yield* RouteRefresher;
-  const refreshes = yield* FiberMap.make<typeof CurrentRouteRefreshKey>();
+  const refreshes = yield* FiberHandle.make<void>();
+  const browserScope = yield* Effect.scope;
 
   const waitForNavigationIdle = Effect.suspend(() => {
     const transition = navigationApi.getTransition();
@@ -80,41 +79,75 @@ export const installRouteRefresh = Effect.gen(function* () {
   });
 
   const refreshRoute = Effect.fnUntraced(function* (transitionType: RouteRefreshTransitionType) {
-    const currentEntry = navigationApi.getCurrentEntry();
-    const destination = new URL(currentEntry?.url ?? navigationApi.getCurrentUrl());
-    const resource = yield* routeLoader.load({
-      destination: {
-        id: currentEntry?.id ?? '',
-        url: destination.href,
-      },
-      navigationType: 'replace',
-    });
+    const responseScope = yield* Scope.make();
+    const render = yield* Effect.uninterruptibleMask(
+      Effect.fnUntraced(
+        function* (restore) {
+          const currentEntry = navigationApi.getCurrentEntry();
+          const destination = new URL(currentEntry?.url ?? navigationApi.getCurrentUrl());
+          const resource = yield* restore(
+            routeLoader
+              .load({
+                destination: {
+                  id: currentEntry?.id ?? '',
+                  url: destination.href,
+                },
+                navigationType: 'replace',
+              })
+              .pipe(Scope.provide(responseScope)),
+          );
+          const release = resource.release.pipe(Scope.use(responseScope));
 
-    if (resource._tag === 'Document') {
-      yield* resource.release;
-      yield* Effect.sync(navigationApi.reloadDocument);
-      return;
+          if (resource._tag === 'Document') {
+            yield* release;
+            yield* Effect.sync(navigationApi.reloadDocument);
+            return;
+          }
+
+          const resolvedDestination = preserveRequestedHash(destination, resource.resolvedUrl);
+          if (resolvedDestination.href !== destination.href) {
+            yield* release;
+            yield* Effect.sync(() => navigationApi.replaceDocument(resolvedDestination.href));
+            return;
+          }
+
+          const commitRefresh = routeLoader.prepareRefresh(resource.routeTree);
+          let published!: ReturnType<BrowserRenderer['Service']['refresh']>;
+          yield* Effect.sync(() => {
+            startTransition(() => {
+              addTransitionType(transitionType);
+              published = browserRenderer.refresh(resource.routeTree);
+            });
+          });
+          // Finish publication and install its browser-owned lifetime before allowing cancellation.
+          yield* Effect.raceFirst(
+            Effect.all([Effect.promise(() => published.committed), resource.completed], {
+              concurrency: 'unbounded',
+              discard: true,
+            }).pipe(Effect.andThen(Effect.sync(commitRefresh))),
+            Effect.promise(() => published.retired),
+          ).pipe(
+            Effect.ensuring(release),
+            Effect.catch((cause) =>
+              Effect.logError('Failed to stream the refreshed route.', cause),
+            ),
+            Effect.forkIn(browserScope, { startImmediately: true }),
+          );
+          yield* Effect.addFinalizer(() =>
+            Effect.sync(() => {
+              // The stream fiber awaits retirement; waiting here could block the replacement render.
+              void published.discard();
+            }),
+          );
+          return published;
+        },
+        Effect.onError((cause) => Scope.close(responseScope, Exit.failCause(cause))),
+      ),
+    );
+
+    if (render !== undefined) {
+      yield* Effect.promise(() => render.committed);
     }
-
-    const resolvedDestination = preserveRequestedHash(destination, resource.resolvedUrl);
-    if (resolvedDestination.href !== destination.href) {
-      yield* resource.release;
-      yield* Effect.sync(() => navigationApi.replaceDocument(resolvedDestination.href));
-      return;
-    }
-
-    const commitRefresh = routeLoader.prepareRefresh(resource.routeTree);
-    let renderCommitted!: Promise<void>;
-    yield* Effect.sync(() => {
-      startTransition(() => {
-        addTransitionType(transitionType);
-        renderCommitted = browserRenderer.refresh(resource.routeTree);
-      });
-    });
-    yield* Effect.all([Effect.promise(() => renderCommitted), resource.completed], {
-      concurrency: 'unbounded',
-      discard: true,
-    }).pipe(Effect.andThen(Effect.sync(commitRefresh)), Effect.ensuring(resource.release));
   });
 
   const refreshCurrentRoute = Effect.fnUntraced(
@@ -130,10 +163,8 @@ export const installRouteRefresh = Effect.gen(function* () {
   );
 
   yield* routeRefresher.replace({
-    interruptCurrentRouteRefresh: FiberMap.remove(refreshes, CurrentRouteRefreshKey),
+    interruptCurrentRouteRefresh: FiberHandle.clear(refreshes),
     refreshCurrentRoute: (transitionType) =>
-      FiberMap.run(refreshes, CurrentRouteRefreshKey, refreshCurrentRoute(transitionType)).pipe(
-        Effect.asVoid,
-      ),
+      FiberHandle.run(refreshes, refreshCurrentRoute(transitionType)).pipe(Effect.asVoid),
   });
 });

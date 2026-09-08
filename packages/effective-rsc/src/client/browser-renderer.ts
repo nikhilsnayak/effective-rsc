@@ -8,67 +8,49 @@ export type BrowserRendererNavigation = {
   readonly retired: Promise<void>;
 };
 
-type BrowserRenderUpdate = {
+type InitialRender = {
+  readonly _tag: 'Initial';
+  readonly routeTree: RouteTreeModel;
+};
+
+type RouteRender = {
+  readonly _tag: 'Navigation' | 'Refresh';
+  readonly order: number;
   readonly committed: PromiseWithResolvers<void>;
   readonly retired: PromiseWithResolvers<void>;
   readonly routeTree: RouteTreeModel;
 };
 
-type BrowserRenderPhase = 'Scheduled' | 'DiscardRequested' | 'Visible' | 'Completed' | 'Retired';
+export type BrowserRender =
+  | InitialRender
+  | RouteRender
+  | {
+      readonly _tag: 'Discard';
+      readonly order: number;
+      readonly restore: InitialRender | RouteRender;
+    };
 
-type BrowserRenderOwner =
-  | { readonly _tag: 'Stable' }
-  | { readonly _tag: 'Update'; readonly update: BrowserRenderUpdate };
-
-type BrowserRendererLifecycle = {
-  active: BrowserRenderOwner;
-  readonly phases: WeakMap<BrowserRenderUpdate, BrowserRenderPhase>;
-  stableRouteTree: RouteTreeModel;
-  visible: BrowserRenderOwner;
+type LiveRender = {
+  readonly _tag: 'Scheduled' | 'DiscardRequested' | 'Committed';
+  readonly lastPublicationOrder: number;
 };
 
 type BrowserRendererState =
   | { readonly _tag: 'Uninitialized' }
   | {
       readonly _tag: 'Ready';
-      readonly lifecycle: BrowserRendererLifecycle;
+      current: BrowserRender;
+      publicationOrder: number;
+      readonly liveRenders: Map<RouteRender, LiveRender>;
       readonly publish: (render: BrowserRender) => void;
     };
-
-export type BrowserRender =
-  | { readonly _tag: 'Initial'; readonly routeTree: RouteTreeModel }
-  | {
-      readonly _tag: 'Navigation' | 'Refresh';
-      readonly update: BrowserRenderUpdate;
-      readonly routeTree: RouteTreeModel;
-    }
-  | {
-      readonly _tag: 'Discard';
-      readonly update: BrowserRenderUpdate;
-      readonly routeTree: RouteTreeModel;
-      readonly visible: BrowserRenderOwner;
-    };
-
-const getRenderPhase = (lifecycle: BrowserRendererLifecycle, update: BrowserRenderUpdate) => {
-  const phase = lifecycle.phases.get(update);
-  if (phase === undefined) {
-    throw new TypeError('Browser render does not belong to this root.');
-  }
-  return phase;
-};
-
-const retireUpdate = (lifecycle: BrowserRendererLifecycle, update: BrowserRenderUpdate) => {
-  if (getRenderPhase(lifecycle, update) !== 'Retired') {
-    lifecycle.phases.set(update, 'Retired');
-    update.retired.resolve();
-  }
-};
 
 export class BrowserRenderer extends Context.Service<BrowserRenderer>()(
   'ersc/client/BrowserRenderer',
   {
     make: Effect.sync(() => {
       const state = MutableRef.make<BrowserRendererState>({ _tag: 'Uninitialized' });
+      const publications = new WeakSet<BrowserRender>();
       const getReadyState = () => {
         const current = MutableRef.get(state);
         if (current._tag === 'Uninitialized') {
@@ -91,58 +73,66 @@ export class BrowserRenderer extends Context.Service<BrowserRenderer>()(
 
         MutableRef.set(state, {
           _tag: 'Ready',
-          lifecycle: {
-            active: { _tag: 'Stable' },
-            phases: new WeakMap<BrowserRenderUpdate, BrowserRenderPhase>(),
-            stableRouteTree: initialRouteTree,
-            visible: { _tag: 'Stable' },
-          },
+          current: { _tag: 'Initial', routeTree: initialRouteTree },
+          publicationOrder: 0,
+          liveRenders: new Map(),
           publish,
         });
       };
 
+      const publish = (render: BrowserRender) => {
+        publications.add(render);
+        getReadyState().publish(render);
+      };
+
       const schedule = (routeTree: RouteTreeModel, kind: 'Navigation' | 'Refresh') => {
-        const { lifecycle, publish } = getReadyState();
-        const update: BrowserRenderUpdate = {
+        const ready = getReadyState();
+        const order = ++ready.publicationOrder;
+        const render: RouteRender = {
+          _tag: kind,
+          order,
           committed: Promise.withResolvers<void>(),
           retired: Promise.withResolvers<void>(),
           routeTree,
         };
-        lifecycle.phases.set(update, 'Scheduled');
-        lifecycle.active = { _tag: 'Update', update };
-        publish({ _tag: kind, update, routeTree });
+        ready.liveRenders.set(render, { _tag: 'Scheduled', lastPublicationOrder: order });
+        publish(render);
 
         return {
-          committed: update.committed.promise,
+          committed: render.committed.promise,
           discard: () => {
-            if (getRenderPhase(lifecycle, update) !== 'Scheduled') {
-              // Refresh cancellation can arrive just after React commits. Its visible tree
-              // must survive until a successor commits, even if the caller has moved on.
-              if (kind === 'Refresh') {
-                return update.retired.promise;
+            const live = ready.liveRenders.get(render);
+            // A successor may have already retired this tree before cancellation arrives.
+            if (live === undefined) {
+              return render.retired.promise;
+            }
+            if (live._tag !== 'Scheduled') {
+              // A committed refresh keeps its stream until React can no longer display it.
+              if (kind === 'Navigation') {
+                throw new TypeError('Only a scheduled browser navigation can be discarded.');
               }
-              throw new TypeError('Only a scheduled browser navigation can be discarded.');
+              return render.retired.promise;
             }
-            lifecycle.phases.set(update, 'DiscardRequested');
-            if (lifecycle.active._tag === 'Update' && lifecycle.active.update === update) {
-              const visible = lifecycle.visible;
-              lifecycle.active =
-                visible._tag === 'Update' && getRenderPhase(lifecycle, visible.update) === 'Visible'
-                  ? visible
-                  : { _tag: 'Stable' };
-            }
-            publish({
-              _tag: 'Discard',
-              update,
-              routeTree:
-                lifecycle.visible._tag === 'Update'
-                  ? lifecycle.visible.update.routeTree
-                  : lifecycle.stableRouteTree,
-              visible: lifecycle.visible,
+            ready.liveRenders.set(render, {
+              _tag: 'DiscardRequested',
+              lastPublicationOrder: order,
             });
-            return update.retired.promise;
+            const current = ready.current;
+            const restore = current._tag === 'Discard' ? current.restore : current;
+            const discardOrder = ++ready.publicationOrder;
+            if (restore._tag !== 'Initial') {
+              // Keep the tree alive even if another render commits before this discard.
+              // Reinsertion keeps the map ordered by each render's last publication.
+              ready.liveRenders.delete(restore);
+              ready.liveRenders.set(restore, {
+                _tag: 'Committed',
+                lastPublicationOrder: discardOrder,
+              });
+            }
+            publish({ _tag: 'Discard', order: discardOrder, restore });
+            return render.retired.promise;
           },
-          retired: update.retired.promise,
+          retired: render.retired.promise,
         };
       };
 
@@ -150,41 +140,43 @@ export class BrowserRenderer extends Context.Service<BrowserRenderer>()(
       const refresh = (routeTree: RouteTreeModel) => schedule(routeTree, 'Refresh');
 
       const commit = (render: BrowserRender) => {
-        const { lifecycle } = getReadyState();
-        const previousVisible = lifecycle.visible;
-        const visible: BrowserRenderOwner =
-          render._tag === 'Navigation' || render._tag === 'Refresh'
-            ? { _tag: 'Update', update: render.update }
-            : render._tag === 'Discard'
-              ? render.visible
-              : { _tag: 'Stable' };
-        lifecycle.visible = visible;
-
-        if (
-          previousVisible._tag === 'Update' &&
-          (visible._tag !== 'Update' || visible.update !== previousVisible.update)
-        ) {
-          retireUpdate(lifecycle, previousVisible.update);
+        const ready = getReadyState();
+        if (render._tag === 'Initial') {
+          return;
+        }
+        if (!publications.has(render)) {
+          throw new TypeError('Browser render does not belong to this root.');
+        }
+        const current = ready.current;
+        if (current._tag !== 'Initial' && render.order < current.order) {
+          throw new TypeError('Browser renders must commit in publication order.');
+        }
+        const visible = render._tag === 'Discard' ? render.restore : render;
+        if (visible._tag !== 'Initial') {
+          const live = ready.liveRenders.get(visible);
+          if (live === undefined) {
+            throw new TypeError('A retired browser tree cannot commit.');
+          }
+          ready.liveRenders.set(visible, {
+            _tag: 'Committed',
+            lastPublicationOrder: live.lastPublicationOrder,
+          });
+        }
+        ready.current = render;
+        if (render._tag !== 'Discard') {
+          render.committed.resolve();
         }
 
-        switch (render._tag) {
-          case 'Initial':
+        // A later replacement commit supersedes earlier publications. A tree stays alive
+        // while visible or referenced by a newer publication, including a pending discard.
+        for (const [retained, live] of ready.liveRenders) {
+          if (live.lastPublicationOrder > render.order) {
             break;
-          case 'Discard':
-            retireUpdate(lifecycle, render.update);
-            break;
-          case 'Navigation':
-          case 'Refresh':
-            if (getRenderPhase(lifecycle, render.update) === 'Scheduled') {
-              lifecycle.phases.set(render.update, 'Visible');
-            }
-            if (lifecycle.active._tag === 'Update' && lifecycle.active.update === render.update) {
-              lifecycle.active = { _tag: 'Stable' };
-              lifecycle.stableRouteTree = render.routeTree;
-              lifecycle.phases.set(render.update, 'Completed');
-            }
-            render.update.committed.resolve();
-            break;
+          }
+          if (retained !== visible) {
+            ready.liveRenders.delete(retained);
+            retained.retired.resolve();
+          }
         }
       };
 

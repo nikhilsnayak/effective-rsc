@@ -455,3 +455,59 @@ it.effect('releases a visible Server Function refresh when its replacement commi
     ),
   ),
 );
+
+it.effect('releases a never-committed Server Function refresh after its successor commits', () =>
+  Effect.gen(function* () {
+    const browserRenderer = yield* BrowserRenderer.make;
+    let published = Promise.withResolvers<BrowserRender>();
+    browserRenderer.initialize(makeRouteTree('initial'), (render) => published.resolve(render));
+    const released = vi.fn();
+    const cached = vi.fn();
+    yield* listen(
+      Layer.mergeAll(
+        BrowserEffectRunner.layer,
+        BrowserRenderer.layerTest(browserRenderer),
+        FlightClient.layerTest({
+          load: () => Effect.succeed(makeFlight('refreshed', 'saved', Effect.sync(released))),
+        }),
+        NavigationApi.layerTest({
+          getCurrentEntry: () => firstEntry,
+          getCurrentUrl: () => firstEntry.url,
+          getTransition: () => null,
+          navigate: () => {
+            throw new TypeError('Unexpected document navigation.');
+          },
+          reloadDocument: () => undefined,
+          replaceDocument: () => undefined,
+          subscribe: () => () => undefined,
+        }),
+        RouteLoader.layerTest({ invalidate: () => undefined, prepareRefresh: () => cached }),
+        RouteRefresher.layerTest({ interruptCurrentRouteRefresh: Effect.void }),
+      ),
+    );
+
+    const result = yield* Effect.promise(() => invokeServerFn('save'));
+    expect(result).toBe('saved');
+    const refresh = yield* Effect.promise(() => published.promise);
+    expect(refresh._tag).toBe('Refresh');
+
+    // The first stream has ended, but React has not committed its refresh.
+    published = Promise.withResolvers<BrowserRender>();
+    const replacement = browserRenderer.refresh(makeRouteTree('replacement'));
+    const nextRender = yield* Effect.promise(() => published.promise);
+    yield* Effect.yieldNow;
+    expect(released).not.toHaveBeenCalled();
+
+    browserRenderer.commit(nextRender);
+    yield* Effect.promise(() => replacement.committed);
+    yield* Effect.yieldNow;
+    expect(released).toHaveBeenCalledOnce();
+    expect(cached).not.toHaveBeenCalled();
+  }).pipe(
+    Effect.scoped,
+    Effect.provideService(
+      HttpClient.HttpClient,
+      HttpClient.make(() => Effect.die('Unexpected HTTP request.')),
+    ),
+  ),
+);

@@ -1,5 +1,6 @@
 import { expect, it } from '@effect/vitest';
 import { Effect } from 'effect';
+import { vi } from 'vitest';
 
 import { type BrowserRender, BrowserRenderer } from '../../src/client/browser-renderer';
 import type { RouteTreeModel } from '../../src/rsc/route-tree';
@@ -132,8 +133,10 @@ it.effect('discards a scheduled navigation without replacing the visible navigat
     nextRender(renders);
     const discarded = candidate.discard();
     const discardRender = nextRender(renders);
-    expect(discardRender._tag).toBe('Discard');
-    expect(discardRender.routeTree).toBe(visibleRouteTree);
+    if (discardRender._tag !== 'Discard') {
+      return yield* Effect.die('Expected a discard render.');
+    }
+    expect(discardRender.restore.routeTree).toBe(visibleRouteTree);
 
     let candidateRetired = false;
     let visibleRetired = false;
@@ -151,13 +154,12 @@ it.effect('discards a scheduled navigation without replacing the visible navigat
 
     expect(candidateRetired).toBe(true);
     expect(visibleRetired).toBe(false);
-    expect(() => candidate.discard()).toThrow(
-      'Only a scheduled browser navigation can be discarded.',
-    );
+    expect(candidate.discard()).toBe(discarded);
+    expect(renders).toEqual([]);
   }).pipe(Effect.provide(BrowserRenderer.layer)),
 );
 
-it.effect('advances the stable route tree when a navigation commits', () =>
+it.effect('restores the last committed tree when discarding the next navigation', () =>
   Effect.gen(function* () {
     const firstRouteTree = makeRouteTree('first');
     const renders: Array<BrowserRender> = [];
@@ -181,7 +183,7 @@ it.effect('advances the stable route tree when a navigation commits', () =>
       return yield* Effect.die('Expected a discard render.');
     }
 
-    expect(discardRender.routeTree).toBe(firstRouteTree);
+    expect(discardRender.restore.routeTree).toBe(firstRouteTree);
     renderer.commit(discardRender);
     yield* Effect.promise(() => retired);
   }).pipe(Effect.provide(BrowserRenderer.layer)),
@@ -212,8 +214,231 @@ it.effect('uses a committed Server Function refresh as the next discard target',
       return yield* Effect.die('Expected a discard render.');
     }
 
-    expect(discardRender.routeTree).toBe(refreshedRouteTree);
+    expect(discardRender.restore.routeTree).toBe(refreshedRouteTree);
     renderer.commit(discardRender);
     yield* Effect.promise(() => retired);
+  }).pipe(Effect.provide(BrowserRenderer.layer)),
+);
+
+it.effect('retires skipped refreshes only up to the render React commits', () =>
+  Effect.gen(function* () {
+    const renderer = yield* BrowserRenderer;
+    const renders: Array<BrowserRender> = [];
+    renderer.initialize(makeRouteTree('initial'), (render) => renders.push(render));
+    const first = renderer.refresh(makeRouteTree('first'));
+    nextRender(renders);
+    const second = renderer.refresh(makeRouteTree('second'));
+    const secondRender = nextRender(renders);
+    const third = renderer.refresh(makeRouteTree('third'));
+    const thirdRender = nextRender(renders);
+    const firstRetired = vi.fn();
+    const firstCommitted = vi.fn();
+    const secondRetired = vi.fn();
+    const thirdRetired = vi.fn();
+    void first.retired.then(firstRetired);
+    void first.committed.then(firstCommitted);
+    void second.retired.then(secondRetired);
+    void third.retired.then(thirdRetired);
+
+    yield* Effect.promise(() => Promise.resolve());
+    expect(firstRetired).not.toHaveBeenCalled();
+
+    // React skips the first refresh, while the third is still preparing.
+    renderer.commit(secondRender);
+    yield* Effect.promise(() => second.committed);
+    expect(firstRetired).toHaveBeenCalledOnce();
+    expect(firstCommitted).not.toHaveBeenCalled();
+    expect(secondRetired).not.toHaveBeenCalled();
+    expect(thirdRetired).not.toHaveBeenCalled();
+
+    // React may repeat a layout effect; the same commit must remain harmless.
+    renderer.commit(secondRender);
+    renderer.commit(thirdRender);
+    yield* Effect.promise(() => third.committed);
+    expect(secondRetired).toHaveBeenCalledOnce();
+    expect(thirdRetired).not.toHaveBeenCalled();
+  }).pipe(Effect.provide(BrowserRenderer.layer)),
+);
+
+it.effect('acknowledges a discard that React skips when committing a replacement', () =>
+  Effect.gen(function* () {
+    const renderer = yield* BrowserRenderer;
+    const renders: Array<BrowserRender> = [];
+    renderer.initialize(makeRouteTree('initial'), (render) => renders.push(render));
+    const first = renderer.refresh(makeRouteTree('first'));
+    nextRender(renders);
+    const discarded = vi.fn();
+    void first.discard().then(discarded);
+    expect(nextRender(renders)._tag).toBe('Discard');
+    const second = renderer.refresh(makeRouteTree('second'));
+    const secondRender = nextRender(renders);
+
+    yield* Effect.promise(() => Promise.resolve());
+    expect(discarded).not.toHaveBeenCalled();
+    renderer.commit(secondRender);
+    yield* Effect.promise(() => second.committed);
+    expect(discarded).toHaveBeenCalledOnce();
+  }).pipe(Effect.provide(BrowserRenderer.layer)),
+);
+
+it.effect('uses discard publication order when retiring skipped renders', () =>
+  Effect.gen(function* () {
+    const renderer = yield* BrowserRenderer;
+    const renders: Array<BrowserRender> = [];
+    renderer.initialize(makeRouteTree('initial'), (render) => renders.push(render));
+    const first = renderer.refresh(makeRouteTree('first'));
+    nextRender(renders);
+    const second = renderer.refresh(makeRouteTree('second'));
+    nextRender(renders);
+    const discarded = first.discard();
+    const discardRender = nextRender(renders);
+    const third = renderer.refresh(makeRouteTree('third'));
+    nextRender(renders);
+    const secondRetired = vi.fn();
+    const thirdRetired = vi.fn();
+    void second.retired.then(secondRetired);
+    void third.retired.then(thirdRetired);
+
+    // This discard was published after the second refresh but before the third.
+    renderer.commit(discardRender);
+    yield* Effect.promise(() => discarded);
+    expect(secondRetired).toHaveBeenCalledOnce();
+    expect(thirdRetired).not.toHaveBeenCalled();
+  }).pipe(Effect.provide(BrowserRenderer.layer)),
+);
+
+it.effect(
+  'does not republish a skipped navigation when cancellation arrives after retirement',
+  () =>
+    Effect.gen(function* () {
+      const renderer = yield* BrowserRenderer;
+      const renders: Array<BrowserRender> = [];
+      renderer.initialize(makeRouteTree('initial'), (render) => renders.push(render));
+      const navigation = renderer.navigate(makeRouteTree('destination'));
+      nextRender(renders);
+      const refresh = renderer.refresh(makeRouteTree('refreshed'));
+      renderer.commit(nextRender(renders));
+      yield* Effect.promise(() => refresh.committed);
+
+      expect(navigation.discard()).toBe(navigation.retired);
+      expect(renders).toEqual([]);
+    }).pipe(Effect.provide(BrowserRenderer.layer)),
+);
+
+it.effect('keeps a tree alive while a queued discard can restore it', () =>
+  Effect.gen(function* () {
+    const renderer = yield* BrowserRenderer;
+    const renders: Array<BrowserRender> = [];
+    renderer.initialize(makeRouteTree('initial'), (render) => renders.push(render));
+    const visible = renderer.refresh(makeRouteTree('visible'));
+    renderer.commit(nextRender(renders));
+    const visibleRetired = vi.fn();
+    void visible.retired.then(visibleRetired);
+
+    const candidate = renderer.refresh(makeRouteTree('candidate'));
+    const candidateRender = nextRender(renders);
+    const discarded = candidate.discard();
+    const discardRender = nextRender(renders);
+
+    // React commits the candidate before processing its lower-priority discard.
+    // The discard still needs the previous page's stream to restore that page.
+    renderer.commit(candidateRender);
+    yield* Effect.promise(() => candidate.committed);
+    expect(visibleRetired).not.toHaveBeenCalled();
+
+    renderer.commit(discardRender);
+    yield* Effect.promise(() => discarded);
+    expect(visibleRetired).not.toHaveBeenCalled();
+
+    const replacement = renderer.refresh(makeRouteTree('replacement'));
+    renderer.commit(nextRender(renders));
+    yield* Effect.promise(() => replacement.committed);
+    expect(visibleRetired).toHaveBeenCalledOnce();
+  }).pipe(Effect.provide(BrowserRenderer.layer)),
+);
+
+it.effect('releases a retained tree when React skips the discard that would restore it', () =>
+  Effect.gen(function* () {
+    const renderer = yield* BrowserRenderer;
+    const renders: Array<BrowserRender> = [];
+    renderer.initialize(makeRouteTree('initial'), (render) => renders.push(render));
+    const visible = renderer.refresh(makeRouteTree('visible'));
+    renderer.commit(nextRender(renders));
+    const visibleRetired = vi.fn();
+    void visible.retired.then(visibleRetired);
+
+    const candidate = renderer.refresh(makeRouteTree('candidate'));
+    const candidateRender = nextRender(renders);
+    const candidateRetired = vi.fn();
+    void candidate.discard().then(candidateRetired);
+    nextRender(renders);
+    renderer.commit(candidateRender);
+    yield* Effect.promise(() => candidate.committed);
+    expect(visibleRetired).not.toHaveBeenCalled();
+
+    // A newer replacement overtakes the discard, so neither older tree can return.
+    const replacement = renderer.refresh(makeRouteTree('replacement'));
+    renderer.commit(nextRender(renders));
+    yield* Effect.promise(() => replacement.committed);
+    expect(visibleRetired).toHaveBeenCalledOnce();
+    expect(candidateRetired).toHaveBeenCalledOnce();
+  }).pipe(Effect.provide(BrowserRenderer.layer)),
+);
+
+it.effect("rejects another root's publication before changing the visible tree", () =>
+  Effect.gen(function* () {
+    const renderer = yield* BrowserRenderer.make;
+    const otherRenderer = yield* BrowserRenderer.make;
+    const renders: Array<BrowserRender> = [];
+    const otherRenders: Array<BrowserRender> = [];
+    renderer.initialize(makeRouteTree('initial'), (render) => renders.push(render));
+    otherRenderer.initialize(makeRouteTree('other'), (render) => otherRenders.push(render));
+    const visibleTree = makeRouteTree('visible');
+    const visible = renderer.refresh(visibleTree);
+    renderer.commit(nextRender(renders));
+    const visibleRetired = vi.fn();
+    void visible.retired.then(visibleRetired);
+
+    otherRenderer.refresh(makeRouteTree('foreign'));
+    expect(() => renderer.commit(nextRender(otherRenders))).toThrow(
+      'Browser render does not belong to this root.',
+    );
+
+    const candidate = renderer.navigate(makeRouteTree('candidate'));
+    nextRender(renders);
+    const discarded = candidate.discard();
+    const discardRender = nextRender(renders);
+    if (discardRender._tag !== 'Discard') {
+      return yield* Effect.die('Expected a discard render.');
+    }
+    expect(discardRender.restore.routeTree).toBe(visibleTree);
+    renderer.commit(discardRender);
+    yield* Effect.promise(() => discarded);
+    expect(visibleRetired).not.toHaveBeenCalled();
+  }),
+);
+
+it.effect('rejects an older commit without retiring the current tree', () =>
+  Effect.gen(function* () {
+    const renderer = yield* BrowserRenderer;
+    const renders: Array<BrowserRender> = [];
+    renderer.initialize(makeRouteTree('initial'), (render) => renders.push(render));
+    renderer.refresh(makeRouteTree('skipped'));
+    const skippedRender = nextRender(renders);
+    const current = renderer.refresh(makeRouteTree('current'));
+    renderer.commit(nextRender(renders));
+    const currentRetired = vi.fn();
+    void current.retired.then(currentRetired);
+
+    expect(() => renderer.commit(skippedRender)).toThrow(
+      'Browser renders must commit in publication order.',
+    );
+    yield* Effect.promise(() => current.committed);
+    expect(currentRetired).not.toHaveBeenCalled();
+
+    const replacement = renderer.refresh(makeRouteTree('replacement'));
+    renderer.commit(nextRender(renders));
+    yield* Effect.promise(() => replacement.committed);
+    expect(currentRetired).toHaveBeenCalledOnce();
   }).pipe(Effect.provide(BrowserRenderer.layer)),
 );

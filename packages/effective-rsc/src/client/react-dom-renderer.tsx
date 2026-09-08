@@ -122,9 +122,10 @@ export class ReactDOMRenderer extends Context.Service<ReactDOMRenderer>()(
             browserRenderer.commit(render);
           }, [render]);
 
+          const routeTree = render._tag === 'Discard' ? render.restore.routeTree : render.routeTree;
           return (
             <BrowserErrorBoundary onError={reportError} onRendered={reportRendered} render={render}>
-              <RouteTree root={render.routeTree} />
+              <RouteTree root={routeTree} />
             </BrowserErrorBoundary>
           );
         }

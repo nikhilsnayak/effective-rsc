@@ -365,7 +365,9 @@ it.effect('keeps a visible refresh stream open while the next navigation is pend
         // Commit the refreshed page while its server response is still streaming.
         yield* refresh('server-function');
         const render = yield* Effect.promise(() => published.promise);
-        expect(render._tag).toBe('Refresh');
+        if (render._tag !== 'Refresh') {
+          return yield* Effect.die('Expected a refresh render.');
+        }
         expect(render.routeTree).toBe(refreshedTree);
         browserRenderer.commit(render);
         yield* Effect.yieldNow;
@@ -449,8 +451,10 @@ it.effect('discards an uncommitted refresh before releasing its response', () =>
         published = Promise.withResolvers<BrowserRender>();
         yield* interrupt;
         const discard = yield* Effect.promise(() => published.promise);
-        expect(discard._tag).toBe('Discard');
-        expect(discard.routeTree).toBe(initialTree);
+        if (discard._tag !== 'Discard') {
+          return yield* Effect.die('Expected a discard render.');
+        }
+        expect(discard.restore.routeTree).toBe(initialTree);
         expect(releaseStream).not.toHaveBeenCalled();
         expect(Deferred.isDoneUnsafe(responseScopeClosed)).toBe(false);
 

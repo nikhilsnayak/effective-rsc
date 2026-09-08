@@ -138,23 +138,22 @@ export const installCallServer = Effect.gen(function* () {
       return;
     }
     const commitRefresh = routeLoader.prepareRefresh(resource.payload.routeTree);
-    let renderCommitted!: Promise<void>;
+    let published!: ReturnType<BrowserRenderer['Service']['refresh']>;
     yield* Effect.sync(() => {
       startTransition(() => {
         addTransitionType('server-function');
         // Do not return the commit Promise from React's Transition Action. React cannot commit the
         // render until that Action ends.
-        renderCommitted = browserRenderer.refresh(resource.payload.routeTree).committed;
+        published = browserRenderer.refresh(resource.payload.routeTree);
       });
     });
-    yield* Effect.all([resource.completed, Effect.promise(() => renderCommitted)], {
-      concurrency: 'unbounded',
-      discard: true,
-    }).pipe(
-      Effect.andThen(Effect.sync(commitRefresh)),
-      Effect.onError(() => resource.release),
-      Effect.forkScoped,
-    );
+    yield* Effect.raceFirst(
+      Effect.all([resource.completed, Effect.promise(() => published.committed)], {
+        concurrency: 'unbounded',
+        discard: true,
+      }).pipe(Effect.andThen(Effect.sync(commitRefresh))),
+      Effect.promise(() => published.retired),
+    ).pipe(Effect.ensuring(resource.release), Effect.forkScoped({ startImmediately: true }));
   });
 
   yield* Effect.sync(() => {

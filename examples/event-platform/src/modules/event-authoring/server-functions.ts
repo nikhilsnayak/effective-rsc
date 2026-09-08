@@ -82,6 +82,12 @@ const failureState = (error: EventAuthoringError): AuthoringMutationState => {
         message: `Check the ${error.field} value and event timezone. End time must follow start time.`,
         status: 'error',
       };
+    case '@effective-rsc/example-event-platform/event-authoring/EventProgrammeInvalid':
+      return {
+        message:
+          'Existing sessions must fit within the event dates and capacity. Update the programme first.',
+        status: 'error',
+      };
     case '@effective-rsc/example-event-platform/event-authoring/EventAuthoringConcurrentUpdate':
       return {
         message: 'This event changed in another request. Refresh and apply your edits again.',

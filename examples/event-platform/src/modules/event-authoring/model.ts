@@ -101,6 +101,11 @@ export class EventScheduleInvalid extends Schema.TaggedError<EventScheduleInvali
   { field: Schema.String },
 ) {}
 
+export class EventProgrammeInvalid extends Schema.TaggedError<EventProgrammeInvalid>()(
+  '@effective-rsc/example-event-platform/event-authoring/EventProgrammeInvalid',
+  { eventId: Schema.String },
+) {}
+
 export class EventAuthoringConcurrentUpdate extends Schema.TaggedError<EventAuthoringConcurrentUpdate>()(
   '@effective-rsc/example-event-platform/event-authoring/EventAuthoringConcurrentUpdate',
   { eventId: Schema.String },

@@ -7,6 +7,7 @@ import {
   EventAuthoringUnavailable,
   type EventDetailsInput,
   EventScheduleInvalid,
+  EventProgrammeInvalid,
   EventSlugConflict,
   TicketInventoryInvalid,
   type TicketTypeInput,
@@ -22,6 +23,7 @@ export type EventAuthoringError =
   | EventAuthoringAccessDenied
   | EventAuthoringConcurrentUpdate
   | EventAuthoringUnavailable
+  | EventProgrammeInvalid
   | EventScheduleInvalid
   | EventSlugConflict
   | TicketInventoryInvalid
@@ -162,7 +164,11 @@ export class EventAuthoringService extends Context.Service<EventAuthoringService
             input.salesEndsAt,
             editor.event.timezone,
           );
-          const normalized = { ...input, ...range };
+          const normalized = {
+            ...input,
+            salesStartsAt: range.startsAt,
+            salesEndsAt: range.endsAt,
+          };
           if (input.ticketTypeId === undefined) {
             const ticketTypeId = yield* repository
               .createTicketType(userId, normalized)
@@ -246,7 +252,14 @@ export class EventAuthoringService extends Context.Service<EventAuthoringService
           const updatedAt = DateTime.formatIso(currentTime);
           const updated = yield* repository
             .updateEvent(userId, input.eventId, details, input.expectedUpdatedAt, updatedAt)
-            .pipe(unavailable('update event details'));
+            .pipe(
+              Effect.mapError((error) =>
+                error._tag ===
+                '@effective-rsc/example-event-platform/event-authoring/EventProgrammeInvalid'
+                  ? error
+                  : new EventAuthoringUnavailable({ operation: 'update event details' }),
+              ),
+            );
           if (!updated) {
             return yield* new EventAuthoringConcurrentUpdate({ eventId: input.eventId });
           }

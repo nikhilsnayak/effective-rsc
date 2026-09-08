@@ -14,7 +14,8 @@ Open `http://localhost:18193`. `bun run build` then `bun run start` runs the pro
 Application state uses a durable Bun SQLite database at `.data/event-platform.sqlite`. Migrations
 seed two fictional organizations and public events. Remove the local database when you
 intentionally want to replay the seed data, or set `EVENT_PLATFORM_DATABASE_FILENAME` to choose
-another SQLite database.
+another SQLite database. Ticket sale windows use UTC in storage; a migration repairs older
+local-time values using the owning event’s timezone.
 
 ## Test it
 
@@ -24,9 +25,10 @@ bun run test:e2e  # Playwright: product journeys in production and development
 ```
 
 After a build, `test:e2e` runs every product journey twice: once against `ersc start` on port 18204
-and once against `ersc dev` on port 18205. Each server gets its own in-memory SQLite database and
-seed data, so the projects cannot race through shared state. Playwright owns both E2E ports, so the
-normal development server can keep running on port 18193.
+and once against `ersc dev` on port 18205. Each journey starts a fresh server with its own in-memory
+SQLite database and seed data. Retries and repeated runs therefore do not inherit earlier purchases,
+refunds, or edits. The suite
+uses one worker and owns both E2E ports; the normal development server can keep running on port 18193.
 
 ## What it exercises
 
@@ -61,7 +63,8 @@ and its derived middleware views.
   inventory and visibility controls.
 - Programme management at `/organizer/events/:eventId/programme`, including reusable rooms and
   speaker profiles, timezone-aware session scheduling, room and speaker conflict prevention,
-  capacity constraints, and per-session draft, published, and cancelled states.
+  capacity constraints, and per-session draft, published, and cancelled states. Event edits must
+  keep existing sessions within the event’s dates and capacity.
 - Database-backed public programmes at
   `/events/:organizationSlug/:eventSlug/programme`; only published sessions are visible.
 - Public registration at `/events/:organizationSlug/:eventSlug/register`, with ticket inventory,

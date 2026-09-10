@@ -25,20 +25,21 @@ import {
 
 declare const RoutesContractTypeId: unique symbol;
 
-type RoutesState<HasLayout extends boolean, Paths extends AbsolutePath> = {
+type RoutesState<
+  HasLayout extends boolean,
+  Paths extends AbsolutePath,
+  Shapes extends AbsolutePath,
+> = {
   readonly hasLayout: Types.Covariant<HasLayout>;
   readonly paths: Types.Covariant<Paths>;
+  readonly shapes: Types.Covariant<Shapes>;
 };
 
 type MountedPaths<Prefix extends AbsolutePath, Child> =
   RoutesPaths<Child> extends infer Path extends AbsolutePath ? JoinPath<Prefix, Path> : never;
 
-type RouteShapes<Paths extends AbsolutePath> = Paths extends AbsolutePath
-  ? RouteShape<Paths>
-  : never;
-
-type NoPathCollision<Current extends AbsolutePath, Added extends AbsolutePath> = [
-  Extract<RouteShapes<Current>, RouteShapes<Added>>,
+type NoPathCollision<CurrentShapes extends AbsolutePath, Added extends AbsolutePath> = [
+  Extract<RouteShape<Added>, CurrentShapes>,
 ] extends [never]
   ? unknown
   : never;
@@ -82,31 +83,38 @@ export interface RoutesDefinition<
   Services,
   out HasLayout extends boolean,
   out Paths extends AbsolutePath,
+  // Retain each matcher shape so additions do not recompute every earlier path's shape.
+  out Shapes extends AbsolutePath = RouteShape<Paths>,
 > extends ERSCStatefulMember<Services, 'Routes', RoutesImplementationState<Services>> {
-  readonly [RoutesContractTypeId]: RoutesState<HasLayout, Paths>;
+  readonly [RoutesContractTypeId]: RoutesState<HasLayout, Paths, Shapes>;
 
   page<const Path extends AbsolutePath, const Page extends AnyPageDefinition<Services>>(
-    path: Path & ValidRoutePath<Path> & NoPathCollision<Paths, Path>,
+    path: Path & ValidRoutePath<Path> & NoPathCollision<Shapes, Path>,
     page: Page & MatchingPageParams<Path, Page>,
-  ): RoutesDefinition<Services, HasLayout, Paths | Path>;
+  ): RoutesDefinition<Services, HasLayout, Paths | Path, Shapes | RouteShape<Path>>;
 
   mount<const Prefix extends AbsolutePath, const Child extends AnyRoutes<Services>>(
     path: Prefix & ValidRoutePath<Prefix> & StaticMountPath<Prefix>,
     routes: Child &
       KnownNonEmptyRoutes<Child> &
-      NoPathCollision<Paths, MountedPaths<Prefix, Child>>,
-  ): RoutesDefinition<Services, HasLayout, Paths | MountedPaths<Prefix, Child>>;
+      NoPathCollision<Shapes, MountedPaths<Prefix, Child>>,
+  ): RoutesDefinition<
+    Services,
+    HasLayout,
+    Paths | MountedPaths<Prefix, Child>,
+    Shapes | RouteShape<MountedPaths<Prefix, Child>>
+  >;
 }
 
 export type AnyRoutes<Services> = RoutesDefinition<Services, boolean, AbsolutePath>;
 
 export type RoutesHasLayout<Definition> =
-  Definition extends RoutesDefinition<infer _Services, infer HasLayout, infer _Paths>
+  Definition extends RoutesDefinition<infer _Services, infer HasLayout, infer _Paths, infer _Shapes>
     ? HasLayout
     : never;
 
 export type RoutesPaths<Definition> =
-  Definition extends RoutesDefinition<infer _Services, infer _HasLayout, infer Paths>
+  Definition extends RoutesDefinition<infer _Services, infer _HasLayout, infer Paths, infer _Shapes>
     ? Paths
     : never;
 
@@ -145,8 +153,9 @@ class RoutesDefinitionImpl<
   Services,
   HasLayout extends boolean,
   Paths extends AbsolutePath,
-> implements RoutesDefinition<Services, HasLayout, Paths> {
-  declare readonly [RoutesContractTypeId]: RoutesState<HasLayout, Paths>;
+  Shapes extends AbsolutePath = RouteShape<Paths>,
+> implements RoutesDefinition<Services, HasLayout, Paths, Shapes> {
+  declare readonly [RoutesContractTypeId]: RoutesState<HasLayout, Paths, Shapes>;
   readonly [ERSCIdentityTypeId]: ERSCIdentity<Services>;
   readonly [ERSCMemberKindTypeId] = 'Routes' as const;
   get [ERSCStateTypeId](): RoutesImplementationState<Services> {
@@ -188,9 +197,9 @@ class RoutesDefinitionImpl<
   }
 
   page<const Path extends AbsolutePath, const Page extends AnyPageDefinition<Services>>(
-    path: Path & ValidRoutePath<Path> & NoPathCollision<Paths, Path>,
+    path: Path & ValidRoutePath<Path> & NoPathCollision<Shapes, Path>,
     page: Page & MatchingPageParams<Path, Page>,
-  ): RoutesDefinitionImpl<Services, HasLayout, Paths | Path> {
+  ): RoutesDefinitionImpl<Services, HasLayout, Paths | Path, Shapes | RouteShape<Path>> {
     const route = analyzeRoutePath(path);
     if (this.#routeShapes.has(route.shape)) {
       throw new TypeError(`Route "${path}" conflicts with an existing route pattern.`);
@@ -226,8 +235,13 @@ class RoutesDefinitionImpl<
     path: Prefix & ValidRoutePath<Prefix> & StaticMountPath<Prefix>,
     routes: Child &
       KnownNonEmptyRoutes<Child> &
-      NoPathCollision<Paths, MountedPaths<Prefix, Child>>,
-  ): RoutesDefinitionImpl<Services, HasLayout, Paths | MountedPaths<Prefix, Child>> {
+      NoPathCollision<Shapes, MountedPaths<Prefix, Child>>,
+  ): RoutesDefinitionImpl<
+    Services,
+    HasLayout,
+    Paths | MountedPaths<Prefix, Child>,
+    Shapes | RouteShape<MountedPaths<Prefix, Child>>
+  > {
     const route = analyzeRoutePath(path);
     if (route._tag === 'Parameterized') {
       throw new TypeError(`Routes cannot be mounted beneath parameterized path "${path}".`);

@@ -1,13 +1,15 @@
 // oxlint-disable effecttsgo/async-function -- Playwright owns this Promise-based browser-test boundary.
-import { expect, test, type Request } from '@playwright/test';
+import { expect, type Request } from '@playwright/test';
 
 import { observeBrowserErrors } from './support/browser-errors';
+import { test } from './support/queries';
 import { expectViewTransition, observeViewTransitions } from './support/view-transitions';
 
 const isNavigationFlightRequest = (request: Request) =>
   request.method() === 'GET' && request.headers()['accept'] === 'text/x-component';
 
-test('moves between route groups through the composed catalog', async ({ page }) => {
+test('moves between route groups through the composed catalog', async ({ page, holdQuery }) => {
+  const secondary = await holdQuery('catalog-secondary');
   const browserErrors = observeBrowserErrors(page);
   let navigationFlightFinished = false;
   await observeViewTransitions(page);
@@ -45,11 +47,9 @@ test('moves between route groups through the composed catalog', async ({ page })
         },
       );
       expect(navigationStartedAtScrollY).toBeGreaterThan(0);
-      // The destination page deliberately takes two seconds. Loading must commit from the streamed
-      // route shell rather than appearing only after the page row has resolved.
-      await expect(page.getByRole('main', { name: 'Loading catalog' })).toBeVisible({
-        timeout: 1_500,
-      });
+      await secondary.waitUntilStarted();
+      // The route shell must commit while its catalog query is still held.
+      await expect(page.getByRole('main', { name: 'Loading catalog' })).toBeVisible();
       await expect(page).toHaveURL('/catalog/secondary');
       await expect(page.getByRole('heading', { level: 1, name: 'Primary catalog' })).toBeHidden();
       await expect(page.getByRole('heading', { level: 1, name: 'Secondary catalog' })).toBeHidden();
@@ -61,6 +61,7 @@ test('moves between route groups through the composed catalog', async ({ page })
   );
   expect(navigationFlightFinished).toBe(false);
   await flightRequest;
+  await secondary.release();
 
   await expect(page.getByRole('heading', { level: 1, name: 'Secondary catalog' })).toBeVisible();
   await expect(page.getByText('Server Function mutation').first()).toBeVisible();
@@ -220,7 +221,11 @@ test.skip('restores a streamed history entry to its saved scroll position', asyn
   expect(browserErrors).toEqual([]);
 });
 
-test('supersedes a streaming navigation with a fresh push to the stable URL', async ({ page }) => {
+test('supersedes a streaming navigation with a fresh push to the stable URL', async ({
+  page,
+  holdQuery,
+}) => {
+  const secondary = await holdQuery('catalog-secondary');
   const browserErrors = observeBrowserErrors(page);
   const primaryFlightRequests: Array<Request> = [];
   page.on('request', (request) => {
@@ -239,21 +244,22 @@ test('supersedes a streaming navigation with a fresh push to the stable URL', as
   await page
     .getByRole('link', { name: 'Open Secondary' })
     .evaluate((element: HTMLAnchorElement) => element.click());
-  await expect(page.getByRole('main', { name: 'Loading catalog' })).toBeVisible({
-    timeout: 1_500,
-  });
+  await expect(page.getByRole('main', { name: 'Loading catalog' })).toBeVisible();
   await expect(page).toHaveURL('/catalog/secondary');
 
+  await secondary.waitUntilStarted();
+  const primary = await holdQuery('catalog-primary');
   await page
     .getByRole('navigation', { name: 'Fixture catalog' })
     .getByRole('link', { name: 'Primary A' })
     .evaluate((element: HTMLAnchorElement) => element.click());
 
   await expect(page).toHaveURL('/catalog/primary');
-  await expect(page.getByRole('main', { name: 'Loading catalog' })).toBeVisible({
-    timeout: 1_500,
-  });
+  await expect(page.getByRole('main', { name: 'Loading catalog' })).toBeVisible();
   await expect(page.getByRole('heading', { level: 1, name: 'Primary catalog' })).toBeHidden();
+  await primary.waitUntilStarted();
+  await secondary.waitUntilCancelled();
+  await primary.release();
   await expect(page.getByRole('heading', { level: 1, name: 'Primary catalog' })).toBeVisible();
   await page.waitForFunction(() => window.navigation.transition === null);
   expect(
@@ -263,18 +269,21 @@ test('supersedes a streaming navigation with a fresh push to the stable URL', as
   expect(browserErrors).toEqual([]);
 });
 
-test('lets Back supersede a streaming push without restoring over it', async ({ page }) => {
+test('lets Back supersede a streaming push without restoring over it', async ({
+  page,
+  holdQuery,
+}) => {
+  const secondary = await holdQuery('catalog-secondary');
   const browserErrors = observeBrowserErrors(page);
 
   await page.goto('/catalog/primary');
   await page
     .getByRole('link', { name: 'Open Secondary' })
     .evaluate((element: HTMLAnchorElement) => element.click());
-  await expect(page.getByRole('main', { name: 'Loading catalog' })).toBeVisible({
-    timeout: 1_500,
-  });
+  await expect(page.getByRole('main', { name: 'Loading catalog' })).toBeVisible();
   await expect(page).toHaveURL('/catalog/secondary');
 
+  await secondary.waitUntilStarted();
   const outcome = await page.evaluate(() => {
     const finished = window.navigation.back().finished;
     return finished === undefined
@@ -286,12 +295,14 @@ test('lets Back supersede a streaming push without restoring over it', async ({ 
   });
 
   expect(outcome).toBe('finished');
+  await secondary.waitUntilCancelled();
   await expect(page).toHaveURL('/catalog/primary');
   await expect(page.getByRole('heading', { level: 1, name: 'Primary catalog' })).toBeVisible();
   expect(browserErrors).toEqual([]);
 });
 
-test('keeps a committed Flight alive while its successor prepares', async ({ page }) => {
+test('keeps a committed Flight alive while its successor prepares', async ({ page, holdQuery }) => {
+  const slowDetail = await holdQuery('detail-secondary-slow-stream');
   const browserErrors = observeBrowserErrors(page);
   await page.goto('/catalog/primary');
   await page
@@ -303,28 +314,37 @@ test('keeps a committed Flight alive while its successor prepares', async ({ pag
   const firstDetail = page.locator('[data-detail-id="secondary-history"]');
   const lastDetail = page.locator('[data-detail-id="secondary-slow-stream"]');
   await expect(firstDetail).toBeVisible();
+  await slowDetail.waitUntilStarted();
   await expect(lastDetail).toBeHidden();
 
+  const primaryFlightStarted = Promise.withResolvers<void>();
   const releasePrimaryFlight = Promise.withResolvers<void>();
   await page.route(
     (url) => url.pathname === '/catalog/primary',
     // oxlint-disable-next-line effecttsgo/async-function -- Playwright owns this Promise boundary.
     async (route, request) => {
       if (isNavigationFlightRequest(request)) {
+        primaryFlightStarted.resolve();
         await releasePrimaryFlight.promise;
       }
       await route.continue();
     },
   );
-  await page
-    .getByRole('navigation', { name: 'Fixture catalog' })
-    .getByRole('link', { name: 'Primary A' })
-    .evaluate((element: HTMLAnchorElement) => element.click());
-  await expect(lastDetail).toBeVisible();
-  await expect(page).toHaveURL('/catalog/secondary');
-  await expect(page.getByRole('heading', { level: 1, name: 'Something went wrong' })).toBeHidden();
-
-  releasePrimaryFlight.resolve();
+  try {
+    await page
+      .getByRole('navigation', { name: 'Fixture catalog' })
+      .getByRole('link', { name: 'Primary A' })
+      .evaluate((element: HTMLAnchorElement) => element.click());
+    await primaryFlightStarted.promise;
+    await slowDetail.release();
+    await expect(lastDetail).toBeVisible();
+    await expect(page).toHaveURL('/catalog/secondary');
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Something went wrong' }),
+    ).toBeHidden();
+  } finally {
+    releasePrimaryFlight.resolve();
+  }
   await expect(page).toHaveURL('/catalog/primary');
   await expect(page.getByRole('heading', { level: 1, name: 'Primary catalog' })).toBeVisible();
   expect(browserErrors).toEqual([]);
@@ -350,7 +370,9 @@ test('follows a Routes middleware redirect during client navigation', async ({ p
 
 test('streams effectful detail leaves independently within the fixture catalog', async ({
   page,
+  holdQuery,
 }) => {
+  const slowDetail = await holdQuery('detail-secondary-slow-stream');
   const browserErrors = observeBrowserErrors(page);
   await page.goto('/catalog/primary');
 
@@ -362,8 +384,10 @@ test('streams effectful detail leaves independently within the fixture catalog',
   const firstDetail = page.locator('[data-detail-id="secondary-history"]');
   const lastDetail = page.locator('[data-detail-id="secondary-slow-stream"]');
   await expect(firstDetail).toBeVisible();
+  await slowDetail.waitUntilStarted();
   await expect(lastDetail).toBeHidden();
   await expect(page.locator('[data-detail-id="secondary-mutation"]')).toBeVisible();
+  await slowDetail.release();
   await expect(lastDetail).toBeVisible();
   expect(browserErrors).toEqual([]);
 });

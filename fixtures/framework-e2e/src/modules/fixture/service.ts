@@ -1,4 +1,4 @@
-import { Clock, Context, type Duration, Effect, Layer } from 'effect';
+import { Clock, Context, Effect, Layer } from 'effect';
 
 import { catalogs, details, fixture, itemById } from '@/modules/fixture/data';
 import {
@@ -8,16 +8,17 @@ import {
   type ObservedQuery,
   type SelectionItem,
 } from '@/modules/fixture/model';
+import { QueryControl } from '@/modules/fixture/query-control';
 import { FixtureRepository } from '@/modules/fixture/repository';
 
 type QueryOptions<Value> = {
-  readonly latency: Duration.Input;
+  readonly wait: Effect.Effect<void>;
   readonly value: Value;
 };
 
-const query = Effect.fnUntraced(function* <Value>({ latency, value }: QueryOptions<Value>) {
+const query = Effect.fnUntraced(function* <Value>({ wait, value }: QueryOptions<Value>) {
   const startedAt = yield* Clock.currentTimeMillis;
-  yield* Effect.sleep(latency);
+  yield* wait;
   const completedAt = yield* Clock.currentTimeMillis;
 
   return { completedAt, data: value, startedAt } satisfies ObservedQuery<Value>;
@@ -31,6 +32,7 @@ export class FixtureService extends Context.Service<FixtureService>()(
   {
     make: Effect.gen(function* () {
       const repository = yield* FixtureRepository;
+      const control = yield* QueryControl;
 
       return {
         selection: repository.selectedItemIds.pipe(
@@ -47,10 +49,10 @@ export class FixtureService extends Context.Service<FixtureService>()(
                 });
               }
             }
-            return query({ latency: '130 millis', value: items });
+            return query({ wait: Effect.sleep('130 millis'), value: items });
           }),
         ),
-        fixture: query({ latency: '80 millis', value: fixture }),
+        fixture: query({ wait: Effect.sleep('80 millis'), value: fixture }),
         catalog: Effect.fn('FixtureService.catalog')(function* (group: FixtureGroup) {
           const selectedIds = yield* repository.selectedItemIds.pipe(unavailable('load catalog'));
           const definition = catalogs[group];
@@ -62,7 +64,7 @@ export class FixtureService extends Context.Service<FixtureService>()(
             })),
           };
 
-          return yield* query({ latency: '2 seconds', value });
+          return yield* query({ wait: control.delay(`catalog-${group}`, '2 seconds'), value });
         }),
         detail: Effect.fn('FixtureService.detail')(function* (detailId: string) {
           const definition = details.get(detailId);
@@ -71,7 +73,7 @@ export class FixtureService extends Context.Service<FixtureService>()(
           }
 
           return yield* query({
-            latency: definition.latency,
+            wait: control.delay(`detail-${detailId}`, definition.latency),
             value: definition.detail,
           });
         }),

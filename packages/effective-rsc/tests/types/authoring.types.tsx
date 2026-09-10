@@ -5,7 +5,7 @@ import type { ApplicationServices } from '../../src/application/definition';
 import { Application } from '../../src/application/ersc';
 import type { AnyPageDefinition } from '../../src/application/page';
 import type { AbsolutePath } from '../../src/application/route-path';
-import type { AnyRoutes, RoutesPaths } from '../../src/application/routes';
+import type { AnyRoutes, RoutesDefinition, RoutesPaths } from '../../src/application/routes';
 
 class LayoutService extends Context.Service<LayoutService, object>()(
   'ersc/tests/types/LayoutService',
@@ -165,6 +165,37 @@ const homeRoutes = ERSC.Routes.make().page('/', HomePage);
 homeRoutes.page('/', HistoryPage);
 // @ts-expect-error Mounted paths cannot collide with existing paths.
 homeRoutes.mount('/', ERSC.Routes.make().page('/', HistoryPage));
+
+const scheduleRoutes = ERSC.Routes.make().page('/', HomePage).page('/:day', DayPage);
+const mountedSchedule = ERSC.Routes.make()
+  .page('/about', HomePage)
+  .mount('/Schedule', scheduleRoutes);
+// @ts-expect-error A mounted root still conflicts with a differently cased local path.
+mountedSchedule.page('/schedule', HomePage);
+// @ts-expect-error Renaming a parameter and changing case cannot hide a mounted collision.
+mountedSchedule.page('/schedule/:slug', SlugPage);
+mountedSchedule.mount(
+  '/schedule',
+  // @ts-expect-error A collision in any member rejects the whole mount, even with a distinct root.
+  ERSC.Routes.make().page('/new', HomePage).page('/:slug', SlugPage),
+);
+// @ts-expect-error A mount must also detect collisions with pages added before it.
+ERSC.Routes.make().page('/schedule/:slug', SlugPage).mount('/Schedule', scheduleRoutes);
+
+// A specific static route can coexist with a parameterized matcher.
+const extendedSchedule = mountedSchedule.page('/schedule/today', HomePage);
+const annotatedSchedule: RoutesDefinition<
+  never,
+  false,
+  '/about' | '/Schedule' | '/Schedule/:day' | '/schedule/today'
+> = extendedSchedule;
+void annotatedSchedule;
+const schedulePath: RoutesPaths<typeof extendedSchedule> = '/Schedule/:day';
+void schedulePath;
+// @ts-expect-error Shape normalization must not replace the authored path or parameter name.
+const normalizedSchedulePath: RoutesPaths<typeof extendedSchedule> = '/schedule/:slug';
+void normalizedSchedulePath;
+
 const emptyRoutes = ERSC.Routes.make({ layout: RootLayout });
 // @ts-expect-error Empty Routes do not contribute an application destination.
 ERSC.Routes.make().mount('/empty', emptyRoutes);

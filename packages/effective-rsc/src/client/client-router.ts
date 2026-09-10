@@ -167,10 +167,7 @@ const reduceRouterState = (state: RouterState, event: RouterEvent): RouterTransi
     switch (event._tag) {
       case 'RenderRetired':
         return {
-          command:
-            visible.flight._tag === 'Streaming'
-              ? { _tag: 'ReleaseRoute', resource: visible.flight.resource }
-              : null,
+          command: null,
           state: { ...state, visible: { _tag: 'Settled' } },
         };
       case 'HistoryCommitted':
@@ -596,9 +593,12 @@ export const installClientRouter = Effect.gen(function* () {
 
       const waitForRenderRetirement = Effect.gen(function* () {
         yield* Effect.promise(() => rendererNavigation.retired);
-        const transition = dispatch({ _tag: 'RenderRetired', generation });
-        yield* executeRouterCommand(transition.command);
-      }).pipe(Effect.ignore);
+        dispatch({ _tag: 'RenderRetired', generation });
+      }).pipe(
+        // A newer generation may already be current when this render retires.
+        Effect.ensuring(resource.release),
+        Effect.ignore,
+      );
       void run(waitForRenderRetirement).catch(() => undefined);
 
       const waitForFlightCompletion = Effect.gen(function* () {

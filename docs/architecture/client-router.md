@@ -196,8 +196,8 @@ The closed lifecycle event family is:
 - `FlightFailed`
 - `NavigationAborted`
 
-`RenderRetired` is distinct from `NavigationAborted`: the former is React's proof that a visible
-tree is no longer mounted, while the latter is the native precommit signal. This distinction lets a
+`RenderRetired` is distinct from `NavigationAborted`: the former confirms that React can no longer
+display the tree, while the latter is the native precommit signal. This distinction lets a
 refresh, HMR update, Server Function tree, or later navigation safely retire a visible navigation.
 
 The reducer returns the next state and at most one tagged command. State is installed before the
@@ -228,11 +228,23 @@ type RendererNavigation = {
 ```
 
 - `committed` resolves from the framework root's layout effect after the render becomes visible.
-- `retired` resolves when any different render commits and the navigation tree is no longer visible.
-- `discard` is legal only before commit and resolves once the scheduled tree cannot commit.
+- `retired` resolves when React can no longer display the tree: it is neither visible nor referenced
+  by a pending publication. This includes updates React skipped entirely.
+- `discard` requests cancellation before commit and resolves once the scheduled tree cannot commit.
+  Discarding an already-retired tree is a no-op, so late cancellation cannot restore stale UI.
 
-Refresh cancellation may race with its UI commit. A refresh's `discard` therefore leaves an
-already-visible tree intact and waits for its retirement instead.
+Navigation and refresh cancellation may arrive after React commits but before the caller observes
+the commit notification. In both cases, `discard` leaves the visible tree intact and waits for its
+retirement instead.
+
+React can skip queued replacement renders, including discard renders. Committing a later publication
+also retires earlier skipped updates. Scheduling a replacement alone does not permit release, and
+newer pending updates remain alive. A queued discard also retains the tree it would restore: React
+may commit an intermediate tree before processing that discard. The retained tree can retire once
+it is neither visible nor referenced by a later publication.
+
+Each retirement observer closes its own response, even after the router has moved to another
+navigation. Commit and retirement notifications do not need a particular order.
 
 The router must finish `discard` before releasing that candidate's Flight resource. The renderer
 does not expose Flight completion, a stable-tree snapshot, history rollback, or navigation status.
@@ -290,7 +302,8 @@ history/UI rollback machinery unless browser evidence shows the race is harmful.
 postcommit Flight lifetime or a global busy flag.
 
 - A visible navigation stream may coexist with a route refresh or Server Function request.
-- A different successful renderer commit retires the visible navigation regardless of its source.
+- A different successful renderer commit can retire the visible navigation regardless of its source,
+  once no pending discard can restore it.
 - A failed refresh leaves the visible navigation and its stream intact.
 - A routed navigation may preempt refresh preparation. Published refreshes retain their response
   scope in the browser runtime until EOF or renderer-confirmed retirement. Cancelling a pending

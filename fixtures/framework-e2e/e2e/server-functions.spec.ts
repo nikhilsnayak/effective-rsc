@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 
 import { observeBrowserErrors } from './support/browser-errors';
 import { itemCard, setItemSelection } from './support/catalog-page';
-import { observeViewTransitions, waitForViewTransition } from './support/view-transitions';
+import { expectViewTransition, observeViewTransitions } from './support/view-transitions';
 
 const observeCatalogFallback = (page: Parameters<typeof observeBrowserErrors>[0]) =>
   page.evaluate(() => {
@@ -48,23 +48,25 @@ test.describe('Server Functions', () => {
     try {
       let item = itemCard(page, title);
       await observeCatalogFallback(page);
-      await item.getByRole('button', { name: 'Add to the selection' }).click();
-
-      await expect(item.getByText("Added to Integration Actor's selection.")).toBeVisible();
-      await expect(item.getByRole('button', { name: 'Remove from the selection' })).toBeVisible();
-      await waitForViewTransition(page, ['server-function']);
+      await expectViewTransition(page, ['server-function'], async () => {
+        await item.getByRole('button', { name: 'Add to the selection' }).click();
+        await expect(item.getByText("Added to Integration Actor's selection.")).toBeVisible();
+        await expect(item.getByRole('button', { name: 'Remove from the selection' })).toBeVisible();
+      });
       const selection = page.locator('section[aria-labelledby="fixture-selection-heading"]');
       await expect(selection).not.toContainText(title);
       await expect(selection).toContainText(title);
       expect(await readCatalogFallbackObservation(page)).toBe(false);
 
       // The second submission sends the previous result object, not the initial null state.
-      await item.getByRole('button', { name: 'Remove from the selection' }).click();
-      await expect(item.getByText("Removed from Integration Actor's selection.")).toBeVisible();
-      await waitForViewTransition(page, ['server-function']);
-      await item.getByRole('button', { name: 'Add to the selection' }).click();
-      await expect(item.getByText("Added to Integration Actor's selection.")).toBeVisible();
-      await waitForViewTransition(page, ['server-function']);
+      await expectViewTransition(page, ['server-function'], async () => {
+        await item.getByRole('button', { name: 'Remove from the selection' }).click();
+        await expect(item.getByText("Removed from Integration Actor's selection.")).toBeVisible();
+      });
+      await expectViewTransition(page, ['server-function'], async () => {
+        await item.getByRole('button', { name: 'Add to the selection' }).click();
+        await expect(item.getByText("Added to Integration Actor's selection.")).toBeVisible();
+      });
 
       await page.reload();
       item = itemCard(page, title);

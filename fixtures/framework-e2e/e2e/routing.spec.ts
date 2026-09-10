@@ -3,9 +3,11 @@ import { expect, test } from '@playwright/test';
 
 import { getText } from './support/http';
 
-test('renders every declared route as HTML and Flight', async ({ request }) => {
-  const html = await getText(request, '/catalog/secondary?source=integration');
-  const flight = await getText(request, '/catalog/secondary', { accept: 'text/x-component' });
+test('renders the same catalog route as HTML and Flight', async ({ request }) => {
+  const [html, flight] = await Promise.all([
+    getText(request, '/catalog/secondary?source=integration'),
+    getText(request, '/catalog/secondary', { accept: 'text/x-component' }),
+  ]);
 
   expect(html.response.status()).toBe(200);
   expect(html.body).toContain('<title>ERSC Framework Fixture — Integration contracts</title>');
@@ -19,8 +21,10 @@ test('renders every declared route as HTML and Flight', async ({ request }) => {
 });
 
 test('renders a parameter-free Page at the application root', async ({ request }) => {
-  const html = await getText(request, '/');
-  const flight = await getText(request, '/', { accept: 'text/x-component' });
+  const [html, flight] = await Promise.all([
+    getText(request, '/'),
+    getText(request, '/', { accept: 'text/x-component' }),
+  ]);
 
   expect(html.response.status()).toBe(200);
   expect(html.body).toContain('<title>ERSC Framework Fixture — Integration contracts</title>');
@@ -37,8 +41,10 @@ test('renders a parameter-free Page at the application root', async ({ request }
 });
 
 test('retains the native router response for unknown paths', async ({ request }) => {
-  const html = await getText(request, '/missing');
-  const flight = await getText(request, '/missing', { accept: 'text/x-component' });
+  const [html, flight] = await Promise.all([
+    getText(request, '/missing'),
+    getText(request, '/missing', { accept: 'text/x-component' }),
+  ]);
 
   expect(html.response.status()).toBe(404);
   expect(html.body).toBe('');

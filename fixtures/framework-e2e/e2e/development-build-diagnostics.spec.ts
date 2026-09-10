@@ -4,7 +4,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 
 import { expect, test } from '@playwright/test';
 
-import { observeViewTransitions, waitForViewTransition } from './support/view-transitions';
+import { expectViewTransition, observeViewTransitions } from './support/view-transitions';
 
 const homePath = new URL('../src/modules/fixture/components/fixture-home.tsx', import.meta.url);
 
@@ -24,8 +24,11 @@ test('keeps build diagnostics after a cached navigation commits', async ({
   try {
     await writeFile(homePath, `${original}\nexport const broken = ;\n`);
     await expect(panel.getByRole('heading', { name: 'Build failed' })).toBeVisible();
-    await page.evaluate(() => navigation.back().finished);
-    await waitForViewTransition(page, ['navigation', 'navigation-traverse', 'navigation-backward']);
+    await expectViewTransition(
+      page,
+      ['navigation', 'navigation-traverse', 'navigation-backward'],
+      () => page.evaluate(() => navigation.back().finished),
+    );
     await expect(page).toHaveURL('/');
     await expect(
       page.getByRole('button', { name: 'Probe count: 0', includeHidden: true }),

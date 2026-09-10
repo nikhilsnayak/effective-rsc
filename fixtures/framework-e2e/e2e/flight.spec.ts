@@ -37,8 +37,14 @@ test('serves the complete application route tree through the native Flight proto
 
 test('isolates ERSC runtimes across concurrent Flight requests', async ({ request }) => {
   const [primary, secondary] = await Promise.all([
-    requestFlight(request),
-    requestFlight(request, '/catalog/secondary'),
+    getText(request, '/catalog/primary', {
+      accept: 'text/x-component',
+      cookie: 'fixture-actor=Alice',
+    }),
+    getText(request, '/catalog/secondary', {
+      accept: 'text/x-component',
+      cookie: 'fixture-actor=Bob',
+    }),
   ]);
 
   expect(primary.response.status()).toBe(200);
@@ -49,4 +55,17 @@ test('isolates ERSC runtimes across concurrent Flight requests', async ({ reques
   expect(secondary.body).toContain('Secondary catalog');
   expect(secondary.body).toContain('Secondary detail A');
   expect(secondary.body).not.toContain('Primary detail A');
+  expect(primary.body).toContain(JSON.stringify(['Personalized for ', 'Alice']));
+  expect(primary.body).not.toContain(JSON.stringify(['Personalized for ', 'Bob']));
+  expect(secondary.body).toContain(JSON.stringify(['Personalized for ', 'Bob']));
+  expect(secondary.body).not.toContain(JSON.stringify(['Personalized for ', 'Alice']));
+
+  // Confirm the requests overlapped during their asynchronous catalog queries.
+  const queries = [primary, secondary].map(({ body }) => ({
+    startedAt: Number(body.match(/"data-catalog-started-at":(\d+)/)?.[1]),
+    completedAt: Number(body.match(/"data-catalog-completed-at":(\d+)/)?.[1]),
+  }));
+  expect(Math.max(...queries.map((query) => query.startedAt))).toBeLessThan(
+    Math.min(...queries.map((query) => query.completedAt)),
+  );
 });

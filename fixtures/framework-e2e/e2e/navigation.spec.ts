@@ -2,7 +2,7 @@
 import { expect, test, type Request } from '@playwright/test';
 
 import { observeBrowserErrors } from './support/browser-errors';
-import { observeViewTransitions, waitForViewTransition } from './support/view-transitions';
+import { expectViewTransition, observeViewTransitions } from './support/view-transitions';
 
 const isNavigationFlightRequest = (request: Request) =>
   request.method() === 'GET' && request.headers()['accept'] === 'text/x-component';
@@ -31,29 +31,34 @@ test('moves between route groups through the composed catalog', async ({ page })
       new URL(request.url()).pathname === '/catalog/secondary' &&
       isNavigationFlightRequest(request),
   );
-  const navigationStartedAtScrollY = await secondaryNavigation.evaluate(
-    (element: HTMLAnchorElement) => {
-      window.scrollTo(0, document.documentElement.scrollHeight);
-      element.focus({ preventScroll: true });
-      const scrollY = window.scrollY;
-      element.click();
-      return scrollY;
+  await expectViewTransition(
+    page,
+    ['navigation', 'navigation-push', 'navigation-forward'],
+    async () => {
+      const navigationStartedAtScrollY = await secondaryNavigation.evaluate(
+        (element: HTMLAnchorElement) => {
+          window.scrollTo(0, document.documentElement.scrollHeight);
+          element.focus({ preventScroll: true });
+          const scrollY = window.scrollY;
+          element.click();
+          return scrollY;
+        },
+      );
+      expect(navigationStartedAtScrollY).toBeGreaterThan(0);
+      // The destination page deliberately takes two seconds. Loading must commit from the streamed
+      // route shell rather than appearing only after the page row has resolved.
+      await expect(page.getByRole('main', { name: 'Loading catalog' })).toBeVisible({
+        timeout: 1_500,
+      });
+      await expect(page).toHaveURL('/catalog/secondary');
+      await expect(page.getByRole('heading', { level: 1, name: 'Primary catalog' })).toBeHidden();
+      await expect(page.getByRole('heading', { level: 1, name: 'Secondary catalog' })).toBeHidden();
+      await page.waitForFunction(() => window.navigation.transition === null);
+      await expect(page.locator('body')).toBeFocused();
+      // This covers the current forward-navigation reset, not history restoration for streamed UI.
+      expect(await page.evaluate(() => window.scrollY)).toBe(0);
     },
   );
-  expect(navigationStartedAtScrollY).toBeGreaterThan(0);
-  // The destination page deliberately takes two seconds. Loading must commit from the streamed
-  // route shell rather than appearing only after the page row has resolved.
-  await expect(page.getByRole('main', { name: 'Loading catalog' })).toBeVisible({
-    timeout: 1_500,
-  });
-  await expect(page).toHaveURL('/catalog/secondary');
-  await expect(page.getByRole('heading', { level: 1, name: 'Primary catalog' })).toBeHidden();
-  await expect(page.getByRole('heading', { level: 1, name: 'Secondary catalog' })).toBeHidden();
-  await page.waitForFunction(() => window.navigation.transition === null);
-  await expect(page.locator('body')).toBeFocused();
-  // This covers the current forward-navigation reset, not history restoration for streamed UI.
-  expect(await page.evaluate(() => window.scrollY)).toBe(0);
-  await waitForViewTransition(page, ['navigation', 'navigation-push', 'navigation-forward']);
   expect(navigationFlightFinished).toBe(false);
   await flightRequest;
 
@@ -79,24 +84,30 @@ test('publishes native link types once without replaying them on history travers
     child.textContent = 'Nested link content';
     element.append(child);
   });
-  await link.getByText('Nested link content').click();
-  await expect(page).toHaveURL('/catalog/secondary');
-  await waitForViewTransition(page, [
-    'navigation',
-    'navigation-push',
-    'navigation-forward',
-    'docs-previous',
-    'section-change',
-  ]);
+  await expectViewTransition(
+    page,
+    ['navigation', 'navigation-push', 'navigation-forward', 'docs-previous', 'section-change'],
+    async () => {
+      await link.getByText('Nested link content').click();
+      await expect(page).toHaveURL('/catalog/secondary');
+    },
+  );
   await expect(page.locator('[data-detail-id="secondary-slow-stream"]')).toBeVisible();
 
-  await page.evaluate(() => window.navigation.back().finished);
-  await waitForViewTransition(page, ['navigation', 'navigation-traverse', 'navigation-backward']);
-  await page.evaluate(() => window.navigation.forward().finished);
-  await waitForViewTransition(page, ['navigation', 'navigation-traverse', 'navigation-forward']);
+  await expectViewTransition(
+    page,
+    ['navigation', 'navigation-traverse', 'navigation-backward'],
+    () => page.evaluate(() => window.navigation.back().finished),
+  );
+  await expectViewTransition(
+    page,
+    ['navigation', 'navigation-traverse', 'navigation-forward'],
+    () => page.evaluate(() => window.navigation.forward().finished),
+  );
 
-  await page.evaluate(() => window.navigation.navigate('/catalog/primary').finished);
-  await waitForViewTransition(page, ['navigation', 'navigation-push', 'navigation-forward']);
+  await expectViewTransition(page, ['navigation', 'navigation-push', 'navigation-forward'], () =>
+    page.evaluate(() => window.navigation.navigate('/catalog/primary').finished),
+  );
   expect(browserErrors).toEqual([]);
 });
 
@@ -105,12 +116,12 @@ test('types a replace navigation without inventing a direction', async ({ page }
   await observeViewTransitions(page);
   await page.goto('/catalog/primary');
 
-  await page.evaluate(
-    () => window.navigation.navigate('/catalog/secondary', { history: 'replace' }).finished,
-  );
-
-  await expect(page).toHaveURL('/catalog/secondary');
-  await waitForViewTransition(page, ['navigation', 'navigation-replace']);
+  await expectViewTransition(page, ['navigation', 'navigation-replace'], async () => {
+    await page.evaluate(
+      () => window.navigation.navigate('/catalog/secondary', { history: 'replace' }).finished,
+    );
+    await expect(page).toHaveURL('/catalog/secondary');
+  });
   expect(browserErrors).toEqual([]);
 });
 
@@ -131,13 +142,25 @@ test('reuses completed route trees for back and forward navigation', async ({ pa
   await expect(page.getByRole('heading', { level: 1, name: 'Secondary catalog' })).toBeVisible();
   await expect(page.locator('[data-detail-id="secondary-slow-stream"]')).toBeVisible();
 
-  await page.evaluate(() => window.navigation.back().finished);
-  await expect(page.getByRole('heading', { level: 1, name: 'Primary catalog' })).toBeVisible();
-  await waitForViewTransition(page, ['navigation', 'navigation-traverse', 'navigation-backward']);
+  await expectViewTransition(
+    page,
+    ['navigation', 'navigation-traverse', 'navigation-backward'],
+    async () => {
+      await page.evaluate(() => window.navigation.back().finished);
+      await expect(page.getByRole('heading', { level: 1, name: 'Primary catalog' })).toBeVisible();
+    },
+  );
 
-  await page.evaluate(() => window.navigation.forward().finished);
-  await expect(page.getByRole('heading', { level: 1, name: 'Secondary catalog' })).toBeVisible();
-  await waitForViewTransition(page, ['navigation', 'navigation-traverse', 'navigation-forward']);
+  await expectViewTransition(
+    page,
+    ['navigation', 'navigation-traverse', 'navigation-forward'],
+    async () => {
+      await page.evaluate(() => window.navigation.forward().finished);
+      await expect(
+        page.getByRole('heading', { level: 1, name: 'Secondary catalog' }),
+      ).toBeVisible();
+    },
+  );
 
   expect(flightRequests).toEqual(['/catalog/secondary']);
   expect(browserErrors).toEqual([]);

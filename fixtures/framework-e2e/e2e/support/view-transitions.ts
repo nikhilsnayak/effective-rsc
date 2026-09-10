@@ -1,3 +1,4 @@
+// oxlint-disable effecttsgo/async-function -- Playwright owns this Promise-based browser-test boundary.
 import { expect, type Page } from '@playwright/test';
 
 type ViewTransitionObservation = {
@@ -36,10 +37,27 @@ export const observeViewTransitions = (page: Page) =>
     });
   });
 
-export const waitForViewTransition = (page: Page, types: ReadonlyArray<string>) =>
-  expect
+export const expectViewTransition = async (
+  page: Page,
+  types: ReadonlyArray<string>,
+  action: () => Promise<unknown>,
+) => {
+  const start = await page.evaluate(
+    () =>
+      (Reflect.get(window, '__ersc_view_transitions__') as Array<ViewTransitionObservation>).length,
+  );
+  await action();
+  await expect
     .poll(
-      () => page.evaluate(() => JSON.stringify(Reflect.get(window, '__ersc_view_transitions__'))),
+      () =>
+        page.evaluate(
+          (start) =>
+            (
+              Reflect.get(window, '__ersc_view_transitions__') as Array<ViewTransitionObservation>
+            ).slice(start),
+          start,
+        ),
       { timeout: 3_000 },
     )
-    .toContain(JSON.stringify({ status: 'Finished', types }));
+    .toContainEqual({ status: 'Finished', types });
+};

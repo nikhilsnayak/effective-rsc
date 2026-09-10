@@ -7,7 +7,7 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: true,
   retries: 0,
-  workers: 1,
+  workers: 2,
   reporter: 'list',
   use: {
     trace: 'retain-on-failure',
@@ -15,6 +15,7 @@ export default defineConfig({
   projects: [
     {
       name: 'start',
+      workers: 1,
       use: {
         ...devices['Desktop Chrome'],
         baseURL: startOrigin,
@@ -22,6 +23,7 @@ export default defineConfig({
     },
     {
       name: 'dev',
+      workers: 1,
       use: {
         ...devices['Desktop Chrome'],
         baseURL: developmentOrigin,

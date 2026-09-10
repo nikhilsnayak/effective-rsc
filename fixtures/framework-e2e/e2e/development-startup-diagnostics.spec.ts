@@ -13,6 +13,7 @@ test('recovers from stalled application startup after a source correction', asyn
 }, testInfo) => {
   test.skip(testInfo.project.name !== 'dev', 'This contract exercises the development server.');
   const original = await readFile(applicationPath, 'utf8');
+  expect(original).toContain('layer: ApplicationLayer,');
   const markers = await mkdtemp(join(tmpdir(), 'ersc-stalled-startup-'));
   const startedPath = join(markers, 'started');
   const closedPath = join(markers, 'closed');
@@ -25,15 +26,15 @@ test('recovers from stalled application startup after a source correction', asyn
           "import { Effect, FileSystem, Layer } from 'effect';",
         )
         .replace(
-          'Layer.mergeAll(SelectionHttpLayer, PublicHttpLayer)',
-          `Layer.mergeAll(SelectionHttpLayer, PublicHttpLayer, Layer.effectDiscard(
+          'layer: ApplicationLayer,',
+          `layer: Layer.merge(ApplicationLayer, Layer.effectDiscard(
             Effect.gen(function* () {
               const fs = yield* FileSystem.FileSystem;
               yield* Effect.addFinalizer(() => fs.writeFileString(${JSON.stringify(closedPath)}, 'closed').pipe(Effect.orDie));
               yield* fs.writeFileString(${JSON.stringify(startedPath)}, 'started');
               yield* Effect.never;
             })
-          ))`,
+          )),`,
         ),
     );
     await expect.poll(() => readFile(startedPath, 'utf8').catch(() => '')).toBe('started');
@@ -54,6 +55,7 @@ test('reports application startup failure and clears it after successful replace
 }, testInfo) => {
   test.skip(testInfo.project.name !== 'dev', 'This contract exercises the development server.');
   const original = await readFile(applicationPath, 'utf8');
+  expect(original).toContain('layer: ApplicationLayer,');
   await page.goto('/');
   await page.getByRole('button', { name: 'Probe count: 0' }).click();
   const documentIdentity = await page.evaluate(() => performance.timeOrigin);
@@ -64,8 +66,8 @@ test('reports application startup failure and clears it after successful replace
       original
         .replace("import { Layer } from 'effect';", "import { Effect, Layer } from 'effect';")
         .replace(
-          'Layer.mergeAll(SelectionHttpLayer, PublicHttpLayer)',
-          'Layer.mergeAll(SelectionHttpLayer, PublicHttpLayer, Layer.effectDiscard(Effect.fail(new Error("Fixture startup failed"))))',
+          'layer: ApplicationLayer,',
+          'layer: Layer.merge(ApplicationLayer, Layer.effectDiscard(Effect.fail(new Error("Fixture startup failed")))),',
         ),
     );
     await expect.poll(async () => (await request.get('/')).status()).toBe(500);

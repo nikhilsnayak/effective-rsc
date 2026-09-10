@@ -61,8 +61,9 @@ export const test = base.extend({
               if (startupError !== undefined) {
                 throw startupError;
               }
-              if (server.exitCode !== null) {
-                throw new Error(`Application exited before readiness: ${output}`);
+              if (server.exitCode !== null || server.signalCode !== null) {
+                const reason = server.signalCode ?? `exit code ${server.exitCode}`;
+                throw new Error(`Application exited before readiness (${reason}): ${output}`);
               }
               try {
                 const response = await probe.get('/', { timeout: 1_000 });

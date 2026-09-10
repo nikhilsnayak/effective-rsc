@@ -3,6 +3,7 @@ import { Effect, Fiber, Layer } from 'effect';
 import { TestClock } from 'effect/testing';
 import { SqlError, UnknownError } from 'effect/unstable/sql/SqlError';
 
+import { QueryControl } from '@/modules/fixture/query-control';
 import { FixtureRepository } from '@/modules/fixture/repository';
 import { FixtureService } from '@/modules/fixture/service';
 
@@ -10,7 +11,9 @@ const RepositoryLayer = FixtureRepository.layerTest({
   selectedItemIds: Effect.succeed(new Set(['document-stream'])),
   toggleSelection: (itemId) => Effect.succeed({ selected: itemId.length > 0 }),
 });
-const ServiceLayer = FixtureService.layer.pipe(Layer.provide(RepositoryLayer));
+const ServiceLayer = FixtureService.layer.pipe(
+  Layer.provide([RepositoryLayer, QueryControl.layer]),
+);
 
 describe('FixtureService', () => {
   it.effect('joins SQL-owned selection membership into fixture domain models', () =>
@@ -38,6 +41,7 @@ describe('FixtureService', () => {
         reason: new UnknownError({ cause: new Error('database unavailable') }),
       });
       const serviceLayer = FixtureService.layer.pipe(
+        Layer.provide(QueryControl.layer),
         Layer.provide(
           FixtureRepository.layerTest({
             selectedItemIds: Effect.fail(failure),

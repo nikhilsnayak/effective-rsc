@@ -1,8 +1,9 @@
 // oxlint-disable effecttsgo/async-function -- Playwright owns this Promise-based application-test boundary.
-import { expect, test } from '@playwright/test';
+import { expect } from '@playwright/test';
 
 import { observeBrowserErrors } from './support/browser-errors';
 import { getText } from './support/http';
+import { test } from './support/queries';
 
 const readRenderTimestamp = (html: string, attribute: string) => {
   const value = html.match(new RegExp(`${attribute}="(\\d+)"`))?.[1];
@@ -38,10 +39,13 @@ test('streams a complete React document with its hydration payload', async ({ re
   expect(html).not.toContain('effective-rsc-root');
 });
 
-test('reveals the loading UI before the suspended catalog', async ({ page }) => {
+test('reveals the loading UI before the suspended catalog', async ({ page, holdQuery }) => {
+  const catalog = await holdQuery('catalog-primary');
   await page.goto('/catalog/primary', { waitUntil: 'commit' });
 
+  await catalog.waitUntilStarted();
   await expect(page.getByText('Loading fixture catalog...')).toBeVisible();
+  await catalog.release();
   await expect(page.getByRole('heading', { level: 1, name: 'Primary catalog' })).toBeVisible();
   await expect(page.locator('[data-detail-id="primary-suspense"]')).toBeVisible();
 });

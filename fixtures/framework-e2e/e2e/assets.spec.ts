@@ -36,11 +36,10 @@ test('loads every compiler asset needed by the hydrated document', async ({ page
     }
   });
 
-  const documentResponse = await page.goto('/catalog/primary');
+  const documentResponse = await page.goto('/');
   expect(documentResponse?.status()).toBe(200);
-  await expect(page.getByRole('heading', { level: 1, name: 'Primary catalog' })).toBeVisible();
-  await expect(page.getByRole('button', { name: /the selection/ }).first()).toBeVisible();
-  await page.waitForLoadState('networkidle');
+  await page.getByRole('button', { name: 'Probe count: 0' }).click();
+  await expect(page.getByRole('button', { name: 'Probe count: 1' })).toBeVisible();
 
   const responsesByPath = new Map(
     assetResponses.map((response) => [new URL(response.url()).pathname, response]),

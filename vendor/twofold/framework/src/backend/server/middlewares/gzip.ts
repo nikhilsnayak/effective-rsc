@@ -1,13 +1,17 @@
 import { RouteHandler } from "@hattip/router";
 import { parseHeaderValue } from "@hattip/headers";
-import { Build } from "../../build/build/build.js";
 import { createGzip, constants as zlibConstants } from "node:zlib";
-import { Readable } from "node:stream";
+import { pipeline, Readable } from "node:stream";
 import { ReadableStream } from "node:stream/web";
 
-export function gzip(build: Build): RouteHandler {
+export function gzip(): RouteHandler {
   return async (ctx) => {
-    let buildSupportsCompression = build.name === "production";
+    if (!ctx.runtime) {
+      return;
+    }
+
+    let buildSupportsCompression =
+      ctx.runtime.buildResult.kind === "production";
 
     let encodings = parseHeaderValue(
       ctx.request.headers.get("accept-encoding"),
@@ -42,13 +46,6 @@ export function gzip(build: Build): RouteHandler {
         return res;
       }
 
-      let nodeStream = Readable.fromWeb(res.body as ReadableStream);
-      let gzip = createGzip({
-        level: 6,
-        chunkSize: 4 * 1024,
-        flush: zlibConstants.Z_SYNC_FLUSH,
-      });
-
       let headers = new Headers(res.headers);
       headers.delete("Content-Length");
       headers.set("Content-Encoding", "gzip");
@@ -59,8 +56,15 @@ export function gzip(build: Build): RouteHandler {
         headers.set("ETag", `W/${etag}`);
       }
 
-      let compressedNodeStream = nodeStream.pipe(gzip);
-      let compressedWebStream = Readable.toWeb(compressedNodeStream);
+      let gzip = createGzip({
+        level: 6,
+        chunkSize: 4 * 1024,
+        flush: zlibConstants.Z_SYNC_FLUSH,
+      });
+
+      pipeline(res.body as ReadableStream, gzip, () => {});
+
+      let compressedWebStream = Readable.toWeb(gzip);
 
       return new Response(
         compressedWebStream as globalThis.ReadableStream<Uint8Array>,

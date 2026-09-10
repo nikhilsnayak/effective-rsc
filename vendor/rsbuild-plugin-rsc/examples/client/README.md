@@ -16,9 +16,19 @@ This is the root component of the client app. It renders some client components 
 
 A small fetch wrapper loads an RSC payload from the server. Returning this promise from a component causes React to suspend. Once the server component loads, it renders.
 
-### server/server.mjs
+### server/index.tsx
 
-This is the server entrypoint, built using Express. In its route handler, it creates an RSC payload using Rsbuild's RSC support. This renders to the RSC payload format, not to HTML, since the client app will be consuming it via fetch and not on initial page load.
+Renders an `<RSC />` component server side and serves it as an RSC payload to be `fetch`ed by `client/App.tsx`.
+
+This runs both as part of the dev server (see `rsbuild.config.ts`, under `server.setup`), and as part of `server.js`
+(see below).
+
+### `server.js`
+
+An express server that serves (`npm run preview`) both:
+
+- the RSC handler from `server/index.tsx`
+- and the built files in `dist/`
 
 ### server/RSC.tsx
 

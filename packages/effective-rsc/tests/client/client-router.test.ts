@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it } from '@effect/vitest';
 import { Deferred, Effect, Exit, Fiber, Layer, Scope } from 'effect';
-import { HttpClient, HttpClientResponse } from 'effect/unstable/http';
+import { HttpClient, HttpClientRequest, HttpClientResponse } from 'effect/unstable/http';
 import { vi } from 'vitest';
 
 const react = vi.hoisted(() => ({
@@ -197,23 +197,26 @@ const makeHttpClient = (requestedUrls: Array<string> = [], contentType = 'text/x
   HttpClient.make((request) =>
     Effect.sync(() => {
       requestedUrls.push(request.url);
-      return HttpClientResponse.fromWeb(
+      const response = HttpClientResponse.fromWeb(
         request,
         new Response(new Uint8Array(), {
           headers: {
-            'content-location': 'https://effective-rsc.test/schedule/day-two',
             'content-type': contentType,
           },
         }),
       );
+      Object.defineProperty(response, 'url', {
+        value: 'https://effective-rsc.test/schedule/day-two',
+      });
+      return response;
     }),
   );
 
 const makeInvalidFlightClient = () =>
-  HttpClient.make((request) =>
+  HttpClient.make(() =>
     Effect.succeed(
       HttpClientResponse.fromWeb(
-        request,
+        HttpClientRequest.empty,
         new Response(new Uint8Array(), {
           headers: { 'content-type': 'text/x-component' },
         }),
@@ -239,7 +242,6 @@ const makeStreamingHttpClient = () => {
           }),
           {
             headers: {
-              'content-location': request.url,
               'content-type': 'text/x-component',
             },
           },
@@ -597,7 +599,6 @@ it.effect('settles the post-commit handler before the Flight stream reaches EOF'
               }),
               {
                 headers: {
-                  'content-location': 'https://effective-rsc.test/schedule/day-two',
                   'content-type': 'text/x-component',
                 },
               },
@@ -1021,7 +1022,6 @@ it.effect('cancels a streaming Flight response abandoned before React commits', 
               }),
               {
                 headers: {
-                  'content-location': 'https://effective-rsc.test/schedule/day-two',
                   'content-type': 'text/x-component',
                 },
               },
@@ -1088,7 +1088,6 @@ it.effect('interrupts a pending Flight load when a newer navigation starts', () 
               }),
               {
                 headers: {
-                  'content-location': 'https://effective-rsc.test/schedule/day-two',
                   'content-type': 'text/x-component',
                 },
               },
@@ -1175,7 +1174,6 @@ it.effect('discards and releases a scheduled candidate when a newer navigation s
               }),
               {
                 headers: {
-                  'content-location': 'https://effective-rsc.test/schedule/day-two',
                   'content-type': 'text/x-component',
                 },
               },
@@ -1264,7 +1262,6 @@ it.effect('retains a committed Flight response until its render retires', () => 
               }),
               {
                 headers: {
-                  'content-location': 'https://effective-rsc.test/schedule/day-two',
                   'content-type': 'text/x-component',
                 },
               },

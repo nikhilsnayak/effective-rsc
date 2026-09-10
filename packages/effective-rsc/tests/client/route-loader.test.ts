@@ -57,7 +57,6 @@ const makeHttpClient = (requestedUrls: Array<string>) =>
         request,
         new Response(new Uint8Array(), {
           headers: {
-            'content-location': request.url,
             'content-type': 'text/x-component',
           },
         }),

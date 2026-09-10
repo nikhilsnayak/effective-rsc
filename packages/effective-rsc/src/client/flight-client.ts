@@ -126,15 +126,14 @@ export class FlightClient extends Context.Service<FlightClient>()('ersc/client/F
           });
         }
 
-        const contentLocation = response.headers['content-location'];
-        if (contentLocation === undefined) {
+        if (response.url === '') {
           return yield* new FlightLoadError({
-            cause: new Error('Expected the Flight response to include a Content-Location header.'),
+            cause: new Error('Expected the Flight response to include a resolved URL.'),
             reason: 'UnexpectedResponse',
           });
         }
         const resolvedUrl = yield* Effect.try({
-          try: () => new URL(contentLocation, flightRequest.destination),
+          try: () => new URL(response.url),
           catch: (cause) =>
             new FlightLoadError({
               cause,

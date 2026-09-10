@@ -1,3 +1,4 @@
+import * as BunServices from '@effect/platform-bun/BunServices';
 import { Layer } from 'effect';
 import { HttpRouter } from 'effect/unstable/http';
 
@@ -76,6 +77,7 @@ const PublicHttpLayer = HttpRouter.cors({
 });
 const ApplicationLayer = Layer.mergeAll(AttendeeAccessHttpLayer, PublicHttpLayer).pipe(
   Layer.provideMerge(DomainLayer),
+  Layer.provide(BunServices.layer),
 );
 
 export default ERSC.make({

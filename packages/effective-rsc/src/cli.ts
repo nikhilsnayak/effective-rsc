@@ -47,7 +47,7 @@ const runBuild = Effect.fnUntraced(function* ({
   yield* buildApplication({ root: process.cwd(), adapter });
 });
 
-const adapter = Flag.string('adapter').pipe(
+const adapter = Flag.String('adapter').pipe(
   Flag.withDescription('Installed deployment adapter package to run after compilation'),
   Flag.withSchema(Schema.NonEmptyString),
   Flag.optional,
@@ -58,17 +58,17 @@ const buildCommand = Command.make('build', { adapter }).pipe(
   Command.withHandler(runBuild),
 );
 
-const hostname = Flag.string('hostname').pipe(
+const hostname = Flag.String('hostname').pipe(
   Flag.withDescription('Hostname to bind (defaults to HOST or localhost)'),
   Flag.withFallbackConfig(
-    Config.string('HOST').pipe(Config.withDefault(DefaultApplicationHostname)),
+    Config.String('HOST').pipe(Config.withDefault(DefaultApplicationHostname)),
   ),
   Flag.withSchema(Schema.NonEmptyString),
 );
 
-const port = Flag.integer('port').pipe(
+const port = Flag.Int('port').pipe(
   Flag.withDescription(`Port to bind (defaults to PORT or ${DefaultApplicationPort})`),
-  Flag.withFallbackConfig(Config.int('PORT').pipe(Config.withDefault(DefaultApplicationPort))),
+  Flag.withFallbackConfig(Config.Int('PORT').pipe(Config.withDefault(DefaultApplicationPort))),
   Flag.withSchema(
     Schema.Int.check(
       Schema.isBetween({

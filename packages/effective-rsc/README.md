@@ -65,11 +65,11 @@ mkdir my-effective-rsc-app
 cd my-effective-rsc-app
 bun init -y
 bun add effective-rsc \
-  effect@4.0.0-rc.112 \
-  @effect/platform-browser@4.0.0-rc.112 \
-  @effect/platform-bun@4.0.0-rc.112 \
-  react@19.3.0-canary-8425b691-20260904 \
-  react-dom@19.3.0-canary-8425b691-20260904 \
+  effect@4.0.0-rc.113 \
+  @effect/platform-browser@4.0.0-rc.113 \
+  @effect/platform-bun@4.0.0-rc.113 \
+  react@19.3.0-canary-1d34f91d-20260909 \
+  react-dom@19.3.0-canary-1d34f91d-20260909 \
   react-server-dom-rspack@0.1.0
 bun add --dev \
   typescript@7.0.2 \

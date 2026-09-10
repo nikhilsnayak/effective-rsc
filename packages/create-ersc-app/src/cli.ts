@@ -14,10 +14,10 @@ import {
 import PackageJson from '../package.json' with { type: 'json' };
 import { createApplication } from './create-app';
 
-const directory = Argument.string('directory').pipe(
+const directory = Argument.String('directory').pipe(
   Argument.withDescription('Directory for the new application'),
   Argument.withFallbackPrompt(
-    Prompt.text({
+    Prompt.String({
       message: 'Where should the application be created?',
       validate: (value) =>
         value.trim().length > 0 ? Effect.succeed(value) : Effect.fail('Enter a directory.'),
@@ -25,7 +25,7 @@ const directory = Argument.string('directory').pipe(
   ),
 );
 
-const noInstall = Flag.boolean('no-install').pipe(
+const noInstall = Flag.Boolean('no-install').pipe(
   Flag.withDescription('Skip dependency installation'),
   Flag.withDefault(false),
 );

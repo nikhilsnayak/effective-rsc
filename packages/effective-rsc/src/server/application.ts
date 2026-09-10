@@ -8,6 +8,7 @@ import {
   HttpServerResponse,
   HttpStaticServer,
 } from 'effect/unstable/http';
+import type { ServeError } from 'effect/unstable/http/HttpServerError';
 
 import { type ApplicationDefinition, getApplicationState } from '../application/definition';
 import { getERSCIdentity } from '../application/ersc-identity';
@@ -132,7 +133,7 @@ export type HttpApplicationLayer<ApplicationError> = Layer.Layer<
 
 export type ServerApplicationLayer<ApplicationError> = Layer.Layer<
   never,
-  ApplicationError | PlatformError,
+  HttpRouter.Request.Without<ApplicationError> | PlatformError | ServeError,
   ServerConfig
 >;
 

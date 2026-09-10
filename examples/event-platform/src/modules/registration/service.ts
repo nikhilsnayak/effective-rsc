@@ -1,6 +1,5 @@
-import { randomUUID } from 'node:crypto';
-
-import { Context, DateTime, Effect, Exit, Layer } from 'effect';
+import { Context, Crypto, DateTime, Effect, Exit, Layer } from 'effect';
+import type { PlatformError } from 'effect/PlatformError';
 
 import {
   type CheckoutInput,
@@ -21,21 +20,29 @@ const unavailable = (operation: string) =>
 
 const orderId = (eventId: string, idempotencyKey: string) => `order-${eventId}-${idempotencyKey}`;
 
-const issueCredential = Effect.sync(() => {
-  const ticketId = randomUUID();
-  return {
-    attendeeSessionToken: randomUUID(),
-    ticketCode: `GTH-${ticketId.replaceAll('-', '').toUpperCase()}`,
-    ticketId: `ticket-${ticketId}`,
-  };
-});
-
 export class RegistrationService extends Context.Service<RegistrationService>()(
   '@effective-rsc/example-event-platform/registration/RegistrationService',
   {
     make: Effect.gen(function* () {
       const gateway = yield* PaymentGateway;
       const repository = yield* RegistrationRepository;
+      const crypto = yield* Crypto.Crypto;
+      const issueCredential = Effect.fnUntraced(function* (): Effect.fn.Return<
+        {
+          readonly attendeeSessionToken: string;
+          readonly ticketCode: string;
+          readonly ticketId: string;
+        },
+        PlatformError
+      > {
+        const ticketId = yield* crypto.randomUUIDv4;
+        const attendeeSessionToken = yield* crypto.randomUUIDv4;
+        return {
+          attendeeSessionToken,
+          ticketCode: `GTH-${ticketId.replaceAll('-', '').toUpperCase()}`,
+          ticketId: `ticket-${ticketId}`,
+        };
+      });
 
       return {
         checkout: Effect.fn('RegistrationService.checkout')(function* (
@@ -113,7 +120,9 @@ export class RegistrationService extends Context.Service<RegistrationService>()(
                     : Effect.void,
                 ),
               );
-              const credential = yield* issueCredential;
+              const credential = yield* issueCredential().pipe(
+                unavailable('issue attendee credentials'),
+              );
               const completedNow = yield* DateTime.now;
               const completedAt = DateTime.formatIso(completedNow);
               const completed = yield* repository

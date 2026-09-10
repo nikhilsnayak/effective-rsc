@@ -37,16 +37,15 @@ test('recovers from stalled application startup after a source correction', asyn
         ),
     );
     await expect.poll(() => readFile(startedPath, 'utf8').catch(() => '')).toBe('started');
-
-    await writeFile(applicationPath, original);
-    await expect.poll(() => readFile(closedPath, 'utf8').catch(() => '')).toBe('closed');
-    const response = await request.get('/', { timeout: 10_000 });
-    expect(response.status()).toBe(200);
-    expect(await response.text()).toContain('Runtime probe original');
-    await rm(markers, { recursive: true, force: true });
   } finally {
     await writeFile(applicationPath, original);
+    // The startup finalizer still needs this directory until it writes the cleanup marker.
+    await expect.poll(() => readFile(closedPath, 'utf8').catch(() => '')).toBe('closed');
+    await rm(markers, { recursive: true, force: true });
   }
+  const response = await request.get('/', { timeout: 10_000 });
+  expect(response.status()).toBe(200);
+  expect(await response.text()).toContain('Runtime probe original');
 });
 
 test('reports application startup failure and clears it after successful replacement', async ({

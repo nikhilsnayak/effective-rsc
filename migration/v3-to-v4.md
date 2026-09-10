@@ -2,9 +2,9 @@
 
 # v3 to v4 Migration Reference
 
-Base: `origin/v3` (`7c6e1e5d2ac9dfe00649a65fa80a61dcc14d55ae`)
+Base: `origin/v3` (`6985be0cf461f0997f28f6798f469d01a2b46ca3`)
 
-Head: `origin/main` (`a9d1ee3d4d51e97ea33440fe6100935d5fd5aada`)
+Head: `HEAD` (`f57836b4418ea7c7d399f51bc1adad3fc0c08e98`)
 
 This file is generated from the API diff and `migration/annotations/*.yaml`.
 
@@ -506,7 +506,7 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 - `@effect/platform-node/NodeContext`: No single module replacement; follow the curated per-API guidance below.
 - `@effect/platform-node/NodeFileSystem/ParcelWatcher`: No single module replacement; follow the curated per-API guidance below.
 - `@effect/platform-node/NodeKeyValueStore` -> `effect/unstable/persistence/KeyValueStore`: layerFileSystem is now platform-neutral as KeyValueStore.layerFileSystem(directory); provide FileSystem and Path via NodeServices.layer or NodeFileSystem.layer with NodePath.layer.
-- `@effect/platform-node/index` -> `@effect/platform-node`: The explicit /index entrypoint was removed; import the same namespaces from the @effect/platform-node package root or import specific modules directly.
+- `@effect/platform-node/index` -> `@effect/platform-node`: The explicit /index entrypoint was removed; import Node-prefixed namespaces from the @effect/platform-node package root or import specific modules directly. Undici is no longer in the root barrel; import it from @effect/platform-node/Undici or directly from undici.
 - `@effect/platform/ChannelSchema` -> `effect/ChannelSchema`
 - `@effect/platform/Command` -> `effect/unstable/process/ChildProcess`
 - `@effect/platform/CommandExecutor` -> `effect/unstable/process/ChildProcessSpawner`
@@ -4898,6 +4898,8 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `AiError.AiError` -> `AiError.AiError`: Moved to effect/unstable/ai/AiError and redesigned from a union of separately tagged errors into one AiError wrapper with a semantic reason. Construct it with AiError.make({ module, method, reason }) and match error.reason rather than the old top-level tags.
 
+- `AiError.HttpRequestDetails` -> `AiError.HttpRequestDetails`: Retained in effect/unstable/ai/AiError and also re-exported as Response.HttpRequestDetails. Hash is an optional string instead of Option, headers may contain Redacted strings, and method includes TRACE.
+
 - `AiError.HttpRequestError` -> `AiError.make + AiError.NetworkError`: Replace the old top-level request error with an AiError whose reason is NetworkError. NetworkError.fromRequestError converts a v4 HttpClientError.RequestError.
 
 - `AiError.HttpResponseError` -> `AiError.make + AiError.reasonFromHttpStatus / AiError.InvalidOutputError`: There is no single v4 response-error class. Wrap a semantic reason with AiError.make: use reasonFromHttpStatus for status failures and InvalidOutputError for decode or empty-body failures.
@@ -4994,6 +4996,8 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `Response.ToolCallPartEncoded` -> `Response.ToolCallPartEncoded`: Moved to effect/unstable/ai/Response; providerName was removed while providerExecuted remains optional when encoded.
 
+- `Response.ToolResultPart` -> `Response.ToolResultPart`: The schema selects success or failure using isFailure rather than trying both result schemas. It returns Schema.Codec; supply decoding services when decoding and encoding services when encoding.
+
 - `Response.ToolResultPartEncoded` -> `Response.ToolResultPartEncoded`: Moved to effect/unstable/ai/Response; providerName was removed and optional preliminary was added to the encoded shape.
 
 - `Response.documentSourcePart` -> `Response.makePart("source", { ...params, sourceType: "document" })`: The lowercase convenience constructor was removed. The DocumentSourcePart model remains, and the generic constructor now requires the document source discriminator.
@@ -5048,6 +5052,10 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `Tool.Requirements` -> `Tool.HandlerServices`: Renamed and refined. HandlerServices combines parameter-decoding, result-encoding, and request-level dependencies required by a tool handler.
 
+- `Tool.Result` -> `Tool.Result`: The result includes success, declared failure, and execution-denied or execution-interrupted values in both failure modes. Return mode also includes AiError; handle these variants when narrowing results.
+
+- `Tool.ResultEncoded` -> `Tool.ResultEncoded`: The encoded result includes execution-denied and execution-interrupted variants in both failure modes, plus encoded AiError in return mode.
+
 - `Tool.Success` -> `Tool.Success`: Moved to effect/unstable/ai/Tool and remains the utility type that extracts a tool's decoded success type.
 
 - `Tool.Tool.ProviderDefinedProto` -> `Tool.ProviderDefined`: This implementation-brand interface is no longer public. Use Tool.ProviderDefined for the model type and Tool.isProviderDefined for runtime narrowing.
@@ -5080,9 +5088,9 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `Args.Args.BaseArgsConfig` -> `name: string`: Argument constructors now take the name as a required first parameter.
 
-- `Args.Args.FormatArgsConfig` -> `Primitive.FileParseOptions`: Pass the name separately and use the format option with Argument.fileParse or Argument.fileSchema.
+- `Args.Args.FormatArgsConfig` -> `Primitive.FileParseOptions`: Pass the name separately and use the format option with Argument.FileParse or Argument.FileSchema.
 
-- `Args.Args.PathArgsConfig` -> `Argument.path(name, { pathType, mustExist })`: Path options are inline; map exists=yes to mustExist=true and either to omission. exists=no has no exact replacement.
+- `Args.Args.PathArgsConfig` -> `Argument.Path(name, { pathType, mustExist })`: Path options are inline; map exists=yes to mustExist=true and either to omission. exists=no has no exact replacement.
 
 - `Args.Args.Variance` -> `Argument.Argument`: The separate variance artifact was removed; Argument inherits the shared Param variance.
 
@@ -5096,9 +5104,25 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `Args.between` -> `Argument.between`: Use the moved combinator; v4 validates bounds when constructing the parameter.
 
-- `Args.boolean` -> `Flag.boolean / Argument.choiceWithValue`: Positional booleans were removed as ambiguous; prefer a boolean flag or explicit true/false positional choices.
+- `Args.boolean` -> `Flag.Boolean / Argument.ChoiceWithValue`: Positional booleans were removed as ambiguous; prefer a boolean flag or explicit true/false positional choices.
 
-- `Args.fileContent` -> `Argument.file + Argument.mapEffect`: Parse a path and read it with FileSystem.readFile; no binary-content argument constructor remains.
+- `Args.choice` -> `Argument.Literals`: Use the renamed constructor and pass the argument name explicitly.
+
+- `Args.date` -> `Argument.Date`: Use the renamed constructor and pass the argument name explicitly.
+
+- `Args.directory` -> `Argument.Directory`: Use mustExist=true for exists=yes and omit it for either; exists=no has no exact replacement.
+
+- `Args.file` -> `Argument.File`: Use mustExist=true for exists=yes and omit it for either; exists=no has no exact replacement.
+
+- `Args.fileContent` -> `Argument.File + Argument.mapEffect`: Parse a path and read it with FileSystem.readFile; no binary-content argument constructor remains.
+
+- `Args.fileParse` -> `Argument.FileParse`: Pass the old format as an options field; v4 returns parsed content rather than a path/content tuple.
+
+- `Args.fileSchema` -> `Argument.FileSchema`: Pass the old format as an options field and use a v4 Schema constraint decoder.
+
+- `Args.fileText` -> `Argument.FileText`: Use the renamed constructor; it returns content only.
+
+- `Args.float` -> `Argument.Finite`: Use the renamed constructor; it rejects non-finite numbers.
 
 - `Args.getHelp` -> `none`: Per-argument help introspection was removed; Command generates help internally.
 
@@ -5110,19 +5134,27 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `Args.getUsage` -> `none`: The public Usage tree was removed; Command generates a usage string internally.
 
+- `Args.integer` -> `Argument.Int`: Use the renamed constructor and pass the argument name explicitly.
+
 - `Args.isArgs` -> `Param.isParam(value) && value.kind === Param.argumentKind`: Arguments now use the shared Param representation and an explicit kind discriminator.
 
 - `Args.map` -> `Argument.map`: Use the moved combinator.
 
 - `Args.mapEffect`: TODO: needs guidance
 
+- `Args.none` -> `omit the config entry`: V4 Argument.Never is an always-failing sentinel, not v3's empty successful argument set.
+
 - `Args.optional` -> `Argument.optional`: Use the moved combinator; it still returns Option.
+
+- `Args.path` -> `Argument.Path`: Path options are inline; map exists=yes to mustExist=true and either to omission. exists=no has no exact replacement.
+
+- `Args.redacted` -> `Argument.Redacted`: Use the renamed constructor and pass the argument name explicitly.
 
 - `Args.repeated` -> `Argument.variadic`: Renamed to variadic; pass optional min and max bounds.
 
-- `Args.secret` -> `Argument.redacted`: Use Redacted-backed positional input.
+- `Args.secret` -> `Argument.Redacted`: Use Redacted-backed positional input.
 
-- `Args.text` -> `Argument.string`: Renamed to string; pass the argument name explicitly.
+- `Args.text` -> `Argument.String`: Renamed to String; pass the argument name explicitly.
 
 - `Args.validate` -> `argument.parse({ flags: {}, arguments: args })`: Parsing is now a Param method and returns leftover tokens with the value; errors are CliError.
 
@@ -5284,7 +5316,7 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `CommandDirective.UserDefined` -> `none`: The user-defined intermediate directive was removed.
 
-- `CommandDirective.builtIn` -> `GlobalFlag.action`: Define a custom action flag; v4 runners no longer return built-in directives.
+- `CommandDirective.builtIn` -> `GlobalFlag.Action`: Define a custom action flag; v4 runners no longer return built-in directives.
 
 - `CommandDirective.isBuiltIn` -> `none`: Intermediate built-in directives were removed.
 
@@ -5364,7 +5396,7 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `Options.Options` -> `Flag.Flag`: Options was renamed to Flag in effect/unstable/cli.
 
-- `Options.Options.BooleanOptionsConfig` -> `Flag.boolean + Flag.withAlias + Flag.map`: The config object was removed; aliases and value inversion are combinators, while custom negation names need application logic.
+- `Options.Options.BooleanOptionsConfig` -> `Flag.Boolean + Flag.withAlias + Flag.map`: The config object was removed; aliases and value inversion are combinators, while custom negation names need application logic.
 
 - `Options.Options.PathOptionsConfig` -> `{ readonly mustExist?: boolean }`: Path options are inline; true replaces exists=yes and omission replaces either. exists=no has no exact replacement.
 
@@ -5380,29 +5412,29 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `Options.between` -> `Flag.between`: Use the moved combinator; v4 validates bounds when constructing the parameter.
 
-- `Options.boolean` -> `Flag.boolean + Flag.withDefault`: Use Flag.boolean(name).pipe(Flag.withDefault(false)) to preserve v3's omitted-flag default; bare Flag.boolean is now required. --no-name is automatic and aliases are added with Flag.withAlias.
+- `Options.boolean` -> `Flag.Boolean + Flag.withDefault`: Use Flag.Boolean(name).pipe(Flag.withDefault(false)) to preserve v3's omitted-flag default; bare Flag.Boolean is now required. --no-name is automatic and aliases are added with Flag.withAlias.
 
-- `Options.choice` -> `Flag.choice`: Use the moved constructor.
+- `Options.choice` -> `Flag.Literals`: Use the moved constructor.
 
-- `Options.choiceWithValue` -> `Flag.choiceWithValue`: Use the moved constructor.
+- `Options.choiceWithValue` -> `Flag.ChoiceWithValue`: Use the moved constructor.
 
-- `Options.date` -> `Flag.date`: Use the moved constructor.
+- `Options.date` -> `Flag.Date`: Use the moved constructor.
 
-- `Options.directory` -> `Flag.directory`: Use mustExist=true for exists=yes and omit it for either; exists=no has no exact replacement.
+- `Options.directory` -> `Flag.Directory`: Use mustExist=true for exists=yes and omit it for either; exists=no has no exact replacement.
 
-- `Options.file` -> `Flag.file`: Use mustExist=true for exists=yes and omit it for either; exists=no has no exact replacement.
+- `Options.file` -> `Flag.File`: Use mustExist=true for exists=yes and omit it for either; exists=no has no exact replacement.
 
-- `Options.fileContent` -> `Flag.file + Flag.mapEffect`: Parse a path and read it with FileSystem.readFile; no binary-content flag constructor remains.
+- `Options.fileContent` -> `Flag.File + Flag.mapEffect`: Parse a path and read it with FileSystem.readFile; no binary-content flag constructor remains.
 
-- `Options.fileParse` -> `Flag.fileParse`: Pass the old format as an options field; v4 returns parsed content rather than a path/content tuple.
+- `Options.fileParse` -> `Flag.FileParse`: Pass the old format as an options field; v4 returns parsed content rather than a path/content tuple.
 
-- `Options.fileSchema` -> `Flag.fileSchema`: Pass the old format as an options field and use a v4 Schema constraint decoder.
+- `Options.fileSchema` -> `Flag.FileSchema`: Pass the old format as an options field and use a v4 Schema constraint decoder.
 
-- `Options.fileText` -> `Flag.file + Flag.mapEffect`: Flag.fileText returns content only; read after Flag.file when the path/content tuple must be preserved.
+- `Options.fileText` -> `Flag.File + Flag.mapEffect`: Flag.FileText returns content only; read after Flag.File when the path/content tuple must be preserved.
 
 - `Options.filterMap` -> `Flag.filterMap`: Use the moved combinator and replace the fixed message with an onNone function.
 
-- `Options.float` -> `Flag.float`: Use the moved constructor.
+- `Options.float` -> `Flag.Finite`: Use the moved constructor.
 
 - `Options.getHelp` -> `none`: Per-flag help introspection was removed; Command generates help internally.
 
@@ -5410,13 +5442,13 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `Options.getUsage` -> `none`: The public Usage tree was removed; Command generates a usage string internally.
 
-- `Options.integer` -> `Flag.integer`: Use the moved constructor.
+- `Options.integer` -> `Flag.Int`: Use the moved constructor.
 
 - `Options.isBool` -> `none`: No public flag-shape predicate remains; boolean-shape inspection is internal.
 
 - `Options.isOptions` -> `Param.isParam(value) && value.kind === Param.flagKind`: Flags now use the shared Param representation and an explicit kind discriminator.
 
-- `Options.keyValueMap` -> `Flag.keyValuePair`: Renamed and now returns Record\<string, string\> rather than HashMap.
+- `Options.keyValueMap` -> `Flag.KeyValuePair`: Renamed and now returns Record\<string, string\> rather than HashMap.
 
 - `Options.map` -> `Flag.map`: Use the moved combinator.
 
@@ -5424,7 +5456,7 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `Options.mapTryCatch` -> `Flag.mapTryCatch`: Use the moved combinator; onError now returns a string rather than HelpDoc.
 
-- `Options.none` -> `omit the config entry`: V4 Flag.none is an always-failing sentinel, not v3's empty successful option set.
+- `Options.none` -> `omit the config entry`: V4 Flag.Never is an always-failing sentinel, not v3's empty successful option set.
 
 - `Options.optional` -> `Flag.optional`: Use the moved combinator; it still returns Option.
 
@@ -5436,13 +5468,13 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `Options.processCommandLine` -> `Command.runWith`: Raw argv processing is now whole-command execution; no public standalone flag tokenizer remains.
 
-- `Options.redacted` -> `Flag.redacted`: Use the moved constructor.
+- `Options.redacted` -> `Flag.Redacted`: Use the moved constructor.
 
 - `Options.repeated` -> `Flag.variadic`: Renamed to variadic; pass optional min and max bounds.
 
-- `Options.secret` -> `Flag.redacted`: The deprecated Secret constructor was removed; use Redacted-backed input.
+- `Options.secret` -> `Flag.Redacted`: The deprecated Secret constructor was removed; use Redacted-backed input.
 
-- `Options.text` -> `Flag.string`: Renamed from text to string.
+- `Options.text` -> `Flag.String`: Renamed from text to String.
 
 - `Options.withAlias` -> `Flag.withAlias`: Use the moved combinator.
 
@@ -5468,19 +5500,23 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `Primitive.PrimitiveTypeId` -> `none`: The public Primitive type-id symbol was removed.
 
-- `Primitive.boolean` -> `Primitive.boolean`: Boolean is now a singleton value; defaults belong on Flag.boolean or withDefault.
+- `Primitive.boolean` -> `Primitive.Boolean`: Boolean is now a singleton value; defaults belong on Flag.Boolean or withDefault.
 
-- `Primitive.choice` -> `Primitive.choice`: Use the moved constructor.
+- `Primitive.choice` -> `Primitive.Choice`: Use the moved constructor.
 
-- `Primitive.date` -> `Primitive.date`: Date is now a singleton Primitive value.
+- `Primitive.date` -> `Primitive.Date`: Date is now a singleton Primitive value.
+
+- `Primitive.float` -> `Primitive.Finite`: Finite is now a singleton Primitive value and rejects non-finite numbers.
 
 - `Primitive.getChoices` -> `none`: Choice introspection is internal in v4; retain alternatives in application code when needed.
 
 - `Primitive.getHelp` -> `none`: Primitive-level help generation was removed from the public API.
 
+- `Primitive.integer` -> `Primitive.Int`: Int is now a singleton Primitive value.
+
 - `Primitive.isBool` -> `none`: The boolean Primitive predicate is internal in v4.
 
-- `Primitive.text` -> `Primitive.string`: Renamed from text to string.
+- `Primitive.text` -> `Primitive.String`: Renamed from text to String.
 
 - `Primitive.validate` -> `primitive.parse(value)`: Parsing is now the Primitive.parse method over a string; defaults and case normalization moved out of this layer.
 
@@ -5492,21 +5528,41 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `Prompt.Prompt` -> `Prompt.Prompt`: The model moved to effect/unstable/cli; quitting now fails with Terminal.QuitError.
 
+- `Prompt.Prompt.FloatOptions` -> `Prompt.NumberOptions`: Use the renamed public options type for Prompt.Number; it still extends the integer options type, now IntOptions.
+
+- `Prompt.Prompt.IntegerOptions` -> `Prompt.IntOptions`: Use the renamed public options type for Prompt.Int; option fields are preserved.
+
 - `Prompt.Prompt.Variance` -> `Prompt.Prompt`: The named variance artifact was removed; use Prompt\<Output\>.
 
 - `Prompt.Prompt.VarianceStruct` -> `Prompt.Prompt`: The named variance structure was removed; use Prompt\<Output\>.
 
 - `Prompt.PromptTypeId` -> `Prompt.isPrompt`: The public type-id symbol was removed; use the runtime guard.
 
-- `Prompt.date` -> `Prompt.date`: Use the moved constructor.
+- `Prompt.confirm` -> `Prompt.Confirm`: Use the renamed constructor.
 
-- `Prompt.file` -> `Prompt.file`: Use the moved constructor; v4 also supports a default selected path.
+- `Prompt.custom` -> `Prompt.Custom`: Use the renamed constructor; both overloads are preserved.
 
-- `Prompt.float` -> `Prompt.float`: Use the moved constructor; v4 also supports a default value.
+- `Prompt.date` -> `Prompt.Date`: Use the moved constructor.
 
-- `Prompt.integer` -> `Prompt.integer`: Use the moved constructor; v4 also supports a default value.
+- `Prompt.file` -> `Prompt.File`: Use the moved constructor; v4 also supports a default selected path.
 
-- `Prompt.text` -> `Prompt.text`: Use the moved constructor.
+- `Prompt.float` -> `Prompt.Number`: Use the moved constructor; v4 also supports a default value.
+
+- `Prompt.hidden` -> `Prompt.Hidden`: Use the renamed constructor.
+
+- `Prompt.integer` -> `Prompt.Int`: Use the moved constructor; v4 also supports a default value.
+
+- `Prompt.list` -> `Prompt.List`: Use the renamed constructor.
+
+- `Prompt.multiSelect` -> `Prompt.MultiSelect`: Use the renamed constructor.
+
+- `Prompt.password` -> `Prompt.Password`: Use the renamed constructor.
+
+- `Prompt.select` -> `Prompt.Select`: Use the renamed constructor.
+
+- `Prompt.text` -> `Prompt.String`: Use the moved constructor.
+
+- `Prompt.toggle` -> `Prompt.Toggle`: Use the renamed constructor.
 
 ### `@effect/cli/ValidationError`
 
@@ -5636,9 +5692,9 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `EntityProxyServer.RpcHandlers` -> `effect/unstable/cluster/EntityProxyServer#RpcHandlers`: Moved into core Effect and updated for the additional v4 Rpc requirements type parameter.
 
-- `EntityProxyServer.layerHttpApi` -> `effect/unstable/cluster/EntityProxyServer#layerHttpApi`: Moved into core Effect. Use v4 HttpApi identifiers and Rpc.ServicesServer requirements.
+- `EntityProxyServer.layerHttpApi` -> `effect/unstable/cluster/EntityProxyServer#layerHttpApi`: Moved into core Effect. Use v4 HttpApi identifiers and provide Sharding plus both Rpc.ServicesServer and Rpc.ServicesClient codec requirements.
 
-- `EntityProxyServer.layerRpcHandlers` -> `effect/unstable/cluster/EntityProxyServer#layerRpcHandlers`: Moved into core Effect; the service requirement is now Rpc.ServicesServer rather than Rpc.Context.
+- `EntityProxyServer.layerRpcHandlers` -> `effect/unstable/cluster/EntityProxyServer#layerRpcHandlers`: Moved into core Effect; replace Rpc.Context with both Rpc.ServicesServer and Rpc.ServicesClient codec requirements, alongside Sharding.
 
 ### `@effect/cluster/EntityResource`
 
@@ -5691,6 +5747,8 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 - `MessageStorage.makeEncoded` -> `effect/unstable/cluster/MessageStorage#makeEncoded`: Moved into core Effect. Custom encoded drivers must replace resetAddress with resetAddresses and may use the new limit and addresses options passed to unprocessedMessages.
 
 ### `@effect/cluster/Reply`
+
+- `Reply.Reply` -> `Reply.Reply(rpc, codecFor)`: Pass the transport codec. Decoding replies requires Rpc.ServicesClient; encoding replies requires Rpc.ServicesServer.
 
 - `Reply.ReplyEncoded` -> `effect/unstable/cluster/Reply#Encoded`: Renamed to Encoded and no longer parameterized by an Rpc; payload fields are unknown and validated by Reply.Reply(rpc, codecFor) with the transport's codec.
 
@@ -6336,6 +6394,8 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `Undici.MessageEventInit` -> `undici.MessageEventInit`: Import the upstream type directly; message ports and source use MessagePort instances in Undici 8.
 
+- `Undici.MockAgent`: TODO: needs guidance
+
 - `Undici.Pool` -> `undici.Pool`: Import the upstream Pool directly and apply interceptors after construction with pool.compose(...).
 
 - `Undici.Pool.Options` -> `undici.Pool.Options`: Import the same Pool namespace type; Undici 8 removes the interceptors option in favor of pool.compose(...).
@@ -6438,6 +6498,8 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `Cookies.CookieTypeId` -> `Cookies.isCookie`: The cookie brand is private in v4; use the public refinement instead of reading the type-id symbol.
 
+- `Cookies.CookiesError` -> `Cookies.CookiesError`: The error tag is CookiesError rather than CookieError. Update catchTag calls and \_tag comparisons; validation details are in the reason field.
+
 - `Cookies.ErrorTypeId` -> `Cookies.CookiesError`: The error brand is private in v4; identify the exported error class instead.
 
 - `Cookies.TypeId` -> `Cookies.isCookies`: The collection brand is private in v4; use the public refinement instead.
@@ -6486,13 +6548,21 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `FileSystem.FileTypeId` -> `typeof FileSystem.FileTypeId`: The runtime marker remains exported, but the separate type alias was removed.
 
+- `FileSystem.GiB` -> `ByteSize.gibibytes`: Use the ByteSize binary unit constructor.
+
+- `FileSystem.KiB` -> `ByteSize.kibibytes`: Use the ByteSize binary unit constructor.
+
 - `FileSystem.MakeDirectoryOptions` -> `NonNullable<Parameters<FileSystem.FileSystem["makeDirectory"]>[1]>`: Operation option interfaces are inline in the v4 FileSystem service.
 
 - `FileSystem.MakeTempDirectoryOptions` -> `NonNullable<Parameters<FileSystem.FileSystem["makeTempDirectory"]>[0]>`: Operation option interfaces are inline in the v4 FileSystem service.
 
 - `FileSystem.MakeTempFileOptions` -> `NonNullable<Parameters<FileSystem.FileSystem["makeTempFile"]>[0]>`: Operation option interfaces are inline in the v4 FileSystem service.
 
+- `FileSystem.MiB` -> `ByteSize.mebibytes`: Use the ByteSize binary unit constructor.
+
 - `FileSystem.OpenFileOptions` -> `NonNullable<Parameters<FileSystem.FileSystem["open"]>[1]>`: Operation option interfaces are inline in the v4 FileSystem service.
+
+- `FileSystem.PiB` -> `ByteSize.pebibytes`: Use the ByteSize binary unit constructor.
 
 - `FileSystem.ReadDirectoryOptions` -> `NonNullable<Parameters<FileSystem.FileSystem["readDirectory"]>[1]>`: Operation option interfaces are inline in the v4 FileSystem service.
 
@@ -6500,7 +6570,13 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `FileSystem.SinkOptions` -> `NonNullable<Parameters<FileSystem.FileSystem["sink"]>[1]>`: Operation option interfaces are inline in the v4 FileSystem service.
 
-- `FileSystem.StreamOptions` -> `NonNullable<Parameters<FileSystem.FileSystem["stream"]>[1]>`: Stream options are inline; bufferSize was removed while bytesToRead, chunkSize, and offset remain.
+- `FileSystem.Size` -> `ByteSize.ByteSize`: Use ByteSize.bytes or unit constructors for file sizes. Truncation lengths, buffer sizes, and read/write counts use number. File.seek takes and returns signed bigint positions; it can fail with PlatformError, including BadArgument when seeking before the start.
+
+- `FileSystem.SizeInput` -> `ByteSize.Input`: File-size and path-backed range inputs use ByteSize.Input. Truncation lengths, Web File ranges, and buffer sizes use number.
+
+- `FileSystem.StreamOptions` -> `NonNullable<Parameters<FileSystem.FileSystem["stream"]>[1]>`: Stream options are inline; bufferSize was removed, bytesToRead and offset accept ByteSize inputs, and chunkSize uses number.
+
+- `FileSystem.TiB` -> `ByteSize.tebibytes`: Use the ByteSize binary unit constructor.
 
 - `FileSystem.WatchEventCreate` -> `FileSystem.WatchEvent.Create`: The constructor was removed; construct a tagged object with \_tag: "Create" and path.
 
@@ -6570,7 +6646,7 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `HttpApiBuilder.group` -> `effect/unstable/httpapi/HttpApiBuilder#group`: The group layer remains; names are now identifiers and API/group global error channels are gone.
 
-- `HttpApiBuilder.handler` -> `effect/unstable/httpapi/HttpApiBuilder#endpoint`: Use endpoint for a standalone typed endpoint implementation; inside a group pass callbacks to handlers.handle.
+- `HttpApiBuilder.handler` -> `effect/unstable/httpapi/HttpApiBuilder#handler`: The typed callback helper remains; names are now identifiers and API/group global error channels are gone. Pass the returned callback to handlers.handle.
 
 - `HttpApiBuilder.httpApp` -> `effect/unstable/http/HttpRouter#toHttpEffect`: Build the application from the assembled API route layer; HTTP apps are Effects in v4.
 
@@ -6880,9 +6956,9 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `HttpBody.Uint8Array` -> `HttpBody.Uint8Array`: Retained with the same fields and tag, but v4 exports a class.
 
-- `HttpBody.file` -> `HttpBody.file`: Retained; bufferSize was replaced by chunkSize and the other file options remain.
+- `HttpBody.file` -> `HttpBody.file`: Retained; bufferSize was replaced by numeric chunkSize. Offset and bytesToRead accept ByteSize.Input. Invalid ranges and a final EOF-clamped content length above Number.MAX\_SAFE\_INTEGER fail with PlatformError / BadArgument.
 
-- `HttpBody.fileInfo` -> `HttpBody.fileFromInfo`: Renamed; it still uses supplied File.Info for content length and requires FileSystem.
+- `HttpBody.fileInfo` -> `HttpBody.fileFromInfo`: Renamed; it uses supplied File.Info with ByteSize size metadata and requires FileSystem. Offset and bytesToRead accept ByteSize.Input, while chunkSize is numeric. Invalid ranges and a final EOF-clamped content length above Number.MAX\_SAFE\_INTEGER fail with PlatformError / BadArgument.
 
 - `HttpBody.unsafeJson` -> `HttpBody.jsonUnsafe`: Renamed to put Unsafe last; serialization failures still throw.
 
@@ -6954,6 +7030,8 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 ### `@effect/platform/HttpClientResponse`
 
+- `HttpClientResponse.HttpClientResponse` -> `HttpClientResponse.HttpClientResponse`: Custom implementations must supply the required url string. It represents the resolved URL including query parameters and excluding the hash, uses the final URL after redirects, and is empty when unknown.
+
 - `HttpClientResponse.TypeId` -> `typeof HttpClientResponse.TypeId`: TypeId remains public but is now a string constant; use typeof in type position.
 
 - `HttpClientResponse.filterStatus` -> `HttpClientResponse.filterStatus`: Retained; rejected status now fails with an HttpClientError wrapper.
@@ -6974,11 +7052,11 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 ### `@effect/platform/HttpIncomingMessage`
 
-- `HttpIncomingMessage.MaxBodySize` -> `HttpIncomingMessage.MaxBodySize`: Changed from a Reference subclass holding Option\<Size\> to Context.Reference\<Size | undefined\>.
+- `HttpIncomingMessage.MaxBodySize` -> `HttpIncomingMessage.MaxBodySize`: Changed from a Reference subclass holding Option\<Size\> to Context.Reference\<ByteSize.ByteSize | undefined\>.
 
 - `HttpIncomingMessage.TypeId` -> `typeof HttpIncomingMessage.TypeId`: TypeId remains public but is now a string constant; use typeof in type position.
 
-- `HttpIncomingMessage.withMaxBodySize` -> `Effect.provideService(HttpIncomingMessage.MaxBodySize, size)`: The helper was removed; provide FileSystem.Size(input) or undefined directly.
+- `HttpIncomingMessage.withMaxBodySize` -> `Effect.provideService(HttpIncomingMessage.MaxBodySize, size)`: The helper was removed; provide a ByteSize value or undefined directly.
 
 ### `@effect/platform/HttpLayerRouter`
 
@@ -7048,13 +7126,13 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 ### `@effect/platform/HttpPlatform`
 
-- `HttpPlatform.HttpPlatform` -> `HttpPlatform.HttpPlatform`: The service is now a Context.Service class; use its Service member for the implementation type.
+- `HttpPlatform.HttpPlatform` -> `HttpPlatform.HttpPlatform`: The service is now a Context.Service class; use its Service member for the implementation type. Path-backed offset and bytesToRead accept ByteSize.Input, while chunkSize and all Web File range options use number.
 
 - `HttpPlatform.TypeId` -> `none`: The public type id was removed; use the HttpPlatform Context.Service class.
 
 - `HttpPlatform.layer` -> `HttpPlatform.layer`: Retained as the default file-response layer.
 
-- `HttpPlatform.make` -> `HttpPlatform.make`: Retained; v4 returns the service implementation and uses updated file stream options.
+- `HttpPlatform.make` -> `HttpPlatform.make`: Retained; v4 returns the service implementation. The fileResponse callback receives contentLength as bigint, while start and end remain numbers. Web File range options use number.
 
 ### `@effect/platform/HttpRouter`
 
@@ -7126,11 +7204,17 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 ### `@effect/platform/HttpServer`
 
+- `HttpServer.Address` -> `effect/unstable/net/NetAddress#SocketAddress`: Replaced by the shared concrete internet-or-Unix socket address union.
+
 - `HttpServer.HttpServer` -> `HttpServer.HttpServer`: The interface and tag became one Context.Service class; use its Service member for implementations.
 
 - `HttpServer.ServeOptions` -> `none`: The unused respond option model was removed with no shared v4 counterpart.
 
+- `HttpServer.TcpAddress` -> `effect/unstable/net/NetAddress#InetAddress`: Replaced by the shared resolved internet-address model; use address and port instead of hostname and port.
+
 - `HttpServer.TypeId` -> `none`: The public TypeId was removed; HttpServer is now a Context.Service class.
+
+- `HttpServer.UnixAddress` -> `effect/unstable/net/NetAddress#UnixPathAddress`: Replaced by the shared Unix filesystem-path address model.
 
 - `HttpServer.addressWith` -> `HttpServer.HttpServer.use(({ address }) => effect(address))`: The accessor was removed; read the service and pass its Address to the callback.
 
@@ -7182,7 +7266,9 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `HttpServerResponse.expireCookie` -> `HttpServerResponse.expireCookie`: Now effectful and safe; use expireCookieUnsafe for synchronous throwing behavior.
 
-- `HttpServerResponse.file` -> `HttpServerResponse.file`: Retained with updated FileSystem stream options.
+- `HttpServerResponse.file` -> `HttpServerResponse.file`: Retained; offset and bytesToRead accept ByteSize.Input, while chunkSize uses number. Path-backed responses validate ranges and clamp content length to the available bytes.
+
+- `HttpServerResponse.fileWeb` -> `HttpServerResponse.fileWeb`: Web File offset, bytesToRead, and chunkSize options use number, unlike path-backed ByteSize.Input ranges.
 
 - `HttpServerResponse.isServerResponse` -> `HttpServerResponse.isHttpServerResponse`: Renamed.
 
@@ -7246,9 +7332,9 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `Multipart.FileSchema` -> `Multipart.PersistedFileSchema`: The schema for persisted multipart files was renamed.
 
-- `Multipart.MaxFieldSize` -> `Multipart.MaxFieldSize`: The setting remains but is now a Context.Reference.
+- `Multipart.MaxFieldSize` -> `Multipart.MaxFieldSize`: Now a Context.Reference\<ByteSize.ByteSize\>; provide a value such as ByteSize.bytes(100).
 
-- `Multipart.MaxFileSize` -> `Multipart.MaxFileSize`: The setting remains as a Context.Reference; use undefined rather than Option.none for no limit.
+- `Multipart.MaxFileSize` -> `Multipart.MaxFileSize`: Now a Context.Reference\<ByteSize.ByteSize | undefined\>; provide ByteSize.bytes(100), for example, or undefined for no limit.
 
 - `Multipart.MaxParts` -> `Multipart.MaxParts`: The setting remains as a Context.Reference; use undefined rather than Option.none for no limit.
 
@@ -7262,13 +7348,13 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `Multipart.withLimits` -> `Effect.provideContext(effect, Multipart.limitsServices(options))`: Build the multipart limit context and provide it to the effect; Option-valued limits became optional plain values.
 
-- `Multipart.withLimits.Options` -> `Multipart.withLimits.Options`: Limit fields now use optional plain numbers or SizeInput values; convert Option.none to undefined and Option.some(value) to value.
+- `Multipart.withLimits.Options` -> `Multipart.withLimits.Options`: Limit fields now use optional plain numbers or ByteSize inputs; convert Option.none to undefined and Option.some(value) to value.
 
 - `Multipart.withLimitsStream` -> `Stream.provideContext(stream, Multipart.limitsServices(options))`: Build the multipart limit context and provide it to the stream; Option-valued limits became optional plain values.
 
-- `Multipart.withMaxFieldSize` -> `Effect.provideService(Multipart.MaxFieldSize, size)`: Provide the v4 Context.Reference around the effect.
+- `Multipart.withMaxFieldSize` -> `Effect.provideService(Multipart.MaxFieldSize, size)`: Provide a ByteSize value, such as ByteSize.bytes(100). To normalize ByteSize.Input options, use Multipart.limitsServices.
 
-- `Multipart.withMaxFileSize` -> `Effect.provideService(Multipart.MaxFileSize, size)`: Provide the v4 Context.Reference around the effect, converting Option.none to undefined.
+- `Multipart.withMaxFileSize` -> `Effect.provideService(Multipart.MaxFileSize, size)`: Replace Option.none with undefined and Option.some(value) with a normalized ByteSize value. To normalize ByteSize.Input options, use Multipart.limitsServices.
 
 - `Multipart.withMaxParts` -> `Effect.provideService(Multipart.MaxParts, count)`: Provide the v4 Context.Reference around the effect, converting Option.none to undefined.
 
@@ -7402,7 +7488,13 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 ### `@effect/platform/SocketServer`
 
+- `SocketServer.Address` -> `effect/unstable/net/NetAddress#SocketAddress`: Replaced by the shared concrete internet-or-Unix socket address union.
+
 - `SocketServer.ErrorTypeId` -> `SocketServer.ErrorTypeId`: The API moved to effect/unstable/socket/SocketServer and retains this name.
+
+- `SocketServer.TcpAddress` -> `effect/unstable/net/NetAddress#InetAddress`: Replaced by the shared resolved internet-address model; use address and port instead of hostname and port.
+
+- `SocketServer.UnixAddress` -> `effect/unstable/net/NetAddress#UnixPathAddress`: Replaced by the shared Unix filesystem-path address model.
 
 ### `@effect/platform/Template`
 
@@ -7427,6 +7519,8 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 - `Transferable.unsafeMakeCollector` -> `Transferable.makeCollectorUnsafe`: The unsafe collector constructor was renamed.
 
 ### `@effect/platform/Url`
+
+- `Url.fromString` -> `Url.fromString`: Retained; returns Result with IllegalArgumentError instead of Either with IllegalArgumentException.
 
 - `Url.setUrlParams` -> `Url.setUrlParams`: Retained and widened to accept UrlParams.Input.
 
@@ -7832,6 +7926,10 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `SqliteClient.asyncQuery` -> `@effect/sql-sqlite-react-native/SqliteClient#AsyncQuery`: Renamed and changed from FiberRef to Context.Reference; prefer withAsyncQuery or provide AsyncQuery as a service.
 
+### `@effect/sql-sqlite-wasm/OpfsWorker`
+
+- `OpfsWorker.OpfsWorkerConfig`: TODO: needs guidance
+
 ### `@effect/sql-sqlite-wasm/SqliteClient`
 
 - `SqliteClient.SqliteClient` -> `@effect/sql-sqlite-wasm/SqliteClient#SqliteClient`: Retained with the same export/import surface; the service value is now a Context.Service.
@@ -7848,6 +7946,8 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `Model.Class` -> `effect/unstable/schema/Model#Class`: Moved; model variants remain select, insert, update, json, jsonCreate, and jsonUpdate.
 
+- `Model.Date` -> `effect/unstable/schema/Model#Date`: Moved; still serializes DateTime.Utc as a YYYY-MM-DD string.
+
 - `Model.DateTimeFromDate` -> `effect/Schema#DateTimeUtcFromDate`: Moved to core Schema and retains Date to DateTime.Utc conversion.
 
 - `Model.Generated` -> `effect/unstable/schema/Model#GeneratedByDb`: Renamed and now read-only, with select and json variants only. Use Model.Field with select, update, and json to preserve writable v3 behavior.
@@ -7858,7 +7958,7 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `Model.fields` -> `effect/unstable/schema/Model#fields`: Moved with the variant-model helpers into core Effect's unstable schema package.
 
-- `Model.makeDataLoaders` -> `effect/unstable/sql/SqlModel#makeResolvers`: Returns RequestResolvers instead of callable loaders; execute with SqlResolver.request and use RequestResolver delay/batch combinators for batching controls.
+- `Model.makeDataLoaders` -> `effect/unstable/sql/SqlModel#makeResolvers`: Returns RequestResolvers instead of callable loaders; execute with SqlResolver.request and use RequestResolver delay/batch combinators for batching controls. The insert resolver requires model decoding services as well as insert-schema encoding services.
 
 ### `@effect/sql/SqlClient`
 
@@ -8308,25 +8408,41 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 ### `@effect/vitest/index`
 
-- `index.ApiConfig` -> `vitest/node#ApiConfig`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 4 shape.
+- `index.ApiConfig` -> `vitest/node#ApiConfig`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 5 shape.
 
 - `index.ArgumentsType` -> `T extends (...args: infer A) => any ? A : never`: Vitest 3 marked this root alias as an internal helper. Define the small TypeScript shape locally instead of depending on transitive internals.
 
 - `index.Arrayable` -> `T | Array<T>`: Vitest 3 marked this root alias as an internal helper. Define the small TypeScript shape locally instead of depending on transitive internals.
 
+- `index.Assertion` -> `vitest#Assertion`: Vitest 5 takes the matcher return type first. Replace Assertion\<T\> with Assertion\<void, T\> or Assertion\<Promise\<void\>, T\> for asynchronous assertions.
+
 - `index.Awaitable` -> `T | PromiseLike<T>`: Vitest 3 marked this root alias as an internal helper. Define the small TypeScript shape locally instead of depending on transitive internals.
 
-- `index.BaseCoverageOptions` -> `vitest/node#BaseCoverageOptions`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 4 shape.
+- `index.BaseCoverageOptions` -> `vitest/node#BaseCoverageOptions`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 5 shape.
 
-- `index.BenchmarkUserOptions` -> `vitest/node#BenchmarkUserOptions`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 4 shape.
+- `index.BenchFactory` -> `vitest#Bench`: Use the Vitest 5 test-context bench fixture type. It is no longer the tinybench factory constructor.
 
-- `index.BrowserConfigOptions` -> `vitest/node#BrowserConfigOptions`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 4 shape.
+- `index.BenchFunction` -> `vitest#BenchFn`: Use BenchFn for the callback passed to the Vitest 5 test-context bench fixture.
 
-- `index.BrowserScript` -> `vitest/node#BrowserScript`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 4 shape.
+- `index.BenchTask` -> `vitest#BenchRegistration`: Migrate to a fixture registration and await its run() method; review its fields instead of treating it as a tinybench task.
 
-- `index.BuiltinEnvironment` -> `vitest/node#BuiltinEnvironment`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 4 shape.
+- `index.BenchTaskResult` -> `vitest#BenchResult`: Use the result returned by awaiting the Vitest 5 fixture registration's run() method.
 
-- `index.CSSModuleScopeStrategy` -> `vitest/node#CSSModuleScopeStrategy`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 4 shape.
+- `index.Benchmark` -> `vitest#TestBenchmark`: Use TestBenchmark for recorded benchmark data on a test; benchmarks are no longer standalone test tasks.
+
+- `index.BenchmarkAPI` -> `vitest#Bench`: Use the test-context bench fixture. Move skip, only, and todo to the enclosing test.
+
+- `index.BenchmarkResult` -> `vitest#BenchResult`: Use the result returned by awaiting the Vitest 5 fixture registration's run() method; review its changed fields.
+
+- `index.BenchmarkUserOptions` -> `vitest/node#BenchmarkUserOptions`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 5 shape.
+
+- `index.BrowserConfigOptions` -> `vitest/node#BrowserConfigOptions`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 5 shape.
+
+- `index.BrowserScript` -> `vitest/node#BrowserScript`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 5 shape.
+
+- `index.BuiltinEnvironment` -> `vitest/node#BuiltinEnvironment`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 5 shape.
+
+- `index.CSSModuleScopeStrategy` -> `vitest/node#CSSModuleScopeStrategy`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 5 shape.
 
 - `index.CollectLineNumbers` -> `vitest/node#TypeCheckCollectLineNumbers`: Vitest 3 deprecated the root alias in favor of this renamed vitest/node type.
 
@@ -8336,97 +8452,101 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `index.Context` -> `vitest/node#TypeCheckContext`: Vitest 3 deprecated the root alias in favor of this renamed vitest/node type.
 
-- `index.CoverageIstanbulOptions` -> `vitest/node#CoverageIstanbulOptions`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 4 shape.
+- `index.CoverageIstanbulOptions` -> `vitest/node#CoverageIstanbulOptions`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 5 shape.
 
-- `index.CoverageOptions` -> `vitest/node#CoverageOptions`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 4 shape.
+- `index.CoverageOptions` -> `vitest/node#CoverageOptions`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 5 shape.
 
-- `index.CoverageProvider` -> `vitest/node#CoverageProvider`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 4 shape.
+- `index.CoverageProvider` -> `vitest/node#CoverageProvider`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 5 shape.
 
-- `index.CoverageProviderModule` -> `vitest/node#CoverageProviderModule`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 4 shape.
+- `index.CoverageProviderModule` -> `vitest/node#CoverageProviderModule`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 5 shape.
 
-- `index.CoverageReporter` -> `vitest/node#CoverageReporter`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 4 shape.
+- `index.CoverageReporter` -> `vitest/node#CoverageReporter`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 5 shape.
 
-- `index.CoverageV8Options` -> `vitest/node#CoverageV8Options`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 4 shape.
+- `index.CoverageV8Options` -> `vitest/node#CoverageV8Options`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 5 shape.
 
 - `index.Custom` -> `vitest#RunnerTestCase`: Vitest 4 removed the deprecated unprefixed runner alias. Import the explicit Runner\* type from vitest.
 
-- `index.CustomProviderOptions` -> `vitest/node#CustomProviderOptions`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 4 shape.
+- `index.CustomProviderOptions` -> `vitest/node#CustomProviderOptions`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 5 shape.
 
-- `index.DepsOptimizationOptions` -> `vitest/node#DepsOptimizationOptions`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 4 shape.
+- `index.DepsOptimizationOptions` -> `vitest/node#DepsOptimizationOptions`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 5 shape.
 
 - `index.DoneCallback` -> `none`: Vitest does not support callback-style tests. Return a Promise or, in @effect/vitest tests, return an Effect.
 
-- `index.Environment` -> `vitest/environments#Environment`: This was a deprecated root re-export. Import it from vitest/environments; Vitest 4 custom environments use Vite environments.
+- `index.Environment` -> `vitest/runtime#Environment`: This was a deprecated root re-export. Import it from vitest/runtime; Vitest 5 exposes custom environments through vitest/runtime.
 
-- `index.EnvironmentOptions` -> `vitest/node#EnvironmentOptions`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 4 shape.
+- `index.EnvironmentOptions` -> `vitest/node#EnvironmentOptions`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 5 shape.
 
-- `index.EnvironmentReturn` -> `vitest/environments#EnvironmentReturn`: This was a deprecated root re-export. Import it from vitest/environments; Vitest 4 custom environments use Vite environments.
+- `index.EnvironmentReturn` -> `vitest/runtime#EnvironmentReturn`: This was a deprecated root re-export. Import it from vitest/runtime; Vitest 5 exposes custom environments through vitest/runtime.
 
 - `index.ErrorWithDiff` -> `vitest#TestError`: Vitest 3 deprecated ErrorWithDiff in favor of TestError; review the tightened actual, expected, and cause fields.
 
-- `index.ExtendedContext` -> `vitest#TestContext`: The separate context alias was removed. Vitest 4 uses TestContext, which includes the current task and lifecycle methods.
+- `index.ExpectPollOptions` -> `NonNullable<Parameters<typeof import("vitest").expect.poll>[1]>`: Vitest 5 removes the named options export; derive the options from the public expect.poll function.
+
+- `index.ExtendedContext` -> `vitest#TestContext`: The separate context alias was removed. Vitest 5 uses TestContext, which includes the current task and lifecycle methods.
 
 - `index.File` -> `vitest#RunnerTestFile`: Vitest 4 removed the deprecated unprefixed runner alias. Import the explicit Runner\* type from vitest.
 
-- `index.HappyDOMOptions` -> `NonNullable<import("vitest/node").EnvironmentOptions["happyDOM"]>`: Vitest 4 keeps this shape only as a property of EnvironmentOptions; derive it from the public vitest/node type.
+- `index.HappyDOMOptions` -> `NonNullable<import("vitest/node").EnvironmentOptions["happyDOM"]>`: Vitest 5 keeps this shape only as a property of EnvironmentOptions; derive it from the public vitest/node type.
 
-- `index.HookCleanupCallback` -> `none`: No named Vitest 4 export replaces this alias. Let the hook return type infer, or type the cleanup function locally.
+- `index.HookCleanupCallback` -> `none`: No named Vitest 5 export replaces this alias. Let the hook return type infer, or type the cleanup function locally.
 
-- `index.HookListener` -> `none`: Use the matching @vitest/runner hook-specific type such as BeforeAllListener, AfterAllListener, BeforeEachListener, or AfterEachListener for custom runner code.
+- `index.HookListener` -> `none`: Infer the callback from the public hook function, or derive it with Parameters\<typeof import("vitest").beforeAll\>[0] and the corresponding hook name.
 
-- `index.InlineConfig` -> `vitest/node#InlineConfig`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 4 shape.
+- `index.InlineConfig` -> `vitest/node#InlineConfig`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 5 shape.
 
-- `index.JSDOMOptions` -> `NonNullable<import("vitest/node").EnvironmentOptions["jsdom"]>`: Vitest 4 keeps this shape only as a property of EnvironmentOptions; derive it from the public vitest/node type.
+- `index.JSDOMOptions` -> `NonNullable<import("vitest/node").EnvironmentOptions["jsdom"]>`: Vitest 5 keeps this shape only as a property of EnvironmentOptions; derive it from the public vitest/node type.
+
+- `index.Matchers` -> `vitest#Matchers`: Augment vitest.Matchers\<R, T\> for custom matchers. R is the matcher return type and T is the received value; @vitest/expect no longer shares Vitest's assertion state.
 
 - `index.Mock` -> `vitest#Mock`: This was a Vitest re-export, not Effect API. Import it directly from vitest; @effect/vitest/index is not a valid v4 route.
 
-- `index.ModuleCache` -> `none`: Vitest 3 marked this unused internal cache shape deprecated; Vitest 4 has no public replacement.
+- `index.ModuleCache` -> `none`: Vitest 3 marked this unused internal cache shape deprecated; Vitest 5 has no public replacement.
 
 - `index.MutableArray` -> `{ -readonly [K in keyof T]: T[K] }`: Vitest 3 marked this root alias as an internal helper. Define the small TypeScript shape locally instead of depending on transitive internals.
 
 - `index.Nullable` -> `T | null | undefined`: Vitest 3 marked this root alias as an internal helper. Define the small TypeScript shape locally instead of depending on transitive internals.
 
-- `index.Pool` -> `vitest/node#Pool`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 4 shape.
+- `index.Pool` -> `vitest/node#Pool`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 5 shape.
 
-- `index.PoolOptions` -> `vitest/config#TestUserConfig`: The v3 built-in poolOptions object was removed. Move its fields to Vitest 4 top-level config such as maxWorkers and vmMemoryLimit; vitest/node PoolOptions is a different custom-pool API.
+- `index.PoolOptions` -> `vitest/config#TestUserConfig`: The v3 built-in poolOptions object was removed. Move its fields to Vitest 5 top-level config such as maxWorkers and vmMemoryLimit; vitest/node PoolOptions is a different custom-pool API.
 
-- `index.ProjectConfig` -> `vitest/node#ProjectConfig`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 4 shape.
+- `index.ProjectConfig` -> `vitest/node#ProjectConfig`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 5 shape.
 
 - `index.RawErrsMap` -> `vitest/node#TypeCheckRawErrorsMap`: Vitest 3 deprecated the root alias in favor of this renamed vitest/node type.
 
-- `index.ReportContext` -> `vitest/node#ReportContext`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 4 shape.
+- `index.ReportContext` -> `vitest/node#ReportContext`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 5 shape.
 
-- `index.Reporter` -> `vitest/reporters#Reporter`: Import Reporter from the public plural vitest/reporters entrypoint; its lifecycle methods changed in Vitest 4.
+- `index.Reporter` -> `vitest/node#Reporter`: Import Reporter from vitest/node; the deprecated vitest/reporters entrypoint was removed in Vitest 5.
 
 - `index.ResolveIdFunction` -> `none`: This deprecated vite-node callback was removed. Use Vite environment or module-runner APIs.
 
-- `index.ResolvedConfig` -> `vitest/node#ResolvedConfig`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 4 shape.
+- `index.ResolvedConfig` -> `vitest/node#ResolvedConfig`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 5 shape.
 
-- `index.ResolvedCoverageOptions` -> `vitest/node#ResolvedCoverageOptions`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 4 shape.
+- `index.ResolvedCoverageOptions` -> `vitest/node#ResolvedCoverageOptions`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 5 shape.
 
-- `index.ResolvedTestEnvironment` -> `none`: Vitest 3 marked this type unsupported. Use Environment from vitest/environments for custom environments.
+- `index.ResolvedTestEnvironment` -> `none`: Vitest 3 marked this type unsupported. Use Environment from vitest/runtime for custom environments.
 
 - `index.RootAndTarget` -> `vitest/node#TypeCheckRootAndTarget`: Vitest 3 deprecated the root alias in favor of this renamed vitest/node type.
 
 - `index.RunnerCustomCase` -> `vitest#RunnerTestCase`: Vitest 4 removed the deprecated unprefixed runner alias. Import the explicit Runner\* type from vitest.
 
-- `index.RuntimeContext` -> `@vitest/runner#RuntimeContext`: Custom-runner code can add an explicit @vitest/runner dependency; ordinary tests should avoid this internal state type.
+- `index.RuntimeContext` -> `none`: Vitest 5 deprecates @vitest/runner and does not expose this internal state type. Extend TestRunner from vitest and use its public methods instead.
 
-- `index.SequenceHooks` -> `vitest/node#SequenceHooks`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 4 shape.
+- `index.SequenceHooks` -> `vitest/node#SequenceHooks`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 5 shape.
 
-- `index.SequenceSetupFiles` -> `vitest/node#SequenceSetupFiles`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 4 shape.
+- `index.SequenceSetupFiles` -> `vitest/node#SequenceSetupFiles`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 5 shape.
 
 - `index.SerializableSpec` -> `vitest#SerializedTestSpecification`: Use the non-deprecated Vitest name; SerializableSpec was only an alias.
 
 - `index.Suite` -> `vitest#RunnerTestSuite`: Vitest 4 removed the deprecated unprefixed runner alias. Import the explicit Runner\* type from vitest.
 
-- `index.SuiteHooks` -> `@vitest/runner#SuiteHooks`: Custom-runner code can add an explicit @vitest/runner dependency; ordinary tests should use public hook functions.
+- `index.SuiteHooks` -> `ReturnType<typeof import("vitest").TestRunner.getSuiteHooks>`: Derive the hook collection from Vitest 5's public TestRunner API; ordinary tests should use public hook functions.
 
 - `index.Task` -> `vitest#RunnerTask`: Vitest 4 removed the deprecated unprefixed runner alias. Import the explicit Runner\* type from vitest.
 
 - `index.TaskBase` -> `vitest#RunnerTaskBase`: Vitest 4 removed the deprecated unprefixed runner alias. Import the explicit Runner\* type from vitest.
 
-- `index.TaskContext` -> `vitest#TestContext`: The separate context alias was removed. Vitest 4 uses TestContext, which includes the current task and lifecycle methods.
+- `index.TaskContext` -> `vitest#TestContext`: The separate context alias was removed. Vitest 5 uses TestContext, which includes the current task and lifecycle methods.
 
 - `index.TaskResult` -> `vitest#RunnerTaskResult`: Vitest 4 removed the deprecated unprefixed runner alias. Import the explicit Runner\* type from vitest.
 
@@ -8438,31 +8558,39 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `index.TscErrorInfo` -> `vitest/node#TypeCheckErrorInfo`: Vitest 3 deprecated the root alias in favor of this renamed vitest/node type.
 
-- `index.TypecheckConfig` -> `vitest/node#TypecheckConfig`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 4 shape.
+- `index.TypecheckConfig` -> `vitest/node#TypecheckConfig`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 5 shape.
 
-- `index.UserConfig` -> `vitest/config#TestUserConfig`: Vitest 4 exposes its config as TestUserConfig; ViteUserConfig is the separate Vite configuration type.
+- `index.UserConfig` -> `vitest/config#TestUserConfig`: Vitest 5 exposes its config as TestUserConfig; ViteUserConfig is the separate Vite configuration type.
 
 - `index.UserWorkspaceConfig` -> `vitest/config#UserWorkspaceConfig`: Import the type from vitest/config and migrate Vitest workspace configuration to projects.
 
-- `index.VitestEnvironment` -> `vitest/node#VitestEnvironment`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 4 shape.
+- `index.VitestEnvironment` -> `vitest/node#VitestEnvironment`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 5 shape.
 
-- `index.VitestRunMode` -> `vitest/node#VitestRunMode`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 4 shape.
+- `index.VitestRunMode` -> `vitest/node#VitestRunMode`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 5 shape.
 
-- `index.VmEnvironmentReturn` -> `vitest/environments#VmEnvironmentReturn`: This was a deprecated root re-export. Import it from vitest/environments; Vitest 4 custom environments use Vite environments.
+- `index.VmEnvironmentReturn` -> `vitest/runtime#VmEnvironmentReturn`: This was a deprecated root re-export. Import it from vitest/runtime; Vitest 5 exposes custom environments through vitest/runtime.
 
-- `index.WorkerContext` -> `vitest/node#WorkerContext`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 4 shape.
+- `index.WorkerContext` -> `vitest/node#WorkerContext`: This was a deprecated Vitest 3 root re-export. Import the type directly from vitest/node and review its Vitest 5 shape.
 
 - `index.WorkerRPC` -> `none`: The concrete worker RPC composition is internal. Use public Vitest RuntimeRPC, RunnerRPC, ContextRPC, or WorkerRequest types only when their narrower contract fits.
 
+- `index.bench` -> `vitest#test`: Vitest 5 removes the top-level bench export. Destructure bench from a regular test's context and await bench(name, fn).run(); use skip, only, or todo on the enclosing test.
+
 - `index.chai.Should` -> `vitest#chai.Should`: This was a Vitest re-export, not Effect API. Import it directly from vitest; @effect/vitest/index is not a valid v4 route.
 
+- `index.describe` -> `vitest#describe`: Vitest 5 removes describe.sequential and sequential options. Use describe(name, { concurrent: false }, body) for suites that depend on ordering.
+
 - `index.expect` -> `vitest#expect`: This was a Vitest re-export, not Effect API. Import it directly from vitest; @effect/vitest/index is not a valid v4 route.
+
+- `index.it` -> `@effect/vitest#it`: Effect helpers retain their calling convention. Vitest 5 removes it.sequential; pass { concurrent: false } to the native test or as the Effect helper's third argument.
 
 - `index.scoped` -> `@effect/vitest#effect`: V4 effect tests are scoped and provide the test environment. Replace scoped(...) with effect(...), and it.scoped(...) with it.effect(...).
 
 - `index.scopedLive` -> `@effect/vitest#live`: V4 live tests are scoped automatically. Replace scopedLive(...) with live(...), and it.scopedLive(...) with it.live(...).
 
 - `index.should` -> `vitest#should`: This was a Vitest re-export, not Effect API. Import it directly from vitest; @effect/vitest/index is not a valid v4 route.
+
+- `index.test` -> `vitest#test`: Vitest 5 removes test.sequential and sequential options. Pass { concurrent: false } to opt out of inherited concurrency.
 
 ### `@effect/vitest/utils`
 
@@ -8508,7 +8636,7 @@ effect/unstable/rpc/Utils (barrel: effect/unstable/rpc)
 
 - `DurableDeferred.failCause` -> `effect/unstable/workflow/DurableDeferred#failCause`: Moved into core Effect and now requires the error schema encoding services.
 
-- `DurableDeferred.into` -> `effect/unstable/workflow/DurableDeferred#into`: Moved into core Effect with the same exit recording and suspension propagation behavior.
+- `DurableDeferred.into` -> `effect/unstable/workflow/DurableDeferred#into`: Moved into core Effect with the same exit recording and suspension propagation behavior. Provide both decoding and encoding services for the success and error schemas; recording the exit requires encoding services.
 
 - `DurableDeferred.make` -> `effect/unstable/workflow/DurableDeferred#make`: Moved into core Effect with the same name and optional schemas, expressed through v4 Schema.Constraint.
 
@@ -9914,7 +10042,7 @@ Arbitrary.schema(schema)
 
 - `Effect.transposeMapOption` -> `Option.match`: Return `Effect.succeedNone` for None and map the Effect result to Some. Adapt arguments and imports to the v4 API.
 
-- `Effect.try` -> `Effect.try`: Still exported in v4; update call sites for the revised signature, options, and channel inference.
+- `Effect.try` -> `Effect.try`: Use the callback overload for Cause.UnknownError, or the object overload with try and catch to map failures to a custom error. The callback-only overload does not accept a custom error type parameter.
 
 - `Effect.tryMap` -> `Effect.flatMap + Effect.try`: FlatMap the source value into the v4 synchronous try constructor. Adapt arguments and imports to the v4 API.
 
@@ -10004,7 +10132,7 @@ Arbitrary.schema(schema)
 
 - `Effectable.ChannelTypeId` -> `Channel.TypeId`: The public channel brand moved to its owning module; v4 uses a string TypeId rather than the v3 Symbol.
 
-- `Effectable.Class` -> `Effectable.Class`: Still available; replace commit() with an override property or getter returning the Effect.
+- `Effectable.Class` -> `Effectable.Class`: Still available; replace commit() with an asEffect() method returning the Effect. The intermediate v4 override property/getter is no longer supported.
 
 - `Effectable.CommitPrimitive` -> `new<A, E = never, R = never>() => Effect.Effect<A, E, R>`: The named constructor interface was removed; inline the constructor type when needed.
 
@@ -10018,7 +10146,7 @@ Arbitrary.schema(schema)
 
 - `Effectable.StreamTypeId` -> `Stream.TypeId`: The public stream brand moved to its owning module; v4 uses a string TypeId rather than the v3 Symbol.
 
-- `Effectable.StructuralClass` -> `Effectable.Class`: Use Class and migrate commit() to override; v4 equality is structural by default.
+- `Effectable.StructuralClass` -> `Effectable.Class`: Use Class and migrate commit() to asEffect(); v4 equality is structural by default.
 
 - `Effectable.StructuralCommitPrototype` -> `Effectable.Prototype`: Use Prototype with evaluate; a separate structural prototype is unnecessary because v4 equality is structural by default.
 
@@ -10379,6 +10507,8 @@ Arbitrary.schema(schema)
 - `FastCheck.SchedulerSequenceItem`: TODO: needs guidance
 
 - `FastCheck.ShuffledSubarrayConstraints`: TODO: needs guidance
+
+- `FastCheck.Size`: TODO: needs guidance
 
 - `FastCheck.SizeForArbitrary`: TODO: needs guidance
 
@@ -11463,7 +11593,7 @@ JsonSchema.toDocumentDraft07(Schema.toJsonSchemaDocument(schema))
 
 - `Layer.setVersionMismatchErrorLogLevel` -> `none`: No version-mismatch log-level Reference or public replacement exists.
 
-- `Layer.tapErrorCause` -> `Layer.tapCause`: The cause observer was renamed.
+- `Layer.tapErrorCause` -> `Layer.tapCause`: The cause observer was renamed. Its callback must accept the source layer's full error cause; a callback narrowed to only part of the error union is rejected.
 
 - `Layer.toRuntime` -> `Layer.build(self), then Effect.runForkWith, Effect.runPromiseWith, or Effect.runSyncWith`: Runtime\<R\> was removed; build a Context, or use ManagedRuntime.make for a reusable managed runner.
 
@@ -11481,7 +11611,7 @@ JsonSchema.toDocumentDraft07(Schema.toJsonSchemaDocument(schema))
 
 - `LayerMap.LayerMap` -> `LayerMap.LayerMap`: The type remains; runtime(key) became contextEffect(key) and returns Context.
 
-- `LayerMap.Service` -> `LayerMap.Service`: Use layer instead of Default, layerNoDeps instead of DefaultWithoutDependencies, and contextEffect instead of runtime.
+- `LayerMap.Service` -> `LayerMap.Service`: Use layer instead of Default, layerNoDeps instead of DefaultWithoutDependencies, and contextEffect instead of runtime. Preloading does not remove acquisition errors from later lookups, which can reacquire expired or invalidated entries.
 
 - `LayerMap.Service.Context` -> `LayerMap.Service.Services<Options>`: The input-services extractor was renamed.
 
@@ -11659,7 +11789,7 @@ JsonSchema.toDocumentDraft07(Schema.toJsonSchemaDocument(schema))
 
 - `Logger.pretty` -> `Logger.layer([Logger.consolePretty(), Logger.tracerLogger])`: Logger.layer replaces the active set; include tracerLogger to preserve v3 built-in layer behavior.
 
-- `Logger.prettyLogger` -> `Logger.consolePretty`: Direct constructor rename; call it with the same options.
+- `Logger.prettyLogger` -> `Logger.consolePretty`: Renamed to consolePretty. Remove the stderr option; provide Logger.LogToStderr with true to route TTY output to console.error. Colors, formatDate, and mode remain constructor options.
 
 - `Logger.prettyLoggerDefault` -> `Logger.consolePretty()`: The prebuilt singleton became a constructor call.
 
@@ -14397,9 +14527,9 @@ Schema.toFormatter(schema)
 
 - `Schema.TaggedStruct` -> `Schema.TaggedStruct`: The API remains public in v4, but its type/value declaration was consolidated; use the v4 declaration and update inferred types/signature as needed.
 
-- `Schema.TemplateLiteral` -> `Schema.TemplateLiteral(parts)`: Pass template literal parts as one array.
+- `Schema.TemplateLiteral` -> `Schema.TemplateLiteral(parts)`: Pass template literal parts as one array. Parts must not contain encodings, including inside unions and nested templates. Transformations whose decoded and encoded types are equal are also rejected. Use Schema.TemplateLiteralParser(parts) for transformed parts.
 
-- `Schema.TemplateLiteralParser` -> `Schema.TemplateLiteralParser(schema.parts)`: Create the template schema first and pass its `parts` property.
+- `Schema.TemplateLiteralParser` -> `Schema.TemplateLiteralParser(parts)`: Pass template literal parts directly as one array. Transformed parts are supported, and their decoding and encoding services are required in the corresponding direction.
 
 - `Schema.TimeZone` -> `Schema.TimeZoneFromString`: Use the string codec; v4 `TimeZone` is the self schema.
 
@@ -14775,7 +14905,7 @@ Schema.toFormatter(schema)
 
 - `Schema.transformLiterals` -> `Schema.Literals(fromValues).transform(toValues)`: Split the pairs into parallel arrays and use `Literals(...).transform(...)`.
 
-- `Schema.transformOrFail` -> `schema.pipe(Schema.decodeTo(target, { decode: SchemaGetter.transformOrFail(...), encode: ... }))`: Replace the constructor with `decodeTo` and fallible `SchemaGetter` transformations.
+- `Schema.transformOrFail` -> `schema.pipe(Schema.decodeTo(target, { decode: SchemaGetter.transformEffect(...), encode: ... }))`: Replace the constructor with `decodeTo` and effectful `SchemaGetter` transformations.
 
 - `Schema.trimmed` -> `Schema.isTrimmed`: Rename the string predicate to `isTrimmed` and apply it with `Schema.check` or a schema's `check` method.
 
@@ -14809,7 +14939,7 @@ Schema.toFormatter(schema)
 
 - `SchemaAST.ArbitraryAnnotationId` -> `Schema.Annotations.ToArbitrary`: Symbol annotation IDs were removed. Declarations use the toCodecArbitrary annotation; filters use arbitraryConstraint.
 
-- `SchemaAST.BatchingAnnotation` -> `none`: Per-schema batching annotations were removed; control asynchronous parsing with ParseOptions.concurrency.
+- `SchemaAST.BatchingAnnotation` -> `none`: Per-schema batching annotations were removed. They have no direct replacement. ParseOptions.concurrency controls product child parsing only; configure request batching separately.
 
 - `SchemaAST.BatchingAnnotationId` -> `none`: Symbol annotation IDs were removed and batching is no longer a schema annotation.
 
@@ -14825,9 +14955,9 @@ Schema.toFormatter(schema)
 
 - `SchemaAST.ComposeTransformation` -> `SchemaAST.Encoding`: The marker transformation was replaced by explicit SchemaAST.Link encoding chains.
 
-- `SchemaAST.ConcurrencyAnnotation` -> `SchemaAST.ParseOptions["concurrency"]`: Concurrency is now a parse option rather than its own annotation type.
+- `SchemaAST.ConcurrencyAnnotation` -> `SchemaAST.ParseOptions`: Per-schema concurrency annotations were removed. Pass concurrency in runtime ParseOptions when creating or calling a decoder, encoder, or constructor. It applies independently to each tuple, array, struct, record, or struct-with-rest node and does not make Union candidates concurrent.
 
-- `SchemaAST.ConcurrencyAnnotationId` -> `Schema.Annotations.Bottom["parseOptions"]`: Symbol annotation IDs were removed; put concurrency inside the parseOptions annotation.
+- `SchemaAST.ConcurrencyAnnotationId` -> `SchemaAST.ParseOptions`: The annotation ID was removed. Pass concurrency in runtime ParseOptions; product parsing follows Effect.forEach concurrency semantics while Union candidates remain sequential.
 
 - `SchemaAST.Declaration` -> `SchemaAST.Declaration`: The name remains, but its constructor and fields changed in the v4 Base/check/context/encoding model.
 
@@ -14903,9 +15033,9 @@ Schema.toFormatter(schema)
 
 - `SchemaAST.ParseJsonSchemaId` -> `Schema.UnknownFromJsonString`: Use the built-in JSON string codec instead of checking the old schema ID.
 
-- `SchemaAST.ParseOptions` -> `SchemaAST.ParseOptions`: The name remains, but its constructor and fields changed in the v4 Base/check/context/encoding model.
+- `SchemaAST.ParseOptions` -> `SchemaAST.ParseOptions`: Pass parsing options at runtime. onExcessProperty supports ignore or error, not preserve; model extra values with an explicit Record or StructWithRest. propertyOrder was removed. concurrency follows Effect.forEach semantics for tuple, array, struct, record, and struct-with-rest children, applies independently at each nested product, and does not make Union candidates concurrent. Output key order is unspecified, including in values passed to checks. Handle required presentation or serialization order explicitly outside the parser.
 
-- `SchemaAST.ParseOptionsAnnotationId` -> `Schema.Annotations.Bottom["parseOptions"]`: Symbol annotation IDs were removed; use the parseOptions key.
+- `SchemaAST.ParseOptionsAnnotationId` -> `none`: Parse options are no longer schema annotations. Pass options when creating or calling a decoder or encoder; there is no annotation-based override for nested schemas.
 
 - `SchemaAST.PrettyAnnotationId` -> `Schema.overrideToFormatter`: The symbol annotation was removed; attach custom formatters with Schema.overrideToFormatter.
 
@@ -14929,7 +15059,7 @@ Schema.toFormatter(schema)
 
 - `SchemaAST.SymbolKeyword` -> `SchemaAST.Symbol`: The v4 SchemaAST redesign renamed this primitive, collection, or guard while preserving its role.
 
-- `SchemaAST.TemplateLiteral` -> `SchemaAST.TemplateLiteral`: The name remains, but its constructor and fields changed in the v4 Base/check/context/encoding model.
+- `SchemaAST.TemplateLiteral` -> `SchemaAST.TemplateLiteral`: The name remains, but its constructor and fields changed in the v4 Base/check/context/encoding model. Parts must not contain encodings, including inside unions or nested templates; use Schema.TemplateLiteralParser for transformed parts.
 
 - `SchemaAST.TemplateLiteralSpan` -> `SchemaAST.TemplateLiteral`: Template literal parts are represented directly as AST values in v4.
 
@@ -14941,7 +15071,7 @@ Schema.toFormatter(schema)
 
 - `SchemaAST.TransformationKind` -> `SchemaTransformation.Transformation`: Transformation implementations moved to SchemaTransformation and are stored on SchemaAST.Link.
 
-- `SchemaAST.TupleType` -> `SchemaAST.Arrays`: The v4 SchemaAST redesign renamed this primitive, collection, or guard while preserving its role.
+- `SchemaAST.TupleType` -> `SchemaAST.Arrays`: Use Arrays(isMutable, elements, rest, annotations?, checks?, encoding?, context?, encodingChecks?).
 
 - `SchemaAST.Type` -> `SchemaAST.AST`: The tuple-element Type wrapper was removed; optionality and mutability moved to Context.
 
@@ -14949,13 +15079,13 @@ Schema.toFormatter(schema)
 
 - `SchemaAST.TypeConstructorAnnotationId` -> `Schema.Annotations.Declaration["toCodec"]`: Symbol annotation IDs were removed; use declaration codec annotation keys.
 
-- `SchemaAST.TypeLiteral` -> `SchemaAST.Objects`: The v4 SchemaAST redesign renamed this primitive, collection, or guard while preserving its role.
+- `SchemaAST.TypeLiteral` -> `SchemaAST.Objects`: Use Objects(propertySignatures, indexSignatures, annotations?, checks?, encoding?, context?, encodingChecks?). Output key order is unspecified.
 
 - `SchemaAST.TypeLiteralTransformation` -> `SchemaAST.Encoding`: Object transformations are encoding links; use Schema.encodeKeys for key mappings.
 
 - `SchemaAST.UndefinedKeyword` -> `SchemaAST.Undefined`: The v4 SchemaAST redesign renamed this primitive, collection, or guard while preserving its role.
 
-- `SchemaAST.Union` -> `SchemaAST.Union`: The name remains, but its constructor and fields changed in the v4 Base/check/context/encoding model.
+- `SchemaAST.Union` -> `SchemaAST.Union`: Pass member ASTs and an optional options object: new SchemaAST.Union(types, { mode: 'oneOf' }). Read options?.mode ?? 'anyOf' instead of a direct mode field.
 
 - `SchemaAST.UniqueSymbol` -> `SchemaAST.UniqueSymbol`: The name remains, but its constructor and fields changed in the v4 Base/check/context/encoding model.
 
@@ -14981,13 +15111,13 @@ Schema.toFormatter(schema)
 
 - `SchemaAST.getAnnotation` -> `SchemaAST.resolveAt`: Resolve string-keyed annotations with resolveAt, or use resolveIdentifier, resolveTitle, and resolveDescription.
 
-- `SchemaAST.getBatchingAnnotation` -> `none`: Batching annotations were removed; read ParseOptions.concurrency when controlling asynchronous parsing.
+- `SchemaAST.getBatchingAnnotation` -> `none`: Batching annotations were removed. ParseOptions.concurrency controls product child parsing only; configure request batching separately.
 
 - `SchemaAST.getBrandAnnotation` -> `SchemaAST.resolveAt("brands")`: Resolve the string-keyed brands annotation.
 
 - `SchemaAST.getCompiler` -> `none`: The Match-based compiler was removed; traverse SchemaAST.AST directly or use the relevant Schema derivation API.
 
-- `SchemaAST.getConcurrencyAnnotation` -> `SchemaAST.resolveAt("parseOptions")`: Resolve parseOptions and read concurrency from it.
+- `SchemaAST.getConcurrencyAnnotation` -> `SchemaAST.ParseOptions`: Concurrency is no longer read from schema annotations. Pass it in runtime ParseOptions when creating or calling a parser. It applies to product children, not Union candidates.
 
 - `SchemaAST.getDecodingFallbackAnnotation` -> `none`: Fallbacks are encoding middleware in v4, not readable annotations; attach them with Schema.catchDecoding.
 
@@ -15013,7 +15143,7 @@ Schema.toFormatter(schema)
 
 - `SchemaAST.getParseIssueTitleAnnotation` -> `none`: Issue-title callbacks were removed; use message or expected annotations and SchemaIssue formatters.
 
-- `SchemaAST.getParseOptionsAnnotation` -> `SchemaAST.resolveAt("parseOptions")`: Resolve the string-keyed parseOptions annotation.
+- `SchemaAST.getParseOptionsAnnotation` -> `none`: Parse options are no longer schema annotations. Pass options when creating or calling a decoder or encoder; there is no annotation-based override for nested schemas.
 
 - `SchemaAST.getPropertySignatures` -> `SchemaAST.Objects.propertySignatures`: Narrow to Objects and read propertySignatures directly.
 
@@ -15384,6 +15514,8 @@ Schema.toFormatter(schema)
 - `SortedSet.size` -> `HashSet.size`: Direct size query on the replacement immutable set.
 
 - `SortedSet.some` -> `HashSet.some`: Run the predicate against the replacement HashSet; sort first only if traversal order has observable effects.
+
+- `SortedSet.toggle` -> `HashSet.has + HashSet.add / HashSet.remove`: HashSet has no toggle; branch on membership and add or remove the element.
 
 - `SortedSet.union` -> `HashSet.union + HashSet.fromIterable`: Convert the old general iterable argument to HashSet before taking the union.
 

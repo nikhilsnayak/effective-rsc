@@ -15,8 +15,6 @@ import {
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { deserializeError } from "serialize-error";
-import { ProductionBuild } from "./build/build/production.js";
-import { DevelopmentBuild } from "./build/build/development.js";
 import { ActionRequest } from "./runtime/action-request.js";
 import { injectResolver } from "./monkey-patch.js";
 import { partition } from "./utils/partition.js";
@@ -24,19 +22,22 @@ import { invariant } from "./utils/invariant.js";
 import { readStream } from "./steams/read-stream.js";
 import { combineBatch, createBatchStream } from "./steams/batch-stream.js";
 import { probeFirstChunk } from "./steams/probe-stream.js";
-
-type Build = DevelopmentBuild | ProductionBuild;
+import type {
+  BuildKind,
+  BuildSuccessByKind,
+} from "./build/build-sessions/build-session.js";
 
 export class Runtime {
-  #build: Build;
+  readonly #buildResult: BuildSuccessByKind[BuildKind];
+
   #ssrWorker?: Worker | undefined;
 
-  constructor(build: Build) {
-    this.#build = build;
+  constructor(buildResult: BuildSuccessByKind[BuildKind]) {
+    this.#buildResult = buildResult;
   }
 
-  get build() {
-    return this.#build;
+  get buildResult() {
+    return this.#buildResult;
   }
 
   // api endpoints
@@ -44,7 +45,7 @@ export class Runtime {
   apiRequest(request: Request) {
     let url = new URL(request.url);
     let realPath = url.pathname;
-    let apiEndpoints = this.build.getBuilder("rsc").apiEndpoints;
+    let apiEndpoints = this.#buildResult.outputs.rsc.apiEndpoints;
 
     let [staticAndDynamicApis, catchAllApis] = partition(
       apiEndpoints,
@@ -73,7 +74,7 @@ export class Runtime {
 
   pageRequest(request: Request) {
     let url = new URL(request.url);
-    let page = this.build.getBuilder("rsc").findPageForPath(url.pathname);
+    let page = this.#buildResult.outputs.rsc.findPageForPath(url.pathname);
 
     let pageRequest = page
       ? new PageRequest({ page, request, runtime: this })
@@ -83,9 +84,9 @@ export class Runtime {
   }
 
   notFoundPageRequest(request: Request) {
-    let page = this.build
-      .getBuilder("rsc")
-      .findPageForPath("/__tf/errors/not-found");
+    let page = this.#buildResult.outputs.rsc.findPageForPath(
+      "/__tf/errors/not-found",
+    );
 
     invariant(page, "Could not find not-found page");
 
@@ -98,9 +99,9 @@ export class Runtime {
   }
 
   unauthorizedPageRequest(request: Request) {
-    let page = this.build
-      .getBuilder("rsc")
-      .findPageForPath("/__tf/errors/unauthorized");
+    let page = this.#buildResult.outputs.rsc.findPageForPath(
+      "/__tf/errors/unauthorized",
+    );
 
     invariant(page, "Could not find unauthorized page");
 
@@ -115,8 +116,8 @@ export class Runtime {
   // actions
 
   actionRequest(request: Request) {
-    let serverActionMap = this.build.getBuilder("rsc").serverActionMap;
-    let serverManifest = this.build.getBuilder("rsc").serverManifest;
+    let serverActionMap = this.#buildResult.outputs.rsc.serverActionMap;
+    let serverManifest = this.#buildResult.outputs.rsc.serverManifest;
 
     return ActionRequest.isActionRequest(request)
       ? new ActionRequest({
@@ -131,19 +132,32 @@ export class Runtime {
   // renders
 
   createFlightStream(data: unknown) {
-    return renderToReadableStream(data, {});
+    return createFlightStream(data);
   }
 
   async renderRSCStream(
     data: any,
-    options: { temporaryReferences?: unknown } = {},
+    options: {
+      temporaryReferences?: unknown;
+      signal?: AbortSignal;
+    } = {},
   ) {
-    let clientComponentMap = this.build.getBuilder("client").clientComponentMap;
+    let clientComponentMap =
+      this.#buildResult.outputs.client.clientComponentMap;
     let streamError: unknown;
 
     let rscStream = renderToReadableStream(data, clientComponentMap, {
       temporaryReferences: options.temporaryReferences,
+      signal: options.signal,
       onError(err: unknown) {
+        let isCancellationError =
+          options.signal?.aborted && options.signal.reason === err;
+
+        if (isCancellationError) {
+          // no need to do anything here.
+          return;
+        }
+
         streamError = err;
 
         let isSafeError =
@@ -253,11 +267,11 @@ export class Runtime {
       }
     }
 
-    function cancelInput() {
+    function cancelInput(reason?: unknown) {
       // this can happen async, we just want to signal that we no longer
       // are interested
       if (rscReader) {
-        void rscReader.cancel();
+        void rscReader.cancel(reason);
       }
     }
 
@@ -277,14 +291,14 @@ export class Runtime {
       }
     }
 
-    async function cancel() {
+    async function cancel(reason?: unknown) {
       if (!isRequestActive) return;
 
       if (isHtmlStreamActive) {
         post({ status: "CANCEL" });
       }
 
-      cancelInput();
+      cancelInput(reason);
       finish();
     }
 
@@ -356,12 +370,11 @@ export class Runtime {
     try {
       await waitForStatus.promise;
     } catch (e: unknown) {
-      cancelInput();
-      finish();
-
       // this is likely a worst case scenario since errors should be handled by the
       // worker. so if we get here something is really off.
       let error = deserializeError(e);
+      cancelInput(error);
+      finish();
 
       // bubble this out and let the caller handle it
       throw error;
@@ -377,13 +390,14 @@ export class Runtime {
     // there really needs to be an rsc worker
     injectResolver((moduleId) => {
       let module =
-        this.#build.getBuilder("rsc").serverActionModuleMap[moduleId];
+        this.#buildResult.outputs.rsc.serverActionModuleMap[moduleId];
 
       if (!module) {
         throw new Error(`Failed to resolve module id ${moduleId}`);
       }
       return module.path;
     });
+
     await this.createSSRWorker();
   }
 
@@ -399,25 +413,28 @@ export class Runtime {
   }
 
   private async createSSRWorker() {
-    if (!this.build.error) {
-      let bootstrapPath = this.build.getBuilder("client").bootstrapPath;
-      let bootstrapFile = path.basename(bootstrapPath);
-      let bootstrapUrl = `/__tf/assets/entries/${bootstrapFile}`;
-      let workerUrl = new URL("./ssr/worker.js", import.meta.url);
+    let bootstrapPath = this.#buildResult.outputs.client.bootstrapPath;
+    let bootstrapFile = path.basename(bootstrapPath);
+    let bootstrapUrl = `/__tf/assets/entries/${bootstrapFile}`;
+    let workerUrl = new URL("./ssr/worker.js", import.meta.url);
 
-      this.#ssrWorker = new Worker(workerUrl, {
-        workerData: {
-          bootstrapUrl,
-          appPath: this.build.getBuilder("client").SSRAppPath,
-          clientComponentModuleMap:
-            this.build.getBuilder("client").clientComponentModuleMap,
-        },
-        execArgv: ["-C", "default"],
-        env: {
-          NODE_OPTIONS: "",
-          NODE_ENV: this.build.name,
-        },
-      });
-    }
+    this.#ssrWorker = new Worker(workerUrl, {
+      workerData: {
+        bootstrapUrl,
+        appPath: this.#buildResult.outputs.client.SSRAppPath,
+        clientComponentModuleMap:
+          this.#buildResult.outputs.client.clientComponentModuleMap,
+      },
+      execArgv: ["-C", "default"],
+      env: {
+        NODE_OPTIONS: "",
+        NODE_ENV: this.#buildResult.kind,
+      },
+    });
   }
+}
+
+// not sure where this should live
+export function createFlightStream(data: unknown) {
+  return renderToReadableStream(data, {});
 }

@@ -6,6 +6,49 @@ import { LanguageModel, Prompt, Tool, Toolkit } from "effect/unstable/ai"
 import { HttpClient, type HttpClientError, type HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 
 describe("OpenRouterLanguageModel", () => {
+  describe("strictJsonSchema", () => {
+    it.effect("omits false from requests while preserving response strictness", () =>
+      Effect.gen(function*() {
+        yield* LanguageModel.generateObject({
+          prompt: "Give me a name",
+          schema: Schema.Struct({ name: Schema.String })
+        }).pipe(Effect.provide(OpenRouterLanguageModel.model("openai/gpt-4o-mini", { strictJsonSchema: false })))
+
+        const requests = yield* MockHttpClient.requests
+        const body = yield* getRequestBody(requests[0])
+        strictEqual(body.response_format.json_schema.strict, false)
+        assert.notProperty(body, "strictJsonSchema")
+      }).pipe(Effect.provide(makeTestLayer({
+        body: {
+          choices: [{
+            finish_reason: "stop",
+            index: 0,
+            message: { role: "assistant", content: JSON.stringify({ name: "Alice" }) }
+          }]
+        }
+      }))))
+
+    it.effect("omits true from streaming requests while preserving tool strictness", () =>
+      Effect.gen(function*() {
+        const tool = Tool.make("FlexibleTool", { parameters: Schema.Struct({ query: Schema.String }) })
+          .annotate(Tool.Strict, false)
+        yield* LanguageModel.streamText({
+          prompt: "Use a tool",
+          toolkit: Toolkit.make(tool),
+          disableToolCallResolution: true
+        }).pipe(
+          Stream.runDrain,
+          Effect.provide(OpenRouterLanguageModel.model("openai/gpt-4o-mini", { strictJsonSchema: true }))
+        )
+
+        const requests = yield* MockHttpClient.requests
+        const body = yield* getRequestBody(requests[0])
+        strictEqual(body.stream, true)
+        strictEqual(body.tools[0].function.strict, false)
+        assert.notProperty(body, "strictJsonSchema")
+      }).pipe(Effect.provide(makeStreamTestLayer([]))))
+  })
+
   describe("generateText", () => {
     describe("message preparation", () => {
       describe("audio file parts", () => {
@@ -475,20 +518,27 @@ const getRequestBody = (request: HttpClientRequest.HttpClientRequest) =>
 
 const makeStreamTestLayer = (events: ReadonlyArray<typeof Generated.ChatStreamChunk.Encoded>) => {
   const body = events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("") + "data: [DONE]\n\n"
-  const httpClient = HttpClient.makeWith(
-    Effect.fnUntraced(function*(requestEffect) {
-      const request = yield* requestEffect
-      return HttpClientResponse.fromWeb(
-        request,
-        new Response(body, {
-          status: 200,
-          headers: { "content-type": "text/event-stream" }
-        })
-      )
-    }),
-    Effect.succeed as HttpClient.HttpClient.Preprocess<HttpClientError.HttpClientError, never>
-  )
+  const httpClientLayer = Layer.effectContext(Effect.gen(function*() {
+    const capturedRequests = yield* Ref.make<ReadonlyArray<HttpClientRequest.HttpClientRequest>>([])
+    const httpClient = HttpClient.makeWith(
+      Effect.fnUntraced(function*(requestEffect) {
+        const request = yield* requestEffect
+        yield* Ref.update(capturedRequests, Array.append(request))
+        return HttpClientResponse.fromWeb(
+          request,
+          new Response(body, {
+            status: 200,
+            headers: { "content-type": "text/event-stream" }
+          })
+        )
+      }),
+      Effect.succeed as HttpClient.HttpClient.Preprocess<HttpClientError.HttpClientError, never>
+    )
+    return Context.make(HttpClient.HttpClient, httpClient).pipe(
+      Context.add(MockHttpClient, MockHttpClient.of({ requests: Ref.get(capturedRequests) }))
+    )
+  }))
   return OpenRouterClient.layer({ apiKey: Redacted.make("sk-test-key") }).pipe(
-    Layer.provide(Layer.succeed(HttpClient.HttpClient, httpClient))
+    Layer.provideMerge(httpClientLayer)
   )
 }

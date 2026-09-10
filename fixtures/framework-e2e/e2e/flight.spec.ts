@@ -16,7 +16,6 @@ test('serves the complete application route tree through the native Flight proto
 
   expect(response.status()).toBe(200);
   expect(response.headers()['content-type']).toBe('text/x-component;charset=utf-8');
-  expect(response.headers()['content-location']).toBe(response.url());
   expect(response.headers()['cache-control']).toBe('private, no-store');
   expect(
     response

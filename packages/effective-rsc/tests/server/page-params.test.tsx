@@ -76,7 +76,7 @@ const withHarness = <A, E, R>(
     params: Schema.Struct({ slug: Schema.Literals(['valid', 'render-error', 'wait']) }).pipe(
       Schema.decodeTo(
         Schema.Struct({ id: Schema.String }),
-        SchemaTransformation.transformOrFail({
+        SchemaTransformation.transformEffect({
           decode: ({ slug }) =>
             Effect.flatMap(DecoderService, (service) =>
               Effect.map(service.decode(slug), (id) => ({ id })),

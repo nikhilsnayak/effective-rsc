@@ -1,3 +1,4 @@
+import * as BunServices from '@effect/platform-bun/BunServices';
 import { describe, expect, it } from '@effect/vitest';
 import { Deferred, Effect, Fiber, Layer } from 'effect';
 
@@ -61,6 +62,7 @@ const serviceLayer = (
     Layer.provide(
       Layer.merge(RegistrationRepository.layerTest(repository), PaymentGateway.layerTest(gateway)),
     ),
+    Layer.provide(BunServices.layer),
   );
 
 describe('RegistrationService', () => {

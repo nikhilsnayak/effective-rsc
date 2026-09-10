@@ -1,4 +1,5 @@
 import * as BunHttpServer from '@effect/platform-bun/BunHttpServer';
+import * as BunStream from '@effect/platform-bun/BunStream';
 import { Effect, Layer, Option, Schema, Stream, type Types } from 'effect';
 import type { PlatformError } from 'effect/PlatformError';
 import {
@@ -8,6 +9,7 @@ import {
   HttpServerResponse,
   HttpStaticServer,
 } from 'effect/unstable/http';
+import type { ServeError } from 'effect/unstable/http/HttpServerError';
 
 import { type ApplicationDefinition, getApplicationState } from '../application/definition';
 import { getERSCIdentity } from '../application/ersc-identity';
@@ -102,7 +104,7 @@ const fromWebStream = (
   stream: ReadableStream<Uint8Array>,
   options?: { readonly releaseLockOnEnd?: boolean },
 ) =>
-  Stream.fromReadableStream({
+  BunStream.fromReadableStream({
     evaluate: () => stream,
     onError: (cause) => cause,
     releaseLockOnEnd: options?.releaseLockOnEnd,
@@ -132,7 +134,7 @@ export type HttpApplicationLayer<ApplicationError> = Layer.Layer<
 
 export type ServerApplicationLayer<ApplicationError> = Layer.Layer<
   never,
-  ApplicationError | PlatformError,
+  HttpRouter.Request.Without<ApplicationError> | PlatformError | ServeError,
   ServerConfig
 >;
 
@@ -186,7 +188,6 @@ const httpLayer = <Services, ApplicationError>(
             contentType: `${FlightMediaType};charset=utf-8`,
             headers: {
               ...DynamicResponseHeaders,
-              'content-location': requestUrl.value.href,
             },
             status,
           },

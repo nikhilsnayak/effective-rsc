@@ -7,7 +7,7 @@ import { runMigrations } from '@/persistence/Migrations';
 
 const databaseDirectory = '.data';
 const databaseFilename = `${databaseDirectory}/event-platform.sqlite`;
-const DatabaseFilename = Config.string('EVENT_PLATFORM_DATABASE_FILENAME').pipe(
+const DatabaseFilename = Config.String('EVENT_PLATFORM_DATABASE_FILENAME').pipe(
   Config.withDefault(databaseFilename),
 );
 

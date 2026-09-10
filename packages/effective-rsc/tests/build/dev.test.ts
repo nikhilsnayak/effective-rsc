@@ -19,6 +19,7 @@ import {
 } from 'effect';
 import { TestClock } from 'effect/testing';
 import { HttpServer, HttpServerRequest } from 'effect/unstable/http';
+import * as NetAddress from 'effect/unstable/net/NetAddress';
 import { RpcClient, RpcSerialization } from 'effect/unstable/rpc';
 import * as Socket from 'effect/unstable/socket/Socket';
 
@@ -626,7 +627,7 @@ it.effect('keeps one HTTP server across successful generations', () =>
     const HttpServerLayer = Layer.succeed(
       HttpServer.HttpServer,
       HttpServer.make({
-        address: { _tag: 'TcpAddress', hostname: 'localhost', port: 18193 },
+        address: NetAddress.inetAddressUnsafe(NetAddress.ipv4Loopback, 18193),
         serve: () =>
           Effect.gen(function* () {
             yield* Ref.update(serveCount, (count) => count + 1);

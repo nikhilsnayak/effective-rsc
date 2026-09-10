@@ -64,7 +64,6 @@ const makePendingFlightResponse = (signal: AbortSignal) =>
     }),
     {
       headers: {
-        'content-location': 'https://effective-rsc.test/schedule/day-two',
         'content-type': 'text/x-component',
       },
     },
@@ -111,7 +110,6 @@ it.effect('requests and decodes a whole-tree Flight response', () =>
       observedRequest = request;
       return new Response(new Uint8Array(), {
         headers: {
-          'content-location': 'https://effective-rsc.test/schedule/day-two',
           'content-type': 'text/x-component;charset=utf-8',
         },
       });
@@ -178,7 +176,6 @@ it.effect('closes the response scope when the Flight stream reaches EOF', () =>
       requestSignal = signal;
       return new Response(new Uint8Array(), {
         headers: {
-          'content-location': 'https://effective-rsc.test/schedule/day-two',
           'content-type': 'text/x-component',
         },
       });
@@ -255,11 +252,15 @@ it.effect('rejects a Flight response without its resolved location', () =>
   }).pipe(
     Effect.provideService(
       HttpClient.HttpClient,
-      makeClient(
-        () =>
-          new Response(new Uint8Array(), {
-            headers: { 'content-type': 'text/x-component' },
-          }),
+      HttpClient.make(() =>
+        Effect.succeed(
+          HttpClientResponse.fromWeb(
+            HttpClientRequest.empty,
+            new Response(new Uint8Array(), {
+              headers: { 'content-type': 'text/x-component' },
+            }),
+          ),
+        ),
       ),
     ),
     Effect.flip,
@@ -333,7 +334,6 @@ it.effect('decodes a Server Function response with its temporary references', ()
           observedRequest = request;
           return new Response(new Uint8Array(), {
             headers: {
-              'content-location': 'https://effective-rsc.test/',
               'content-type': 'text/x-component',
             },
           });

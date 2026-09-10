@@ -79,6 +79,8 @@ code. Successful replacement interrupts the previous generation's pending handle
 streams before disposing its application services. Saving a file can therefore cut off an active
 response; development does not drain old generations or automatically retry Server Functions.
 Failed candidates leave the current generation's existing requests alone.
+When a rebuild starts, pending application startup is interrupted and cleaned up before the next
+candidate starts. Requests waiting for startup continue waiting for the new compilation outcome.
 Compilation and application startup failures are reported in both the terminal and the development
 panel. A failed candidate never publishes a successful browser update.
 Content-hashed development server bundles and chunks remain available for the development session.

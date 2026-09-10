@@ -3,6 +3,7 @@ import {
   Deferred,
   Effect,
   Fiber,
+  FiberHandle,
   FileSystem,
   Layer,
   Path,
@@ -115,6 +116,7 @@ export const makeDevGenerationStore = Effect.fnUntraced(function* (options: DevG
   const generation = yield* ScopedRef.make<DevGenerationState>(() => ({ _tag: 'Unavailable' }));
   const initialCompilation = yield* Deferred.make<DevGeneration, DevGenerationFailure>();
   const compilation = yield* Ref.make(initialCompilation);
+  // Only acquisition can be cancelled; installation must also release waiting requests.
   const update = Effect.fnUntraced(function* (event: RspackWatchEvent) {
     const current = yield* Ref.get(compilation);
 
@@ -152,7 +154,7 @@ export const makeDevGenerationStore = Effect.fnUntraced(function* (options: DevG
         yield* Deferred.succeed(current, ready.generation);
       }
     }
-  });
+  }, Effect.uninterruptible);
   const httpEffect = Ref.get(compilation).pipe(
     Effect.flatMap(Deferred.await),
     Effect.flatMap((ready) => ready.httpEffect),
@@ -233,15 +235,35 @@ export const makeDevApplication = Effect.fnUntraced(function* ({
         );
       }
     }
-  });
-  const watch = rspack
-    .watch(
-      makeRspackDevConfig(applicationRoot, entries, {
-        onCompilationStart: channel.onCompilationStart,
-        onServerComponentChanges: channel.onServerComponentChanges,
-      }),
-    )
-    .pipe(Stream.runForEach(update));
+  }, Effect.uninterruptible);
+  const watch = Effect.scoped(
+    Effect.gen(function* () {
+      const startup = yield* FiberHandle.make<void, DevGenerationFailure>();
+      const events = rspack
+        .watch(
+          makeRspackDevConfig(applicationRoot, entries, {
+            onCompilationStart: channel.onCompilationStart,
+            onServerComponentChanges: channel.onServerComponentChanges,
+          }),
+        )
+        .pipe(
+          Stream.runForEach(
+            Effect.fnUntraced(function* (event) {
+              // Finish obsolete startup cleanup before handling the next build event.
+              yield* FiberHandle.clear(startup);
+              if (event._tag === 'Compiled') {
+                yield* FiberHandle.run(startup, update(event), { startImmediately: true });
+              } else {
+                yield* update(event);
+              }
+            }),
+          ),
+          Effect.andThen(FiberHandle.awaitEmpty(startup)),
+        );
+
+      yield* Effect.raceFirst(events, FiberHandle.join(startup));
+    }),
+  );
   const httpEffect = yield* HttpRouter.toHttpEffect(
     HttpRouter.addAll([
       HttpRouter.route('GET', DevChannelPath, channel.httpEffect),

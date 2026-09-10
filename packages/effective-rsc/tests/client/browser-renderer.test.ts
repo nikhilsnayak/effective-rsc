@@ -34,7 +34,7 @@ it.effect('initializes once for a React root', () =>
   }).pipe(Effect.provide(BrowserRenderer.layer)),
 );
 
-it.effect('rejects discard after a navigation commits', () =>
+it.effect('waits for retirement when a navigation is discarded after commit', () =>
   Effect.gen(function* () {
     const renders: Array<BrowserRender> = [];
     const renderer = yield* BrowserRenderer;
@@ -47,10 +47,20 @@ it.effect('rejects discard after a navigation commits', () =>
     renderer.commit(navigationRender);
     yield* Effect.promise(() => navigation.committed);
 
-    expect(() => navigation.discard()).toThrow(
-      'Only a scheduled browser navigation can be discarded.',
-    );
+    const discarded = vi.fn();
+    const retirement = navigation.discard();
+    void retirement.then(discarded);
+    expect(navigation.discard()).toBe(retirement);
     expect(renders).toEqual([]);
+
+    renderer.navigate(makeRouteTree('successor'));
+    const successor = nextRender(renders);
+    yield* Effect.yieldNow;
+    expect(discarded).not.toHaveBeenCalled();
+
+    renderer.commit(successor);
+    yield* Effect.promise(() => retirement);
+    expect(discarded).toHaveBeenCalledOnce();
   }).pipe(Effect.provide(BrowserRenderer.layer)),
 );
 

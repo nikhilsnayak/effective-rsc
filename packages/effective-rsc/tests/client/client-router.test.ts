@@ -1422,6 +1422,63 @@ it.effect(
     ),
 );
 
+it.effect(
+  'keeps a committed navigation stream alive when superseded before its commit notification',
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const navigation = new TestNavigationApi();
+        const renderer = yield* BrowserRenderer.make;
+        let published = Promise.withResolvers<BrowserRender>();
+        renderer.initialize(initialRouteTree, (render) => published.resolve(render));
+        const { httpClient, responseSignals } = makeStreamingHttpClient();
+        yield* listen(navigation, renderer, httpClient);
+
+        const first = makeNavigationEvent();
+        navigation.dispatch(first.event);
+        const firstHandler = first.interception()?.precommitHandler;
+        if (firstHandler === undefined) {
+          return yield* Effect.die('Expected a precommit handler for the first navigation.');
+        }
+        const firstPreparation = yield* Effect.promise(() =>
+          invokePrecommitHandler(firstHandler, makePrecommitController()),
+        ).pipe(Effect.forkChild);
+        const firstRender = yield* Effect.promise(() => published.promise);
+        yield* Effect.yieldNow;
+
+        const successor = makeNavigationEvent({
+          destination: { url: 'https://effective-rsc.test/schedule/day-three' },
+        });
+        // A child layout effect can queue navigation before the root resolves committed.
+        // That microtask then runs before the router processes the commit notification.
+        queueMicrotask(() => navigation.dispatch(successor.event));
+        renderer.commit(firstRender);
+        yield* Fiber.join(firstPreparation);
+        yield* Effect.yieldNow;
+
+        expect(responseSignals).toHaveLength(1);
+        expect(responseSignals[0]?.aborted).toBe(false);
+
+        const successorHandler = successor.interception()?.precommitHandler;
+        if (successorHandler === undefined) {
+          return yield* Effect.die('Expected a precommit handler for the successor.');
+        }
+        published = Promise.withResolvers<BrowserRender>();
+        const successorPreparation = yield* Effect.promise(() =>
+          invokePrecommitHandler(successorHandler, makePrecommitController()),
+        ).pipe(Effect.forkChild);
+        const successorRender = yield* Effect.promise(() => published.promise);
+        expect(responseSignals[0]?.aborted).toBe(false);
+
+        renderer.commit(successorRender);
+        yield* Fiber.join(successorPreparation);
+        yield* Effect.yieldNow;
+        expect(responseSignals[0]?.aborted).toBe(true);
+        expect(responseSignals[1]?.aborted).toBe(false);
+      }),
+    ),
+);
+
 it.effect('keeps an older navigation stream while a queued discard can restore it', () =>
   Effect.scoped(
     Effect.gen(function* () {

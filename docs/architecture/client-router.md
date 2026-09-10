@@ -233,8 +233,9 @@ type RendererNavigation = {
 - `discard` requests cancellation before commit and resolves once the scheduled tree cannot commit.
   Discarding an already-retired tree is a no-op, so late cancellation cannot restore stale UI.
 
-Refresh cancellation may race with its UI commit. A refresh's `discard` therefore leaves an
-already-visible tree intact and waits for its retirement instead.
+Navigation and refresh cancellation may arrive after React commits but before the caller observes
+the commit notification. In both cases, `discard` leaves the visible tree intact and waits for its
+retirement instead.
 
 React can skip queued replacement renders, including discard renders. Committing a later publication
 also retires earlier skipped updates. Scheduling a replacement alone does not permit release, and

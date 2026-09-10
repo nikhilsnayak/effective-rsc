@@ -102,15 +102,8 @@ export class BrowserRenderer extends Context.Service<BrowserRenderer>()(
           committed: render.committed.promise,
           discard: () => {
             const live = ready.liveRenders.get(render);
-            // A successor may have already retired this tree before cancellation arrives.
-            if (live === undefined) {
-              return render.retired.promise;
-            }
-            if (live._tag !== 'Scheduled') {
-              // A committed refresh keeps its stream until React can no longer display it.
-              if (kind === 'Navigation') {
-                throw new TypeError('Only a scheduled browser navigation can be discarded.');
-              }
+            // Cancellation can arrive before the caller observes a commit or retirement.
+            if (live?._tag !== 'Scheduled') {
               return render.retired.promise;
             }
             ready.liveRenders.set(render, {

@@ -286,6 +286,10 @@ You can use `Schema.TemplateLiteral` to define structured string patterns made o
 
 Template literal matching is based on the semantics of each part rather than only a generated regular expression. Checks on string, number, and bigint schema parts are applied while matching each segment.
 
+Parts must not contain encodings. Construction throws for transformed parts, including transformations inside unions and transformations whose decoded and encoded types are equal. Brands and supported checks without encodings remain valid. Use `Schema.TemplateLiteralParser` when the parts need to decode values, such as `BooleanFromBit` or `FiniteFromString`.
+
+To describe bit spellings directly, use `Schema.Literals([0, 1])` as the part. To describe finite numeric spellings, use `Schema.Finite`. Replacing `FiniteFromString` with `Finite` changes the accepted spelling rules: a finite numeric part does not accept an empty segment. Explicit `Schema.toType` and `Schema.toEncoded` projections remove transformations, but can also change the constraints a template validates.
+
 **Example** (Constraining parts of an email-like string)
 
 ```ts
@@ -321,6 +325,12 @@ Failure(Cause([Fail(SchemaError(Expected a string matching template literal part
 ### Template literal parser
 
 If you want to extract the parts of a string that match a template, you can use `Schema.TemplateLiteralParser`. This allows you to parse the input into its individual components rather than treat it as a single string.
+
+The parser transforms a template built from the encoded sides of the parts into a tuple that retains their decoders and checks. Encoding applies the parts' encoders and joins the segments. The parser requires the decoding and encoding services of its parts in the corresponding direction.
+
+`Schema.toEncoded(parser)` validates that source template. Use `Schema.String` if you need to accept unrestricted strings.
+
+Ambiguous templates use greedy segmentation with backtracking. Encoding a tuple and decoding the resulting string can produce a different tuple when a segment contains a separator used by the template.
 
 **Example** (Parsing a template literal into components)
 
@@ -899,25 +909,12 @@ Failure(Cause([Fail(SchemaError: Custom message
 */
 ```
 
-### Preserve unexpected keys
+### Handling unexpected keys
 
-You can preserve unexpected keys by setting `onExcessProperty` to `preserve`.
-
-**Example** (Preserving unexpected keys)
-
-```ts
-import { Schema } from "effect"
-
-const schema = Schema.Struct({
-  a: Schema.String
-})
-
-console.log(String(Schema.decodeUnknownExit(schema)({ a: "a", b: "b" }, { onExcessProperty: "preserve" })))
-/*
-Output:
-Success({"b":"b","a":"a"})
-*/
-```
+Unexpected keys are ignored by default. Set `onExcessProperty` to `error` to
+reject them. To retain additional keys, describe and validate them with
+`Schema.Record` or `Schema.StructWithRest` so they are represented in the
+schema's type.
 
 ### Index Signatures
 
@@ -1683,7 +1680,7 @@ the later selected property wins if a transformation produces a duplicate key.
 With concurrency greater than `1`, completion order determines which value is
 retained.
 
-**Example** (Keeping the later selected value when parsing sequentially)
+**Example** (Keeping the later selected value)
 
 ```ts
 import { Schema, SchemaTransformation } from "effect"
@@ -2288,7 +2285,7 @@ const URLSchema = Schema.declare(
         // The JSON representation is a plain string
         Schema.String,
         // How to convert between URL and string
-        SchemaTransformation.transformOrFail<URL, string>({
+        SchemaTransformation.transformEffect<URL, string>({
           // JSON string -> URL (may fail if the string is not a valid URL)
           decode: (s, options) =>
             Effect.try({
@@ -3214,7 +3211,7 @@ const Kilometers = Schema.Finite.pipe(
 )
 ```
 
-You can define transformations that may fail during decoding or encoding using `SchemaTransformation.transformOrFail`.
+You can define transformations that may fail during decoding or encoding using `SchemaTransformation.transformEffect`.
 
 This is useful when you need to validate input or enforce rules that may not always succeed.
 
@@ -3226,7 +3223,7 @@ import { Effect, Schema, SchemaIssue, SchemaTransformation } from "effect"
 const URLFromString = Schema.String.pipe(
   Schema.decodeTo(
     Schema.instanceOf(URL),
-    SchemaTransformation.transformOrFail({
+    SchemaTransformation.transformEffect({
       decode: (s, options) =>
         Effect.try({
           try: () => new URL(s),
@@ -5122,6 +5119,29 @@ Schema can derive JSON Schemas, test data generators (Arbitraries), equivalence 
 
 By default, a schema produces a draft-2020-12 JSON Schema.
 
+The generated document is intended for preliminary validation. JSON Schema and
+Effect checks do not always have identical semantics, so the Effect decoder
+remains the final authority. Passing JSON Schema validation does not guarantee
+that decoding will succeed.
+
+Properties not modeled by an object schema use `onExcessProperty: "ignore"` by
+default, matching the decoder default. This emits `additionalProperties: true`.
+Pass `{ onExcessProperty: "error" }` to the generator and decoder to reject
+unmatched properties whenever the key space is representable. An
+index-signature key check that cannot be represented leaves unmatched
+properties open so that JSON Schema does not reject inputs Effect may accept.
+The generator does not merge conjunctive key patterns into a new regular
+expression. With `onExcessProperty: "ignore"`, it leaves that index signature
+open. With `onExcessProperty: "error"`, it uses the generated key schemas under
+`propertyNames`. Properties not already selected by `properties` or
+`patternProperties` may satisfy any index-signature value schema; the Effect
+decoder enforces the exact association between keys and values.
+
+Known differences include Unicode code-point versus UTF-16 string length,
+JavaScript RegExp flags, property checks applied before versus after decoding,
+and `oneOf` with overlapping members. Custom `toJsonSchema` callbacks are also
+responsible for the semantics they emit.
+
 The result is a data structure including:
 
 - the source of the JSON Schema (e.g. `draft-2020-12`, `draft-07`, etc...)
@@ -5335,7 +5355,7 @@ console.log(JSON.stringify(document, null, 2))
         "type": "string"
       }
     },
-    "additionalProperties": false
+    "additionalProperties": true
   },
   "definitions": {}
 }
@@ -5373,7 +5393,7 @@ console.log(JSON.stringify(document, null, 2))
         ]
       }
     },
-    "additionalProperties": false
+    "additionalProperties": true
   },
   "definitions": {}
 }
@@ -5454,12 +5474,12 @@ console.log(JSON.stringify(document.schema, null, 2))
   "required": [
     "headers"
   ],
-  "additionalProperties": false
+  "additionalProperties": true
 }
 */
 
 // Example (Decode a JSON-safe value using the same serializer)
-// If a value matches the JSON Schema above, you can decode it with the serializer.
+// JSON Schema is the preliminary check; the serializer remains the final validator.
 console.log(String(Schema.decodeUnknownExit(serializer)(json)))
 // Success({"headers":Headers([["a","b"]])})
 ```
@@ -5561,7 +5581,7 @@ console.log(JSON.stringify(document, null, 2))
       "required": [
         "a"
       ],
-      "additionalProperties": false
+      "additionalProperties": true
     }
   },
   "definitions": {}
@@ -6070,9 +6090,23 @@ with resolved identifiers and leaves anonymous non-recursive candidates inline, 
 candidates still receive references, using a synthetic name when necessary. Pass `referencePolicy` in the options to use a
 different allocation rule.
 
+Generated JSON Schema is a preliminary validation layer. The Effect decoder
+remains the final authority because string length, RegExp flags,
+decoded-object property checks, and `oneOf` can differ between the two
+validators. The default `onExcessProperty: "ignore"` emits
+`additionalProperties: true`; use `onExcessProperty: "error"` in both
+generation and decoding to reject unmatched properties whenever the key space
+is representable. Unrepresentable index-signature key checks leave unmatched
+properties open under the default mode. The compiler does not merge
+conjunctive key patterns into a new regular expression. In `error` mode it uses
+the generated key schemas under `propertyNames`. For properties not otherwise
+selected, it accepts any index-signature value schema and leaves the exact
+key-value association to the Effect decoder.
+
 At the lower level, `SchemaRepresentation.toJsonSchemaDocument(document)` compiles a live `Document`, and
 `toJsonSchemaMultiDocument` compiles a live `MultiDocument`. Check-level `toJsonSchema` callbacks contribute JSON Schema
 constraints. Opaque declarations that have not been structurally lowered compile to an unconstrained JSON Schema.
+Callback authors are responsible for the semantics of their output.
 
 `toJsonSchema` callbacks must treat their input schemas as immutable and return a valid JSON Schema object graph. After a
 callback returns, it must not mutate that object or anything reachable from it; returning a new graph is the supported way
@@ -6133,6 +6167,46 @@ and `additionalProperties`, because matching keys cannot be determined without e
 Opaque declarations and checks provide code through their `toCode` callbacks. `toCodeDocument` does not accept a
 reviver option. To generate code from persisted JSON, first reconstruct the schemas with `fromRepresentation` or
 `fromRepresentations`, then create a new live representation so the revivers can restore the callbacks.
+
+# Parsing Options
+
+## Concurrent Product Parsing
+
+The `concurrency` parse option controls how many children of a product schema may parse at the same time. It uses the
+same semantics as `Effect.forEach`: `undefined` and `1` are sequential, a number greater than `1` sets a bound, and
+`"unbounded"` removes the bound. Synchronous children remain eager and do not require a fiber.
+
+The option applies to tuple elements, array elements, struct fields, record entries, and structs with rest. It applies
+independently at every nested product. For example, with `concurrency: 2`, two outer array elements may each parse two
+inner elements concurrently. The option is runtime-only; it is not stored in the schema AST or its representation.
+
+Union members remain sequential. A product inside the union member currently being evaluated still receives the
+option.
+
+**Example** (Decoding array elements concurrently)
+
+```ts
+import { Effect, Schema, SchemaGetter } from "effect"
+
+const item = Schema.String.pipe(Schema.decode({
+  decode: SchemaGetter.transformEffect((value) => Effect.sleep("10 millis").pipe(Effect.as(value))),
+  encode: SchemaGetter.passthrough()
+}))
+
+const program = Schema.decodeUnknownEffect(Schema.Array(item))(
+  ["a", "b", "c"],
+  { concurrency: 2 }
+)
+
+const result = await Effect.runPromise(program)
+// ["a", "b", "c"]
+```
+
+Tuple and array results retain their element positions, as the result of `Effect.forEach` does. Other observable work
+follows completion order. With `errors: "first"`, the first observed child failure terminates the product and interrupts
+the remaining children. With `errors: "all"`, issues are accumulated as children complete. If transformed record keys
+collide, the last assignment to complete wins. Concurrent work may already have performed effects when another child
+fails or the parser interrupts it.
 
 # Error Handling and Formatting
 

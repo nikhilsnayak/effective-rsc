@@ -26,6 +26,24 @@ const configNamed = (configs: ReadonlyArray<Configuration>, name: string) => {
   return config as Configuration;
 };
 
+const cssRuleLoaders = (config: Configuration) => {
+  for (const rule of config.module?.rules ?? []) {
+    if (typeof rule !== 'object' || rule === null || !Array.isArray(rule.use)) {
+      continue;
+    }
+
+    if (!(rule.test instanceof RegExp) || rule.test.source !== /\.css$/i.source) {
+      continue;
+    }
+
+    return rule.use.flatMap((use) =>
+      typeof use === 'object' && use !== null && typeof use.loader === 'string' ? [use.loader] : [],
+    );
+  }
+
+  return undefined;
+};
+
 const tailwindUseNamed = (config: Configuration) => {
   for (const rule of config.module?.rules ?? []) {
     if (typeof rule !== 'object' || rule === null || !Array.isArray(rule.use)) {
@@ -131,19 +149,87 @@ it.effect('content-addresses every compiled client asset in both modes', () =>
   }).pipe(Effect.provide(Path.layer)),
 );
 
-it.effect('compiles Tailwind CSS against the application root in both runtime graphs', () =>
+it.effect('compiles Tailwind CSS against the application root in the browser graph', () =>
   Effect.gen(function* () {
     const { applicationRoot, entries } = yield* resolveFixtureBuild('/workspace');
     const configs = makeRspackBuildConfig(applicationRoot, entries);
+    const client = configNamed(configs, 'client');
+    const server = configNamed(configs, 'server');
 
-    for (const name of ['client', 'server']) {
-      const tailwindUse = tailwindUseNamed(configNamed(configs, name));
+    expect(tailwindUseNamed(client)?.options).toEqual({
+      base: '/workspace',
+      optimize: { minify: true },
+    });
 
-      expect(tailwindUse).toBeDefined();
-      expect(tailwindUse?.options).toEqual({
-        base: '/workspace',
-        optimize: { minify: true },
-      });
+    // The server graph keeps CSS modules without compiling them again.
+    expect(tailwindUseNamed(server)).toBeUndefined();
+    expect(cssRuleLoaders(server)?.every((loader) => loader.includes('ignore-css-loader'))).toBe(
+      true,
+    );
+  }).pipe(Effect.provide(Path.layer)),
+);
+
+it.effect('points the server CSS rule at the framework pitching loader', () =>
+  Effect.gen(function* () {
+    const { applicationRoot, entries } = yield* resolveFixtureBuild('/workspace');
+    const server = configNamed(makeRspackBuildConfig(applicationRoot, entries), 'server');
+    const loaders = cssRuleLoaders(server) ?? [];
+
+    expect(loaders).toHaveLength(1);
+
+    // The rule is inert unless the path resolves to a module that pitches, so assert the module.
+    const loader = yield* Effect.promise(
+      () => import(loaders[0]!) as Promise<{ readonly pitch?: unknown }>,
+    );
+
+    expect(typeof loader.pitch).toBe('function');
+  }).pipe(Effect.provide(Path.layer)),
+);
+
+const assetRule = (config: Configuration) =>
+  (config.module?.rules ?? []).find(
+    (rule): rule is Extract<typeof rule, { type?: unknown }> =>
+      typeof rule === 'object' && rule !== null && rule.type === 'asset/resource',
+  );
+
+it.effect('emits imported assets from the browser graph only', () =>
+  Effect.gen(function* () {
+    const { applicationRoot, entries } = yield* resolveFixtureBuild('/workspace');
+    const configs = makeRspackBuildConfig(applicationRoot, entries);
+    const client = assetRule(configNamed(configs, 'client'));
+    const server = assetRule(configNamed(configs, 'server'));
+
+    expect(client?.generator).toEqual({ filename: '[name].[contenthash][ext]' });
+
+    // The server graph resolves the browser's URL for a Server Component without writing the file.
+    expect(server?.generator).toEqual({
+      emit: false,
+      filename: '[name].[contenthash][ext]',
+      publicPath: '/_ersc/assets/',
+    });
+  }).pipe(Effect.provide(Path.layer)),
+);
+
+it.effect('matches images, fonts, and media as assets', () =>
+  Effect.gen(function* () {
+    const { applicationRoot, entries } = yield* resolveFixtureBuild('/workspace');
+    const configs = makeRspackBuildConfig(applicationRoot, entries);
+    const tests = assetRule(configNamed(configs, 'client'))?.test as ReadonlyArray<RegExp>;
+    const matches = (name: string) => tests.some((pattern) => pattern.test(name));
+
+    for (const name of ['a.svg', 'a.png', 'a.webp', 'a.woff2', 'a.ttf', 'a.mp4', 'a.vtt']) {
+      expect(matches(name), name).toBe(true);
+    }
+
+    // `effective-rsc/types` declares these modules, and TypeScript matches a wildcard module
+    // pattern case-sensitively, so the compiler accepts exactly what type-checks.
+    for (const name of ['a.PNG', 'a.SVG', 'a.WOFF2']) {
+      expect(matches(name), name).toBe(false);
+    }
+
+    // The JavaScript, CSS, and RSC graphs keep owning their own extensions.
+    for (const name of ['a.css', 'a.tsx', 'a.json']) {
+      expect(matches(name), name).toBe(false);
     }
   }).pipe(Effect.provide(Path.layer)),
 );
@@ -160,11 +246,13 @@ it.effect('keeps development candidates immutable until they are published', () 
       expect(config.optimization?.emitOnErrors).toBe(false);
       expect(config.output?.clean).toBe(false);
       expect(config.output?.filename).toBe('[name].[contenthash].js');
-      expect(tailwindUseNamed(config)?.options).toEqual({
-        base: '/workspace',
-        optimize: false,
-      });
     }
+
+    expect(tailwindUseNamed(client)?.options).toEqual({
+      base: '/workspace',
+      optimize: false,
+    });
+    expect(tailwindUseNamed(server)).toBeUndefined();
 
     // Only the browser compilation emits stylesheets.
     expect(client.output?.cssFilename).toBe('[name].[contenthash].css');

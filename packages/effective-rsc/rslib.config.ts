@@ -51,6 +51,7 @@ export default defineConfig({
   ],
   output: {
     cleanDistPath: true,
+    copy: [{ from: 'src/types.d.ts', to: 'types.d.ts' }],
     minify: false,
     sourceMap: true,
     target: 'node',

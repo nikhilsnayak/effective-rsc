@@ -45,6 +45,9 @@
     "./build": {
       "types": "./dist/build/hook.d.ts",
       "default": "./dist/build/hook.js"
+    },
+    "./types": {
+      "types": "./dist/types.d.ts"
     }
   },
   "publishConfig": {

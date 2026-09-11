@@ -10,6 +10,7 @@ import type { FixtureMetadata, ObservedQuery, SelectionItem } from '@/modules/fi
 import { FixtureService } from '@/modules/fixture/service';
 import { SelectionToggle } from '@/modules/selection/components/selection-toggle';
 
+import erscMark from '../ersc-mark.svg';
 import RuntimeProbe from './runtime-probe';
 
 type FixtureHomeProps = {
@@ -36,6 +37,7 @@ function FixtureHomeView({ fixture, selection }: FixtureHomeProps) {
   return (
     <main className='mx-auto max-w-7xl px-5 py-12 sm:px-8 lg:py-16'>
       <header className='max-w-3xl border-b pb-9'>
+        <img alt='' className='size-8' data-testid='fixture-mark' src={erscMark} />
         <Badge variant='outline'>{fixture.data.revision}</Badge>
         <h1 className='mt-4 text-4xl font-semibold tracking-[-0.03em] text-balance sm:text-5xl'>
           {fixture.data.name}

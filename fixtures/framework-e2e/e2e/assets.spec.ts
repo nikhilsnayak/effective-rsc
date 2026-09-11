@@ -28,6 +28,12 @@ test('preserves useId associations through hydration and a client update', async
   expect(errors).toEqual([]);
 });
 
+const ContentTypeByExtension: Readonly<Record<string, string>> = {
+  css: 'text/css',
+  js: 'text/javascript',
+  svg: 'image/svg+xml',
+};
+
 test('loads every compiler asset needed by the hydrated document', async ({ page }, testInfo) => {
   const assetResponses: Array<Response> = [];
   page.on('response', (response) => {
@@ -60,9 +66,11 @@ test('loads every compiler asset needed by the hydrated document', async ({ page
     expect(response.status()).toBe(200);
     expect((await response.body()).length).toBeGreaterThan(0);
     const headers = await response.allHeaders();
-    expect(headers['content-type']).toContain(
-      pathname.endsWith('.css') ? 'text/css' : 'text/javascript',
-    );
+    const extension = pathname.split('.').pop()!;
+    const contentType = ContentTypeByExtension[extension];
+
+    expect(contentType, `unexpected compiler asset kind: ${pathname}`).toBeDefined();
+    expect(headers['content-type']).toContain(contentType);
     expect(headers['cache-control']).toBe(expectedCacheControl);
   }
 });
@@ -85,4 +93,23 @@ test('serves conventional public assets from the application root', async ({ req
   expect(favicon.response.headers()['content-type']).toContain('image/svg+xml');
   expect(favicon.response.headers()['cache-control']).toBe('public, max-age=0');
   expect(favicon.body).toContain('<svg');
+});
+
+test('serves an asset imported by a Server Component from the compiler namespace', async ({
+  page,
+  request,
+}, testInfo) => {
+  await page.goto('/');
+
+  const source = await page.getByTestId('fixture-mark').getAttribute('src');
+  expect(source).toMatch(/^\/_ersc\/assets\/ersc-mark\.[a-f0-9]+\.svg$/);
+
+  const response = await request.get(source!);
+
+  expect(response.status()).toBe(200);
+  expect(response.headers()['content-type']).toContain('image/svg+xml');
+  expect(response.headers()['cache-control']).toBe(
+    testInfo.project.name === 'dev' ? 'no-store' : 'public, max-age=31536000, immutable',
+  );
+  expect(await response.text()).toContain('<svg');
 });

@@ -38,15 +38,6 @@ await Bun.write(
   sitemapXml(['/', ...entries.map((entry) => entry.href)]),
 );
 await Bun.write(join(siteRoot, 'public/robots.txt'), robotsTxt);
-for (const name of ['geist', 'geist-mono']) {
-  const font = Bun.resolveSync(
-    `@fontsource-variable/${name}/files/${name}-latin-wght-normal.woff2`,
-    siteRoot,
-  );
-  await Bun.write(join(siteRoot, `public/generated/${name}.woff2`), Bun.file(font));
-  const license = Bun.resolveSync(`@fontsource-variable/${name}/LICENSE`, siteRoot);
-  await Bun.write(join(siteRoot, `public/generated/${name}-LICENSE.txt`), Bun.file(license));
-}
 for (const name of ['logo.svg', 'logo-dark.svg', 'LLMS.md']) {
   await Bun.write(join(siteRoot, 'public/generated', name), Bun.file(join(frameworkRoot, name)));
 }

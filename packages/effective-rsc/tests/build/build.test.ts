@@ -217,8 +217,14 @@ it.effect('matches images, fonts, and media as assets', () =>
     const tests = assetRule(configNamed(configs, 'client'))?.test as ReadonlyArray<RegExp>;
     const matches = (name: string) => tests.some((pattern) => pattern.test(name));
 
-    for (const name of ['a.svg', 'a.PNG', 'a.webp', 'a.woff2', 'a.ttf', 'a.mp4', 'a.vtt']) {
+    for (const name of ['a.svg', 'a.png', 'a.webp', 'a.woff2', 'a.ttf', 'a.mp4', 'a.vtt']) {
       expect(matches(name), name).toBe(true);
+    }
+
+    // `effective-rsc/types` declares these modules, and TypeScript matches a wildcard module
+    // pattern case-sensitively, so the compiler accepts exactly what type-checks.
+    for (const name of ['a.PNG', 'a.SVG', 'a.WOFF2']) {
+      expect(matches(name), name).toBe(false);
     }
 
     // The JavaScript, CSS, and RSC graphs keep owning their own extensions.

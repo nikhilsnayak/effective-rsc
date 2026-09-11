@@ -32,10 +32,13 @@ const CacheDirectory = 'node_modules/.cache/ersc/rspack';
 
 const SupportedBrowserTargets = ['chrome >= 141', 'edge >= 141', 'firefox >= 147'] as const;
 
+// Lowercase only, because `effective-rsc/types` declares these modules and TypeScript matches a
+// wildcard module pattern case-sensitively. An uppercase extension would otherwise compile and then
+// fail to resolve its type.
 const ImagePattern =
-  /\.(?:apng|avif|bmp|cur|gif|ico|jfif|jpe?g|jxl|pjp(?:eg)?|png|svg|tiff?|webp)$/i;
-const FontPattern = /\.(?:eot|otf|ttc|ttf|woff2?)$/i;
-const MediaPattern = /\.(?:aac|flac|m4a|mov|mp3|mp4|ogg|opus|vtt|wav|webm)$/i;
+  /\.(?:apng|avif|bmp|cur|gif|ico|jfif|jpe?g|jxl|pjp(?:eg)?|png|svg|tiff?|webp)$/;
+const FontPattern = /\.(?:eot|otf|ttc|ttf|woff2?)$/;
+const MediaPattern = /\.(?:aac|flac|m4a|mov|mp3|mp4|ogg|opus|vtt|wav|webm)$/;
 
 const BunModulePrefix = 'bun:';
 const BunPlatformPackage = '@effect/platform-bun';

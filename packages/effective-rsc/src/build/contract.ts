@@ -10,6 +10,7 @@ export const ServerEntryName = 'main';
 export type Environment = 'development' | 'production';
 
 export type EnvironmentConfig = {
+  readonly clientAssetFilename: string;
   readonly clientAssetsCacheControl: string;
   readonly clientCssFilename: string;
   readonly clientJsFilename: string;
@@ -21,6 +22,7 @@ export type EnvironmentConfig = {
 // A client asset name changes whenever its bytes change, so a client may keep it forever, and
 // `ersc start` resolves the server bundle by path, so that one is named once.
 const production: EnvironmentConfig = {
+  clientAssetFilename: '[name].[contenthash][ext]',
   clientAssetsCacheControl: 'public, max-age=31536000, immutable',
   clientCssFilename: '[name].[contenthash].css',
   clientJsFilename: '[name].[contenthash].js',

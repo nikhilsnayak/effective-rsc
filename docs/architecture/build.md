@@ -17,14 +17,23 @@ lives in `.ersc/client/` and `.ersc/server/`; ERSC does not generate proxy sourc
 A checked-in `'use server-entry'` module imports `src/application.tsx` through a private compiler
 alias. Rspack supplies ordered JavaScript and stylesheet metadata to the compiled application.
 
-The browser build targets the Navigation API browser floor and enables the React Compiler. It
-rejects `bun:*` and `@effect/platform-bun` imports. The server build targets Bun's Node compatibility,
-leaves `effect`, `@effect/*`, and `bun:*` external, and does not run the React Compiler. React, React
-DOM, and `react-server-dom-rspack` use one exact compatible release.
+The browser build targets the Navigation API browser floor and enables the React Compiler. It rejects
+`bun:*` and `@effect/platform-bun` imports, and production output uses compact hashed chunk and module
+identifiers. The server build targets Bun's Node compatibility, leaves `effect`, `@effect/*`, and
+`bun:*` external, and does not run the React Compiler. React, React DOM, and `react-server-dom-rspack`
+use one exact compatible release.
 
-CSS remains in Rspack's pipeline, including Tailwind CSS v4 through `@tailwindcss/webpack`.
-`public/` is served at `/` by Effect `HttpStaticServer`; compiled assets are served below
-`/_ersc/assets`.
+Imported images, fonts, and media become content-addressed assets of the browser build. The server
+graph resolves the same URLs so a Server Component can reference one, without writing the file twice.
+`effective-rsc/types` declares every module the compiler resolves but TypeScript cannot infer,
+including stylesheets; applications reference it once. Anything else stays a conventional `public/`
+file.
+
+CSS remains in Rspack's pipeline, including Tailwind CSS v4 through `@tailwindcss/webpack`. The
+browser build owns every stylesheet asset. The server graph keeps its CSS modules so Rspack can order
+stylesheet metadata, but a pitching loader discards their bytes before Tailwind reads them, so one
+build never compiles the same stylesheet twice. `public/` is served at `/` by Effect
+`HttpStaticServer`; compiled assets are served below `/_ersc/assets`.
 
 Every compiled browser asset carries a content hash, so `/_ersc/assets` is served immutably from a
 build and unstored in development, where one output directory is reused across rebuilds. Requests
@@ -84,6 +93,11 @@ candidate starts. Requests waiting for startup continue waiting for the new comp
 Compilation and application startup failures are reported in both the terminal and the development
 panel. A failed candidate never publishes a successful browser update.
 Content-hashed development server bundles and chunks remain available for the development session.
+
+Development compilation keeps an Rspack persistent cache under `node_modules/.cache/ersc/rspack`, so a
+restarted development server reuses the previous module graph instead of rebuilding it. The framework
+version, the application manifest, and its TypeScript configuration invalidate that cache, and Rspack
+expires unused entries. Production builds compile without a cache, because they usually start cold.
 
 Browser updates use the compiler's HMR protocol; RSC changes refresh the current page through
 Flight, including when client navigation is unavailable. A streaming Effect RPC carries development

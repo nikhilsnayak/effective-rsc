@@ -11,6 +11,9 @@ import { ERSC } from './ersc';
 import { Home } from './home';
 import { cachePublicPage } from './page-cache';
 
+import '@fontsource-variable/geist';
+import '@fontsource-variable/geist-mono';
+
 import './styles.css';
 
 const PublicERSC = ERSC.withMiddleware(ERSC.Middleware.make(cachePublicPage));
@@ -24,7 +27,6 @@ const RootLayout = ERSC.Layout.make({
       <html lang='en' suppressHydrationWarning className='scroll-pt-24 scrollbar-gutter-stable'>
         <head>
           <meta name='viewport' content='width=device-width, initial-scale=1' />
-          <link rel='stylesheet' href='/fonts.css' />
           <link
             rel='icon'
             href='/generated/logo.svg'
@@ -36,13 +38,6 @@ const RootLayout = ERSC.Layout.make({
             href='/generated/logo-dark.svg'
             type='image/svg+xml'
             media='(prefers-color-scheme: dark)'
-          />
-          <link
-            rel='preload'
-            href='/generated/geist.woff2'
-            as='font'
-            type='font/woff2'
-            crossOrigin='anonymous'
           />
           <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         </head>

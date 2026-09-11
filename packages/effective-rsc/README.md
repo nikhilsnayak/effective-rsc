@@ -114,10 +114,10 @@ Create `tsconfig.json`:
 }
 ```
 
-Create `src/environment.d.ts` so TypeScript accepts stylesheet imports:
+Create `src/environment.d.ts` so TypeScript accepts stylesheet and asset imports:
 
 ```ts
-declare module '*.css' {}
+/// <reference types="effective-rsc/types" />
 ```
 
 ## Quick start

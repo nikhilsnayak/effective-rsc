@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import rspack, { type Compiler, type Configuration, type RuleSetRule } from '@rspack/core';
 import { ReactRefreshRspackPlugin } from '@rspack/plugin-react-refresh';
 
+import PackageJson from '../../package.json' with { type: 'json' };
 import { FrameworkAssetPrefix } from '../application/route-path';
 import {
   ApplicationEntrySpecifier,
@@ -26,8 +27,15 @@ export type RspackDevConfigOptions = {
 
 const require = createRequire(import.meta.url);
 const TailwindLoaderPath = require.resolve('@tailwindcss/webpack');
+const IgnoreCssLoaderPath = require.resolve('./ignore-css-loader.js');
+const CacheDirectory = 'node_modules/.cache/ersc/rspack';
 
 const SupportedBrowserTargets = ['chrome >= 141', 'edge >= 141', 'firefox >= 147'] as const;
+
+const ImagePattern =
+  /\.(?:apng|avif|bmp|cur|gif|ico|jfif|jpe?g|jxl|pjp(?:eg)?|png|svg|tiff?|webp)$/i;
+const FontPattern = /\.(?:eot|otf|ttc|ttf|woff2?)$/i;
+const MediaPattern = /\.(?:aac|flac|m4a|mov|mp3|mp4|ogg|opus|vtt|wav|webm)$/i;
 
 const BunModulePrefix = 'bun:';
 const BunPlatformPackage = '@effect/platform-bun';
@@ -70,6 +78,10 @@ const makeSwcRule = (target: 'browser' | 'server', mode: Environment): RuleSetRu
     {
       loader: 'builtin:swc-loader',
       options: {
+        collectTypeScriptInfo: {
+          exportedEnum: mode === 'production',
+          typeExports: true,
+        },
         detectSyntax: 'auto',
         isModule: 'unknown',
         jsc: {
@@ -110,6 +122,36 @@ const makeCssRule = (root: string, mode: Environment): RuleSetRule => ({
   ],
 });
 
+// Only the browser graph writes asset files. The server graph resolves the same URLs so Server
+// Components can reference them, which needs the browser's public path rather than its own.
+const makeAssetRule = (target: 'browser' | 'server', mode: Environment): RuleSetRule => ({
+  generator: {
+    filename: EnvironmentConfig[mode].clientAssetFilename,
+    ...(target === 'server' ? { emit: false, publicPath: FrameworkAssetPrefix } : {}),
+  },
+  test: [ImagePattern, FontPattern, MediaPattern],
+  type: 'asset/resource',
+});
+
+// The server graph keeps CSS modules for ordering, not for their bytes.
+const makeIgnoredCssRule = (): RuleSetRule => ({
+  test: /\.css$/i,
+  type: 'css/auto',
+  use: [{ loader: IgnoreCssLoaderPath }],
+});
+
+// Development only: a production build starts cold in CI, where writing a cache costs more than it
+// saves. Rspack separates caches by compiler name and mode but cannot see these inputs change.
+const makeCache = (root: string): NonNullable<Configuration['cache']> => ({
+  buildDependencies: [`${root}/package.json`, `${root}/tsconfig.json`],
+  storage: {
+    directory: `${root}/${CacheDirectory}`,
+    type: 'filesystem',
+  },
+  type: 'persistent',
+  version: PackageJson.version,
+});
+
 const makeResolve = (root: string): NonNullable<Configuration['resolve']> => ({
   extensionAlias: {
     '.js': ['.js', '.ts', '.tsx'],
@@ -140,19 +182,39 @@ const makeRspackConfig = (
   const config = EnvironmentConfig[mode];
 
   const client: Configuration = {
+    cache: development ? makeCache(root) : false,
     context: root,
     devtool: development ? 'cheap-module-source-map' : false,
     entry: {
       [ClientEntryName]: entries.client,
     },
+    experiments: {
+      // The RSC client plugin sets `watchOptions.ignored` to a function the native watcher rejects.
+      nativeWatcher: false,
+    },
     externals: [guardBrowserModule],
+    infrastructureLogging: {
+      level: 'error',
+    },
     mode,
     module: {
-      rules: [makeCssRule(root, mode), makeSwcRule('browser', mode)],
+      parser: {
+        javascript: {
+          typeReexportsPresence: 'tolerant',
+        },
+      },
+      rules: [
+        makeAssetRule('browser', mode),
+        makeCssRule(root, mode),
+        makeSwcRule('browser', mode),
+      ],
     },
     name: 'client',
     optimization: {
+      // Shorter identifiers shrink the runtime chunk.
+      chunkIds: development ? 'named' : 'compact-hashed',
       emitOnErrors: !development,
+      moduleIds: development ? 'named' : 'compact-hashed',
       splitChunks: {
         cacheGroups: {
           react: {
@@ -169,6 +231,10 @@ const makeRspackConfig = (
       clean: !development,
       cssChunkFilename: config.clientCssFilename,
       cssFilename: config.clientCssFilename,
+      // The Rspack runtime does not need the browser's temporal dead zone checks.
+      environment: {
+        const: false,
+      },
       filename: config.clientJsFilename,
       path: `${root}/${config.clientOutputDir}`,
       publicPath: FrameworkAssetPrefix,
@@ -184,16 +250,30 @@ const makeRspackConfig = (
   };
 
   const server: Configuration = {
+    cache: development ? makeCache(root) : false,
     context: root,
     devtool: 'source-map',
     entry: {
       [ServerEntryName]: entries.rsc,
     },
+    experiments: {
+      // The RSC client plugin sets `watchOptions.ignored` to a function the native watcher rejects.
+      nativeWatcher: false,
+    },
     externals: [externalizeServerModule],
+    infrastructureLogging: {
+      level: 'error',
+    },
     mode,
     module: {
+      parser: {
+        javascript: {
+          typeReexportsPresence: 'tolerant',
+        },
+      },
       rules: [
-        makeCssRule(root, mode),
+        makeAssetRule('server', mode),
+        makeIgnoredCssRule(),
         makeSwcRule('server', mode),
         {
           resource: entries.rsc,

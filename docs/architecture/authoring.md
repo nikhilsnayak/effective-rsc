@@ -37,12 +37,23 @@ Component Effects remain attached to the HTTP request.
 Server Function handlers execute directly in the HTTP request fiber. If a Server Function refreshes
 the current route, the refreshed Page, Layout, and Component Effects use the render runtime.
 
+## Server Functions
+
 `ServerFn.make` accepts one Schema for a single argument, or a readonly list of Schemas for
 positional arguments. The caller passes each Schema's encoded value and the handler receives each
 decoded value in the same position. An empty list declares no arguments. Array and Tuple Schemas
 remain single-argument inputs. A state Schema followed by a FormData decoder supports native
 `useActionState` actions with `(previousState, payload)` arguments without changing React's
 transport or binding.
+
+The handler's Effect error channel must be `never`; expected outcomes belong in its success value.
+
+A Server Function's success type must consistently describe either a top-level Effect `Stream` or
+a non-stream value. Mixed unions such as `Stream<A> | null` are rejected. Returned Streams must
+have a `never` error channel and require only services available to the Server Function; their client
+references resolve `ReadableStream<A>`. Unions of Streams combine their element types and validate
+all error and service requirements. Value queries reject any return union containing a Web Stream;
+stream queries require every alternative to be a Web Stream.
 
 ## Routes
 
@@ -68,7 +79,7 @@ complete ancestry. Rendering produces one unary tree:
 Layout -> optional Loading -> nested scope -> ... -> Page
 ```
 
-Every request carries a complete route tree. React IDs preserve reconciliation identity but are not
+Every Page response and mutation refresh carries a complete route tree. React IDs preserve reconciliation identity but are not
 parsed as ERSC protocol data.
 
 ## Middleware
@@ -81,6 +92,10 @@ scope.
 Ancestors run before descendants and responses unwind in reverse. Middleware already active for a
 Server Function action does not run again during its route refresh; remaining route middleware wraps
 the refresh. Native global Effect HTTP middleware remains separate and surrounds the whole router.
+
+Query helpers pass through native global middleware and the Server Function's middleware;
+they skip route middleware and have no route refresh scope.
+The [lifetime contract](lifetimes-and-protocols.md#middleware-reach) defines reach for every request.
 
 See the [Middleware guide](../../packages/effective-rsc/docs/02-guides/04-middleware/index.md) and
 [API reference](../../packages/effective-rsc/docs/04-api-reference/06-middleware/index.md).

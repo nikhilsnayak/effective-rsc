@@ -1,88 +1,57 @@
 # Open questions
 
-Do not settle these implicitly. When implementation supplies decisive evidence, remove the question
-and add or revise its owning decision.
-
-IDs are append-only and never reused, including after a question is resolved.
+Do not settle these implicitly. When evidence resolves a question, remove it and add or revise the
+owning decision. IDs are append-only and never reused.
 
 ## Open
 
 ### OQ-004 — Typed search parameters
 
-- **Question:** How should Pages declare and decode typed search parameters?
-- **Why:** Search parameters have multiplicity, defaults, and navigation semantics distinct from route parameters.
-- **Affected:** Page authoring, URLs, routing, and navigation refreshes.
-- **Evidence:** The current Page contract models only Effect HTTP path captures.
-- **Related:** D-028, D-046.
-- **Resolution:** Unresolved.
-- **Status:** Open.
+How should Pages declare and decode search parameters? Multiplicity, defaults, and navigation
+semantics differ from path captures, which are all the current Page contract models. The answer
+must cover authoring, URLs, routing, and refreshes. Related: D-028, D-046.
 
 ## Deferred
 
-### OQ-002 — Suspensing Loading diagnostics
+### OQ-002 — Loading suspension diagnostics
 
-- **Question:** How should development diagnose an `ERSC.Loading.make` renderer that calls `use` or otherwise throws a thenable internally?
-- **Why:** Its declared renderer rejects Promise and Effect outputs, but TypeScript cannot detect suspension hidden inside synchronous code.
-- **Affected:** Loading authoring, development diagnostics, and HMR error presentation.
-- **Evidence:** The development panel reports build and browser runtime failures. The static Loading
-  contract catches direct async outputs but not suspension hidden inside synchronous code.
-- **Related:** D-016, D-039, D-041–D-043.
-- **Resolution:** Detecting suspension hidden inside a renderer requires Loading-specific React
-  instrumentation; do not add that machinery for `0.1.0`.
-- **Status:** Deferred until the instrumentation approach is settled.
+How should development detect `use` or a thrown thenable inside a Loading renderer? Types reject
+Promise/Effect outputs but cannot detect hidden suspension. The panel handles ordinary build and
+runtime failures; Loading-specific React instrumentation remains outside the baseline until its
+approach is settled. Related: D-016, D-039, D-041–D-043.
 
 ### OQ-007 — Packaged framework agent evaluation
 
-- **Question:** How should effective-rsc evaluate whether a fresh agent can discover the public API,
-  scaffold an application, and complete a realistic build using only published package artifacts?
-- **Why:** Type checks and integration tests validate framework behavior but do not measure CLI,
-  documentation, diagnostics, or API discoverability for a new user or agent.
-- **Candidate:** Use two layers: deterministic scaffold, type-check, build, start, route, and 404
-  checks in CI; plus a fresh-context agent evaluation at milestones or before publishing.
-- **Anti-overfitting:** Rotate several versioned application briefs with the same feature matrix but
-  different domains. Keep some briefs absent from examples and documentation.
-- **Scoring:** Record setup, documentation, API discovery, type experience, routing, services,
-  Server Functions, styling/build/runtime, diagnostics, confidence on another application, and an
-  independently justified overall score.
-- **Evidence:** The first packaged-artifact evaluation uses local `effective-rsc` and
-  `create-ersc-app` tarballs to build City Signals without source-repository context.
-- **Affected:** Release confidence, `create-ersc-app`, package documentation, `LLMS.md`, public API
-  design, and diagnostics.
-- **Related:** D-052, D-053.
-- **Resolution:** Future exploration; use the first run to define assertions and a result schema
-  without embedding its solution.
-- **Status:** Deferred until the baseline framework feature set is ready.
+How should a fresh agent demonstrate API discovery, scaffolding, and realistic application work
+using published artifacts alone? Unit and integration tests cannot measure that experience.
+
+The candidate has two layers: deterministic scaffold, type-check, build, start, route, and `404`
+checks in CI; fresh-context agent evaluations at milestones or before publishing. Rotate versioned
+briefs with equivalent feature coverage and different domains; keep some absent from examples/docs.
+Score setup, docs/API discovery, types, routing, services, Server Functions, styling/build/runtime,
+diagnostics, confidence on another application, and an independently justified overall result.
+
+The first run uses local framework/CLI tarballs for City Signals without repository context. Use it
+to define assertions and a result schema without embedding its solution. Deferred until the baseline
+feature set is ready. Related: D-052, D-053.
 
 ### OQ-009 — Stream-aware history scroll restoration
 
-- **Question:** When and how should the client router capture and restore scroll positions for
-  history entries whose route trees continue streaming after their first UI commit?
-- **Why:** D-066 finishes native navigation at the first UI commit. The browser can therefore
-  remember a position against an intermediate Suspense fallback rather than the subsequently
-  revealed route, making native history restoration an unstable model for streamed UI.
-- **Affected:** Back/Forward traversal, exact history-entry identity, hash navigation, focus, and
-  the point at which the router considers a restored position safe to apply.
-- **Evidence:** The browser's default forward-navigation reset works at the D-066 commit boundary,
-  while the visible Flight stream intentionally remains alive beyond that boundary. The skipped
-  framework E2E contract test reproduces a Back traversal clamping the saved offset against the
-  Suspense fallback and retaining that incorrect offset after the complete route streams in.
-- **Related:** D-066.
-- **Resolution:** Keep native behavior initially. A future design must key positions by history
-  entry and choose a restoration point that accounts for later streamed reveals.
-- **Status:** Deferred; native behavior remains the initial policy.
+When should the router capture and restore positions for routes streaming after their first commit?
+D-066 permits native navigation to finish against a Suspense fallback. A skipped framework E2E test
+reproduces Back traversal clamping a saved offset against that fallback and retaining the wrong
+position after content arrives; default forward reset works.
+
+Keep native behavior for now. A future design must key positions by exact history entry and account
+for later reveals, hash navigation, focus, and a safe restoration point. Related: D-066.
 
 ### OQ-010 — Typed application navigation transition APIs
 
-- **Question:** How should public client navigation APIs provide type-safe application transition
-  names for both links and programmatic navigation?
-- **Why:** Plain data attributes provide navigation intent without committing to a Link component,
-  helper factory, or global type-registration API.
-- **Affected:** Client public exports, native links, programmatic navigation, and React View
-  Transition type maps.
-- **Evidence:** D-071 supports `data-ersc-transition-types` on native links. The documentation site
-  uses application types to distinguish Previous, Next, and unordered navigation from history
-  direction, but plain attribute values do not catch misspelled application types.
-- **Related:** D-018, D-047, D-067, D-071.
-- **Resolution:** Use plain data attributes now; revisit naming, API shape, and type safety together
-  with framework-level public client APIs.
-- **Status:** Deferred until public client APIs are designed.
+How should links and programmatic navigation share type-safe application transition names?
+`data-ersc-transition-types` carries intent without choosing a Link component, helper factory, or
+global type registration. The site uses it for Previous/Next/document order, but misspellings are
+unchecked.
+
+Keep plain attributes until application navigation APIs are designed; settle naming, API shape,
+and type safety together. Existing Server Function client helpers do not resolve this question.
+Related: D-018, D-047, D-067, D-071.

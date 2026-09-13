@@ -2,10 +2,9 @@
 
 ## Purpose — Accepted
 
-effective-rsc researches a coherent, bleeding-edge RSC framework in which React owns the UI
-protocol and Effect owns the application runtime. It is not a production-safe default and may rely
-on React Canary, Effect v4 RC, TypeScript 7, Rspack RSC support, and new browser APIs without legacy
-fallbacks.
+effective-rsc researches an RSC framework where React owns the UI protocol and Effect owns the
+application runtime. It offers no production-safety guarantee and uses React Canary, Effect v4 RC,
+TypeScript 7, Rspack RSC support, and new browser APIs without legacy fallbacks.
 
 ## Principles — Accepted
 

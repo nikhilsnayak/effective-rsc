@@ -1,15 +1,15 @@
 ## Routing, parameters, and loading
 
-- Routes are immutable and belong to one ERSC identity.
-- `page(path, page)` attaches a Page; `mount(prefix, routes)` nests a route scope.
-- Mounted scopes retain their Layout and Loading ancestry.
-- On GET/HEAD, the request handler decodes Page parameters once before rendering, with services
-  from existing route middleware available. Rejected parameters return an empty `404`, including
-  navigation Flight.
-- Server Function POST refreshes keep parameter rejection in React's render-error path, preserving
-  the completed action result.
-- Effect HTTP owns route matching; ERSC rejects duplicate shapes and invalid composition while
-  building the graph.
+Attach a Page with `routes.page(path, page)`. Group routes under a Layout and optional Loading
+fallback, then nest them with `routes.mount(prefix, childRoutes)`. Each operation returns new Routes;
+mounting preserves the child's layouts, loading fallbacks, and middleware.
+
+Define path parameters in a Page's `params` Schema. Its encoded keys must match the route's
+`:parameters` and accept strings; `render` receives decoded values. Mount prefixes cannot contain
+parameters. Unmatched routes and rejected path parameters return `404`.
+
+The root Routes needs a Layout containing the HTML document and at least one Page. A Loading
+fallback is synchronous and renders below its Layout while descendants suspend.
 
 <!-- source-navigation -->
 

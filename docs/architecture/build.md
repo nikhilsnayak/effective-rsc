@@ -17,13 +17,15 @@ lives in `.ersc/client/` and `.ersc/server/`; ERSC does not generate proxy sourc
 A checked-in `'use server-entry'` module imports `src/application.tsx` through a private compiler
 alias. Rspack supplies ordered JavaScript and stylesheet metadata to the compiled application.
 
-The browser build targets the Navigation API browser floor and applies the React Compiler only to
-the application's `src/` tree, excluding `node_modules` and workspace-linked dependencies.
-Browser-graph violations are handled by module resolution. Production output uses
-compact hashed chunk and module identifiers. The server build targets Bun's Node compatibility and
-externalizes only `bun:*` and `effect`; other dependencies are bundled so React-dependent packages
-resolve React through their RSC layer. The server build does not run the React Compiler. React, React
-DOM, and `react-server-dom-rspack` use one exact compatible release.
+The browser build enables Strict Mode and runs the React Compiler only on the application's `src/`
+tree, excluding `node_modules` and workspace-linked dependencies. Dependency modules still receive
+RSC directive processing. Browser resolution rejects unavailable server modules; there is no bespoke
+Bun-import guard. Production uses compact hashed chunk and module identifiers.
+
+The server build targets Bun's Node compatibility and omits the React Compiler. Only `bun:*` and
+`effect` are external: Bun supplies the former, and Effect's migration loader uses computed imports.
+Other dependencies are bundled so React-dependent packages resolve against their RSC or SSR layer.
+React, React DOM, and `react-server-dom-rspack` use the exact compatible releases in the root catalog.
 
 Imported images, fonts, and media become content-addressed assets of the browser build. The server
 graph resolves the same URLs so a Server Component can reference one, without writing the file twice.
@@ -40,8 +42,8 @@ build never compiles the same stylesheet twice. `public/` is served at `/` by Ef
 Every compiled browser asset carries a content hash, so `/_ersc/assets` is served immutably from a
 build and unstored in development, where one output directory is reused across rebuilds. Requests
 for these compiler-owned assets skip the per-request logger; public assets and application routes
-remain logged. The compiled server bundle keeps a stable name instead, because `ersc start`
-resolves it by path.
+remain logged. Production server bundles use stable `[name].js` paths for `ersc start`.
+Development server entries and chunks use `[name].[contenthash].js` and remain for the session.
 
 ## Production entry
 
@@ -83,54 +85,47 @@ GitHub creates a draft release.
 
 ## Development
 
-`ersc dev` watches the same browser and server compiler graphs. A replacement generation is fully
-initialized before it atomically becomes available to new requests. Admission waits for the current
-compilation outcome; compilation or startup failure rejects new requests instead of serving stale
-code. Successful replacement interrupts the previous generation's pending handlers and response
-streams before disposing its application services. Saving a file can therefore cut off an active
-response; development does not drain old generations or automatically retry Server Functions.
-Failed candidates leave the current generation's existing requests alone.
-When a rebuild starts, pending application startup is interrupted and cleaned up before the next
-candidate starts. Requests waiting for startup continue waiting for the new compilation outcome.
-Compilation and application startup failures are reported in both the terminal and the development
-panel. A failed candidate never publishes a successful browser update.
-Content-hashed development server bundles and chunks remain available for the development session.
+`ersc dev` watches the same compiler graphs and uses one Bun/Effect HTTP server. A generation
+contains its application services and requests:
 
-Development compilation keeps an Rspack persistent cache under `node_modules/.cache/ersc/rspack`, so a
-restarted development server reuses the previous module graph instead of rebuilding it. The framework
-version, the Rspack configuration module, the application manifest, and its TypeScript configuration
-invalidate that cache, and Rspack
-expires unused entries. Production builds compile without a cache, because they usually start cold.
+- Initialize a replacement fully before atomically admitting new requests to it. Admission waits
+  for the current compilation outcome; compilation or startup failures reject new requests.
+- Successful replacement interrupts old handlers and response streams before disposing services.
+  There is no draining or automatic Server Function retry. Failed candidates leave existing requests
+  on the current generation alone.
+- A rebuild interrupts pending startup and awaits cleanup before starting the next candidate.
+  Waiting requests follow the new compilation outcome. Failed candidates never publish success.
+- Keep content-hashed server bundles and chunks for the development session.
 
-Browser updates use the compiler's HMR protocol; RSC changes refresh the current page through
-Flight, including when client navigation is unavailable. A streaming Effect RPC carries development
-updates over `/_ersc/dev`. Development-only branches are removed from production builds. On
-shutdown, the development channel closes active WebSockets before stopping the Bun HTTP server, so
-connected browser tabs cannot retain the process. Request cleanup precedes disposal of generation
-services. The channel accepts only WebSocket handshakes whose `Origin` matches the development server.
+The Rspack persistent cache lives at `node_modules/.cache/ersc/rspack`. Framework version,
+application manifest, and TypeScript configuration invalidate it; Rspack expires unused entries.
+Production compiles without a cache.
 
-Development diagnostics start independently of hydration. Current-route refresh initially reloads
-the document; successful hydration replaces it with streamed RSC refresh.
-The initial successful socket snapshot reconciles when its hash differs from the loaded browser
-bundle.
+### Updates and diagnostics
 
-When client-navigation APIs are unavailable, development logs a warning naming the missing API and
-shows a dismissible, non-modal notice in the development panel. It explains that links use full-page
-navigation while hydration, Server Functions, and HMR remain enabled. Successful builds and renders
-do not clear the warning; build and runtime failures take precedence. Production emits no such warning.
+An Effect RPC stream at `/_ersc/dev` carries development updates; WebSocket handshakes require an
+Origin matching the development server. Apply Rspack HMR and
+React Fast Refresh before refreshing changed RSC content through Flight. Production removes this
+channel and development-only branches. At shutdown, close channel WebSockets before stopping Bun;
+request cleanup precedes generation service disposal.
 
-Caught React render errors include their component stack in the development panel. Later
-HMR or explicit navigation can recover the framework error boundary; starting a refresh alone does
-not clear the error. Healthy trees retain their React state, application error boundaries retain
-their own policy, and recovery never replays a Server Function or retries unchanged code on a timer.
-Build diagnostics clear only when the server reports a successful replacement. A successful render
-or a cached history traversal does not clear a compilation failure, and build success alone does
-not clear a runtime failure.
+Diagnostics start before hydration. Current-route refresh initially reloads the document; successful
+hydration installs streamed refresh. The first successful socket snapshot reconciles a hash that
+differs from the loaded browser bundle. Missing navigation APIs produce a console warning and a
+persistent dismissible panel notice; failures take precedence, and production omits the warning.
 
-React Server Components Performance Tracks remain native. Initial hydration uses the document
-timeline origin; navigation and Server Function decoding receive a timestamp captured before HTTP
-execution. Production compilation removes the timing metadata. React Debug Channel transport and
-Loading-specific suspension diagnostics remain deferred.
+Build and runtime diagnostics have independent recovery:
+
+- Compilation/startup failures appear in the terminal and panel. Only a successful replacement
+  clears build diagnostics; renders and cached traversal cannot clear them.
+- Caught React failures include component stacks. Only a successful recovery commit clears runtime
+  diagnostics; starting a refresh or completing a build does not. HMR or navigation can recover the
+  root error boundary without remounting healthy trees. Application boundaries own their recovery.
+- Recovery never replays a Server Function or retries unchanged code on a timer.
+
+Native React Server Components Performance Tracks use the document timeline for hydration and a
+pre-HTTP timestamp for navigation and Server Function decoding. Production removes timing metadata.
+Debug Channel transport and Loading-specific suspension diagnostics remain deferred.
 
 ## Owners
 

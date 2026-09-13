@@ -1,17 +1,14 @@
 ## Routes
 
-`ERSC.Routes.make({ layout?, loading? })` creates an immutable route scope.
+`ERSC.Routes.make({ layout?, loading? })` creates a route scope. Its methods return new Routes:
 
-- `routes.page(path, page)` adds a Page at an absolute Effect HTTP pattern. Parameter Schema keys
-  must exactly match path parameters.
-- `routes.mount(prefix, childRoutes)` mounts a non-empty graph of the same ERSC identity below an
-  absolute, parameter-free prefix.
-- Mounted scopes retain their Layout, Loading, and middleware ancestry.
+- `page(path, page)` adds a Page at an absolute Effect HTTP pattern. Parameter Schema keys must
+  exactly match path parameters.
+- `mount(prefix, childRoutes)` mounts non-empty Routes from the same application below an absolute,
+  parameter-free prefix, retaining Layout, Loading, and middleware ancestry.
 
-Both operations return new Routes values. Conflicting matcher shapes and `/_ersc/assets` are
-rejected. Root Routes require a Layout and at least one Page.
-
-Routes created from a derived authoring view activate its middleware.
+Conflicting matcher shapes and the `/_ersc` namespace are rejected. The root Routes must have a
+Layout and at least one Page. Routes created from a `withMiddleware` view activate that middleware.
 
 <!-- source-navigation -->
 

@@ -1,23 +1,15 @@
 # effective-rsc application
 
-A new effective-rsc application.
-
-## Requirements
-
-- Bun 1.4 or newer
-
-Client navigation requires the Navigation API and `NavigationPrecommitController`. Other browsers
-use full-page navigation; hydration and Server Functions still work.
-
-## Develop
+Requires Bun 1.4 or newer.
 
 ```sh
 bun run dev
 ```
 
-Open `http://localhost:18193`.
+Open `http://localhost:18193`. Edit `src/application.tsx` and its Tailwind stylesheet,
+`src/styles.css`. Files in `public/` are served from `/`.
 
-Verify and run the production build with:
+Verify and run production output:
 
 ```sh
 bun run check
@@ -25,11 +17,9 @@ bun run build
 bun run start
 ```
 
-For deployment, `ersc start` accepts `--hostname` and `--port`. Command-line flags take precedence
-over `HOST` and `PORT`.
+`ersc start --hostname <host> --port <port>` overrides `HOST` and `PORT`.
+Client navigation needs the Navigation API and `NavigationPrecommitController`; other browsers
+load full documents while hydration and Server Functions still work.
 
-The starter application lives in `src/application.tsx`. Its Tailwind stylesheet is
-`src/styles.css`. Files in `public/` are served from `/`.
-
-Framework documentation is installed at `node_modules/effective-rsc/docs`; the combined reference
-is `node_modules/effective-rsc/LLMS.md`.
+Documentation: `node_modules/effective-rsc/docs`. Combined reference:
+`node_modules/effective-rsc/LLMS.md`.

@@ -1,72 +1,40 @@
 ## Client navigation
 
-ERSC handles eligible document navigations through the browser Navigation API and
-`NavigationPrecommitController`. There is no History API fallback. A browser missing either one
-still hydrates Client Components and supports Server Functions and streamed current-page refreshes,
-including HMR. Links use full-page navigation instead of the client router. Without JavaScript,
-the server-rendered document retains working links and natively submitted forms.
+Use ordinary `<a href>` links. ERSC uses the Navigation API and `NavigationPrecommitController`
+when available. Other browsers use full-page navigation while Client Components, Server Functions,
+and HMR still work. Without JavaScript, links and native forms remain usable.
 
-Development reports a missing navigation API in the console and a dismissible development-panel
-warning. The warning does not block interaction and is absent in production.
+The shared Layout stays mounted across client navigation. URL, history, focus, and default scroll
+advance when the destination first appears; suspended content can continue streaming afterward.
+The current page stays visible while its replacement loads. Later render failures go to React Error
+Boundaries.
 
-An intercepted Page navigation has two milestones:
+Back/Forward can reuse completed route trees. New navigations fetch fresh content, and mutations
+invalidate that history cache. Redirects follow their destination; responses that cannot be rendered
+as a route fall back to full-document navigation.
 
-- **Native commit:** ERSC starts the Flight request in a React Transition, retains the common Layout
-  prefix, and publishes the destination in another Transition after the asynchronous load. The
-  precommit handler settles at the destination's first UI commit. The Navigation API can
-  then commit the URL and history entry, apply focus and default scroll, and finish any React View
-  Transition without waiting for Flight EOF.
-- **Stream completion:** after native commit, the client router owns any remaining Flight stream
-  until EOF or until React confirms that another render retired it. A completed tree is cached for
-  the exact Navigation API history-entry id that committed for that navigation.
-
-Canceling or superseding before commit interrupts the client transport and server request Effects.
-A scheduled destination is discarded before its stream is released, so no rollback is needed. The
-current UI and stream remain live while a successor prepares and retire only after React confirms a
-different render. After native commit, Browser Stop no longer owns the stream; later Flight failures
-use React's Error Boundary handling.
-
-Back/Forward traversal reuses a completed cached payload. Push, replace, and uncached traversal
-fetch fresh Flight. Disposing a history entry evicts its payload; a Server Function refresh clears
-the traversal cache because a mutation may affect any route.
-
-Flight redirects use the response's final URL; a non-success or non-Flight response becomes a
-full-document navigation. Native focus and scroll remain enabled. Because Suspense content may
-continue after native commit, history can remember an intermediate fallback's scroll position;
-stream-aware restoration is not yet implemented.
+**Scroll limitation:** history restoration may clamp a saved position against a Loading fallback
+and keep that position after content arrives. Stream-aware restoration is not implemented.
 
 ### React View Transitions
 
-Applications own React `<ViewTransition>` boundaries and all animation CSS. ERSC does not wrap the
-route tree or call `document.startViewTransition()`. It calls React's `addTransitionType()` inside
-the same Transition that publishes an initial navigation or refresh render, so application
-boundaries can select animation policy without delaying native navigation until Flight EOF.
+Add React `<ViewTransition>` boundaries and CSS in your application. ERSC supplies these additive
+types when it first publishes a navigation or refresh:
 
-The types are additive:
+| Event                              | Types                                                                                |
+| ---------------------------------- | ------------------------------------------------------------------------------------ |
+| Routed navigation                  | `navigation`, plus `navigation-push`, `navigation-replace`, or `navigation-traverse` |
+| Push or forward history traversal  | `navigation-forward`                                                                 |
+| Backward history traversal         | `navigation-backward`                                                                |
+| Browser-provided visual transition | `navigation-ua-visual-transition`                                                    |
+| Mutation refresh                   | `server-function`                                                                    |
+| HMR refresh                        | `hmr-refresh`                                                                        |
 
-| Publication                                            | Added types                                        |
-| ------------------------------------------------------ | -------------------------------------------------- |
-| Every routed navigation                                | `navigation`, `navigation-${event.navigationType}` |
-| Push navigation                                        | `navigation-forward`                               |
-| Backward traversal                                     | `navigation-backward`                              |
-| Forward traversal                                      | `navigation-forward`                               |
-| Navigation with `event.hasUAVisualTransition`          | `navigation-ua-visual-transition`                  |
-| Server Function response tree or current-route refresh | `server-function`                                  |
-| HMR current-route refresh                              | `hmr-refresh`                                      |
+Replace has no direction type. Traversal adds one only when history indices establish a direction.
+Choose whether to animate HMR or browser-provided transitions. Suspense reveals that arrive later
+need their own boundaries and styling; they do not inherit these types.
 
-`event.navigationType` is `push`, `replace`, or `traverse`. Replace has no direction type. A
-traversal has no direction type when either history index is unavailable or the indices are equal.
-Applications may suppress author animation for `navigation-ua-visual-transition` and `hmr-refresh`,
-but ERSC does not impose that policy.
-
-These types describe only the first publication. Suspense content that resolves later renders in a
-separate, untyped React Transition. Applications should use their own Suspense-specific
-`<ViewTransition>` boundaries and styling for those reveals.
-
-#### Application transition types
-
-Add whitespace-separated application transition types to a native link with
-`data-ersc-transition-types`:
+Add application types to a link:
 
 ```tsx
 <a href='/photos/2' data-ersc-transition-types='photo-next'>
@@ -74,8 +42,6 @@ Add whitespace-separated application transition types to a native link with
 </a>
 ```
 
-These are added alongside ERSC's built-in types for that push or replace navigation and can be
-used in your `<ViewTransition>` type maps. They are not replayed on Back/Forward.
-
-The names `navigation`, `navigation-*`, `server-function`, and `hmr-refresh` are reserved for ERSC
-and ignored in the attribute.
+Separate multiple types with spaces. They supplement built-in types for that push or replace and
+are not replayed on Back/Forward. `navigation`, `navigation-*`, `server-function`, and `hmr-refresh`
+are reserved and ignored in the attribute.

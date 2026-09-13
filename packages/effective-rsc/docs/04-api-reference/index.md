@@ -1,12 +1,16 @@
 ## API reference
 
-Under the `react-server` condition, the package root exports `Application`.
-`Application.ersc<Services>()` returns `Component`, `Layout`, `Loading`, `Page`, `Middleware`,
-`Routes`, `ServerFn`, `withMiddleware`, and `make`. Values from different ERSC identities cannot
-be composed.
+| Import                 | Use                                                      |
+| ---------------------- | -------------------------------------------------------- |
+| `effective-rsc`        | `Application` and server authoring factories             |
+| `effective-rsc/client` | `ServerFn` query/stream helpers and error types          |
+| `effective-rsc/server` | Custom Bun startup with `start`                          |
+| `effective-rsc/build`  | Deployment adapter types                                 |
+| `effective-rsc/types`  | TypeScript declarations for stylesheet and asset imports |
 
-`effective-rsc/client` is the entry point for Client Components and exports `ServerFn` query
-helpers.
+`Application.ersc<Services>()` returns `Page`, `Layout`, `Loading`, `Component`, `Middleware`,
+`Routes`, `ServerFn`, `withMiddleware`, and `make`. Create values from one instance and its derived
+views. The package root is server-only; importing it from a Client Component throws.
 
 <!-- source-navigation -->
 
@@ -18,4 +22,5 @@ helpers.
 - [Middleware](./06-middleware/index.md)
 - [Routes](./07-routes/index.md)
 - [ServerFn](./08-server-fn/index.md)
-- [Query](./09-query/index.md)
+- [Client queries and streams](./09-client-queries-and-streams/index.md)
+- [Production startup](../03-advanced/04-production-startup/index.md)

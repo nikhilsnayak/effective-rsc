@@ -2,10 +2,11 @@
 
 Vercel deployment packaging for effective-rsc on Bun 1.4+.
 
-Add `@ersc/vercel` to the app's `devDependencies` and build with:
+The `@ersc/vercel` version must match the installed `effective-rsc` version. Install it and package the build:
 
 ```sh
-ersc build --adapter @ersc/vercel
+bun add --dev @ersc/vercel
+bunx ersc build --adapter @ersc/vercel
 ```
 
 This generates `.vercel/output/` with a Bun function, traced dependencies, and copied assets.

@@ -1,21 +1,21 @@
 ## Production startup
 
-Run `ersc build`, then `ersc start`. A custom Bun entry can await
-`start({ root, hostname, port })` from `effective-rsc/server`. All options are required;
-`root` is the application directory. Deploy its `.ersc/`, `public/`, and runtime dependencies.
+Run `ersc build`, then `ersc start`. Deploy `.ersc/`, `public/`, and runtime dependencies with
+Bun 1.4 or newer. Flags `--hostname` and `--port` override `HOST` and `PORT`; defaults are
+`localhost` and `18193`.
 
-The Promise resolves when ready; startup failures reject and exit. ERSC owns signal handling
-and cleanup, so do not wrap it in `BunRuntime.runMain`.
+For a custom Bun entry, await `start({ root, hostname, port })` from `effective-rsc/server`.
+All options are required; `root` is the application directory. The Promise resolves when ready.
+Startup failures reject and exit. ERSC handles signals and cleanup; do not wrap it in
+`BunRuntime.runMain`.
 
 ### Deployment adapters
 
-`ersc build --adapter <package>` runs an installed adapter after compilation; it does not upload.
-Without the flag, packaging is skipped and previous output remains.
+`ersc build --adapter <package>` packages the build using an installed adapter. It does not upload;
+follow the deployment provider's setup. Omitting `--adapter` skips packaging and leaves any previous
+adapter output in place.
 
-Adapters export `build: BuildHook` from `./build`, with types from `effective-rsc/build`.
-The hook receives absolute `root`, `serverDir`, `clientDir`, and `publicDir` paths and returns
-`Effect<void, Error, Scope>`. Inputs are read-only; adapters provide dependencies and ERSC owns
-cleanup/cancellation. Failures stop the build.
+Adapter authors can use the [framework build contract](https://github.com/nikhilsnayak/effective-rsc/blob/main/docs/architecture/build.md#deployment-adapters).
 
 <!-- source-navigation -->
 

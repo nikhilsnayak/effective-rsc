@@ -1,7 +1,7 @@
 /**
  * @title Reading a Server Function from the browser
  *
- * `queryAtom` reads without refreshing the route; an unexpected failure arrives as `ServerFnError`.
+ * `queryAtom` exposes the author lookup as atom state, with typed results and `ServerFnError` failures.
  */
 'use client';
 
@@ -20,7 +20,7 @@ const describe = (cause: Cause.Cause<ServerFnError>) => {
     case 'ServerFnInputError':
       return `The lookup was rejected: ${error.detail.message}`;
     case 'ServerFnTransportError':
-      return 'The lookup could not reach the server.';
+      return 'The lookup request could not complete.';
     case 'ServerFnDefect':
       return `The lookup failed. Reference ${error.digest}.`;
     default:

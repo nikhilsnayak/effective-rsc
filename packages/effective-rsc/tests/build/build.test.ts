@@ -4,13 +4,13 @@ import rspack from '@rspack/core';
 import { ReactRefreshRspackPlugin } from '@rspack/plugin-react-refresh';
 import { Effect, Path } from 'effect';
 
+import PackageJson from '../../package.json' with { type: 'json' };
 import { resolveApplicationBuild } from '../../src/build/build';
 import { BuildServerBundlePath } from '../../src/build/contract';
 import {
   externalizeServerModule,
   makeRspackBuildConfig,
   makeRspackDevConfig,
-  guardBrowserModule,
 } from '../../src/build/rspack-config';
 
 const BuildModuleUrl = new URL('file:///framework/dist/build/build.js');
@@ -265,41 +265,81 @@ it.effect('keeps development candidates immutable until they are published', () 
   }).pipe(Effect.provide(Path.layer)),
 );
 
-const reactTransformOptions = (config: Configuration) => {
-  const rules = config.module?.rules as
-    | ReadonlyArray<{
-        readonly use?: ReadonlyArray<{
-          readonly loader?: string;
-          readonly options?: {
-            readonly jsc?: {
-              readonly transform?: {
-                readonly react?: { readonly refresh?: boolean };
-                readonly reactCompiler?: unknown;
-              };
-            };
-          };
-        }>;
-      }>
-    | undefined;
+type SwcUseItem = {
+  readonly loader?: string;
+  readonly options?: {
+    readonly jsc?: {
+      readonly transform?: {
+        readonly react?: { readonly refresh?: boolean };
+        readonly reactCompiler?: unknown;
+      };
+    };
+  };
+};
 
-  for (const rule of rules ?? []) {
-    for (const use of rule.use ?? []) {
-      if (use.loader === 'builtin:swc-loader') {
-        return use.options?.jsc?.transform;
-      }
+type SwcUseFunction = (data: {
+  readonly resource?: string | undefined;
+}) => ReadonlyArray<SwcUseItem>;
+
+const reactTransformOptions = (config: Configuration, resource: string | undefined) => {
+  for (const rule of (config.module?.rules ?? []) as ReadonlyArray<{ readonly use?: unknown }>) {
+    const items =
+      typeof rule.use === 'function'
+        ? (rule.use as SwcUseFunction)({ resource })
+        : ((rule.use ?? []) as ReadonlyArray<SwcUseItem>);
+    const swc = items.find((item) => item.loader === 'builtin:swc-loader');
+    if (swc !== undefined) {
+      return swc.options?.jsc?.transform;
     }
   }
 
   return undefined;
 };
 
+const ApplicationSource = '/workspace/src/modules/feed/feed-panel.tsx';
+const DependencySource = '/workspace/node_modules/@effect/atom-react/dist/Hooks.js';
+
 it.effect('keeps the React Compiler out of the server compilation', () =>
   Effect.gen(function* () {
     const { applicationRoot, entries } = yield* resolveFixtureBuild('/workspace');
     const configs = makeRspackBuildConfig(applicationRoot, entries);
 
-    expect(reactTransformOptions(configNamed(configs, 'client'))?.reactCompiler).toBe(true);
-    expect(reactTransformOptions(configNamed(configs, 'server'))?.reactCompiler).toBeUndefined();
+    expect(
+      reactTransformOptions(configNamed(configs, 'client'), ApplicationSource)?.reactCompiler,
+    ).toBe(true);
+    expect(
+      reactTransformOptions(configNamed(configs, 'server'), ApplicationSource)?.reactCompiler,
+    ).toBeUndefined();
+  }).pipe(Effect.provide(Path.layer)),
+);
+
+it.effect('limits the React Compiler to application src in production and development', () =>
+  Effect.gen(function* () {
+    const { applicationRoot, entries } = yield* resolveFixtureBuild('/workspace');
+    const clients = [
+      configNamed(makeRspackBuildConfig(applicationRoot, entries), 'client'),
+      configNamed(makeRspackDevConfig(applicationRoot, entries), 'client'),
+    ];
+    const dependencies = [
+      DependencySource,
+      // Workspace symlinks resolve to real paths outside node_modules.
+      '/framework/dist/client/application.js',
+      '/packages/shared-ui/src/button.tsx',
+      '/workspace/src-shared/button.tsx',
+      '/workspace-other/src/button.tsx',
+      '/workspace/src/node_modules/local-package/index.js',
+    ];
+
+    for (const client of clients) {
+      expect(reactTransformOptions(client, ApplicationSource)?.reactCompiler).toBe(true);
+      for (const dependency of dependencies) {
+        expect(
+          reactTransformOptions(client, dependency)?.reactCompiler,
+          dependency,
+        ).toBeUndefined();
+      }
+      expect(reactTransformOptions(client, undefined)?.reactCompiler).toBeUndefined();
+    }
   }).pipe(Effect.provide(Path.layer)),
 );
 
@@ -313,10 +353,10 @@ it.effect('enables HMR and React Refresh only in the development browser graph',
     const devClient = configNamed(devConfigs, 'client');
     const devServer = configNamed(devConfigs, 'server');
 
-    expect(reactTransformOptions(devClient)?.react?.refresh).toBe(true);
-    expect(reactTransformOptions(devServer)?.react?.refresh).toBe(false);
-    expect(reactTransformOptions(buildClient)?.react?.refresh).toBe(false);
-    expect(reactTransformOptions(buildServer)?.react?.refresh).toBe(false);
+    expect(reactTransformOptions(devClient, ApplicationSource)?.react?.refresh).toBe(true);
+    expect(reactTransformOptions(devServer, ApplicationSource)?.react?.refresh).toBe(false);
+    expect(reactTransformOptions(buildClient, ApplicationSource)?.react?.refresh).toBe(false);
+    expect(reactTransformOptions(buildServer, ApplicationSource)?.react?.refresh).toBe(false);
     expect(devClient.plugins).toEqual(
       expect.arrayContaining([
         expect.any(rspack.HotModuleReplacementPlugin),
@@ -340,46 +380,40 @@ it.effect('enables HMR and React Refresh only in the development browser graph',
   }).pipe(Effect.provide(Path.layer)),
 );
 
-it('externalizes Bun and Effect modules for the server graph', () => {
+it('externalizes Bun builtins and Effect for the server graph', () => {
   expect(externalizeServerModule({ request: 'bun:sqlite' })).toBe('module bun:sqlite');
   expect(externalizeServerModule({ request: 'bun:test' })).toBe('module bun:test');
   expect(externalizeServerModule({ request: 'effect' })).toBe('module effect');
   expect(externalizeServerModule({ request: 'effect/Schema' })).toBe('module effect/Schema');
-  expect(externalizeServerModule({ request: '@effect/platform-bun/BunHttpServer' })).toBe(
-    'module @effect/platform-bun/BunHttpServer',
+  expect(externalizeServerModule({ request: 'effect/unstable/sql/Migrator' })).toBe(
+    'module effect/unstable/sql/Migrator',
   );
-  expect(externalizeServerModule({ request: 'effective-rsc' })).toBe(false);
-  expect(externalizeServerModule({ request: '@effectual/core' })).toBe(false);
-  expect(externalizeServerModule({ request: 'node:path' })).toBe(false);
+});
+
+it('bundles every other dependency, including the remaining peers', () => {
+  const bundled = [
+    ...Object.keys(PackageJson.peerDependencies).filter((name) => name !== 'effect'),
+    '@effect/atom-react',
+    '@effect/atom-react/Hooks',
+    '@effect/sql-sqlite-bun',
+    'effective-rsc',
+    '@effectual/core',
+    'node:path',
+  ];
+
+  for (const request of bundled) {
+    expect(externalizeServerModule({ request })).toBe(false);
+  }
+
   expect(externalizeServerModule({})).toBe(false);
 });
 
-it('rejects Bun-only modules reaching the browser graph and points at the boundary', () => {
-  expect(() => guardBrowserModule({ request: 'bun:sqlite' })).toThrowError(TypeError);
-  expect(() => guardBrowserModule({ request: 'bun:sqlite' })).toThrow(
-    '"bun:sqlite" runs only on Bun and cannot enter the browser module graph.',
-  );
-  expect(() => guardBrowserModule({ request: '@effect/platform-bun' })).toThrow(
-    '"@effect/platform-bun" runs only on Bun and cannot enter the browser module graph.',
-  );
-  expect(() => guardBrowserModule({ request: '@effect/platform-bun/BunHttpServer' })).toThrow(
-    '"@effect/platform-bun/BunHttpServer" runs only on Bun and cannot enter the browser module graph.',
-  );
-  expect(() => guardBrowserModule({ request: 'bun:sqlite' })).toThrow(
-    /Move the import behind a Server Component, Layout, Page, or ServerFn boundary/,
-  );
-  expect(guardBrowserModule({ request: 'effect' })).toBe(false);
-  expect(guardBrowserModule({ request: '@effect/platform-browser' })).toBe(false);
-  expect(guardBrowserModule({ request: 'node:path' })).toBe(false);
-  expect(guardBrowserModule({})).toBe(false);
-});
-
-it.effect('wires the browser rejection and server externalization into their owning graphs', () =>
+it.effect('externalizes only in the server graph', () =>
   Effect.gen(function* () {
     const { applicationRoot, entries } = yield* resolveFixtureBuild('/workspace');
     const configs = makeRspackBuildConfig(applicationRoot, entries);
 
-    expect(configNamed(configs, 'client').externals).toEqual([guardBrowserModule]);
+    expect(configNamed(configs, 'client').externals).toBeUndefined();
     expect(configNamed(configs, 'server').externals).toEqual([externalizeServerModule]);
   }).pipe(Effect.provide(Path.layer)),
 );

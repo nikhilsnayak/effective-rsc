@@ -1,6 +1,12 @@
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 
-import rspack, { type Compiler, type Configuration, type RuleSetRule } from '@rspack/core';
+import rspack, {
+  type Compiler,
+  type Configuration,
+  type RuleSetRule,
+  type RuleSetUseItem,
+} from '@rspack/core';
 import { ReactRefreshRspackPlugin } from '@rspack/plugin-react-refresh';
 
 import PackageJson from '../../package.json' with { type: 'json' };
@@ -29,6 +35,7 @@ const require = createRequire(import.meta.url);
 const TailwindLoaderPath = require.resolve('@tailwindcss/webpack');
 const IgnoreCssLoaderPath = require.resolve('./ignore-css-loader.js');
 const CacheDirectory = 'node_modules/.cache/ersc/rspack';
+const ConfigModulePath = fileURLToPath(import.meta.url);
 
 const SupportedBrowserTargets = ['chrome >= 141', 'edge >= 141', 'firefox >= 147'] as const;
 
@@ -41,10 +48,7 @@ const FontPattern = /\.(?:eot|otf|ttc|ttf|woff2?)$/;
 const MediaPattern = /\.(?:aac|flac|m4a|mov|mp3|mp4|ogg|opus|vtt|wav|webm)$/;
 
 const BunModulePrefix = 'bun:';
-const BunPlatformPackage = '@effect/platform-bun';
-const EffectModuleName = 'effect';
-const EffectModulePrefix = `${EffectModuleName}/`;
-const EffectPackagePrefix = '@effect/';
+const ServerExternalPackages: ReadonlyArray<string> = ['effect'];
 
 export type ExternalsRequest = {
   readonly request?: string;
@@ -53,63 +57,78 @@ export type ExternalsRequest = {
 const isBunModule = (request: string | undefined): request is string =>
   request !== undefined && request.startsWith(BunModulePrefix);
 
-const isBunPlatformModule = (request: string | undefined): request is string =>
-  request === BunPlatformPackage || request?.startsWith(`${BunPlatformPackage}/`) === true;
-
-const isEffectModule = (request: string | undefined): request is string =>
-  request === EffectModuleName ||
-  request?.startsWith(EffectModulePrefix) === true ||
-  request?.startsWith(EffectPackagePrefix) === true;
+const isServerExternalPackage = (request: string | undefined): request is string =>
+  request !== undefined &&
+  ServerExternalPackages.some((name) => request === name || request.startsWith(`${name}/`));
 
 export const externalizeServerModule = ({ request }: ExternalsRequest): string | false =>
-  isBunModule(request) || isEffectModule(request) ? `module ${request}` : false;
+  isBunModule(request) || isServerExternalPackage(request) ? `module ${request}` : false;
 
-export const guardBrowserModule = ({ request }: ExternalsRequest): false => {
-  if (isBunModule(request) || isBunPlatformModule(request)) {
-    throw new TypeError(
-      `"${request}" runs only on Bun and cannot enter the browser module graph. Move the import behind a Server Component, Layout, Page, or ServerFn boundary so it stays in the server graph.`,
-    );
-  }
+const NodeModulesPattern = /[\\/]node_modules[\\/]/;
+const SourcePattern = /\.(?:js|jsx|mjs|cjs|ts|tsx|mts|cts)$/;
 
-  return false;
-};
+const isApplicationSource = (
+  sourceRoot: string,
+  resource: string | undefined,
+): resource is string =>
+  resource !== undefined &&
+  resource.replaceAll('\\', '/').startsWith(sourceRoot) &&
+  !NodeModulesPattern.test(resource);
 
-const makeSwcRule = (target: 'browser' | 'server', mode: Environment): RuleSetRule => ({
-  test: /\.(?:js|jsx|mjs|cjs|ts|tsx|mts|cts)$/,
-  type: 'javascript/auto',
-  use: [
-    {
-      loader: 'builtin:swc-loader',
-      options: {
-        collectTypeScriptInfo: {
-          exportedEnum: mode === 'production',
-          typeExports: true,
+const makeSwcLoader = (
+  target: 'browser' | 'server',
+  mode: Environment,
+  reactCompiler: boolean,
+): RuleSetUseItem => ({
+  loader: 'builtin:swc-loader',
+  options: {
+    collectTypeScriptInfo: {
+      exportedEnum: mode === 'production',
+      typeExports: true,
+    },
+    detectSyntax: 'auto',
+    isModule: 'unknown',
+    jsc: {
+      experimental: {
+        keepImportAttributes: true,
+      },
+      parser: {
+        decorators: true,
+      },
+      transform: {
+        react: {
+          development: mode === 'development',
+          refresh: target === 'browser' && mode === 'development',
+          runtime: 'automatic',
         },
-        detectSyntax: 'auto',
-        isModule: 'unknown',
-        jsc: {
-          experimental: {
-            keepImportAttributes: true,
-          },
-          parser: {
-            decorators: true,
-          },
-          transform: {
-            react: {
-              development: mode === 'development',
-              refresh: target === 'browser' && mode === 'development',
-              runtime: 'automatic',
-            },
-            ...(target === 'browser' ? { reactCompiler: true } : {}),
-          },
-        },
-        rspackExperiments: {
-          reactServerComponents: true,
-        },
+        ...(reactCompiler ? { reactCompiler: true } : {}),
       },
     },
-  ],
+    rspackExperiments: {
+      reactServerComponents: true,
+    },
+  },
 });
+
+const makeSwcRule = (
+  root: string,
+  target: 'browser' | 'server',
+  mode: Environment,
+): RuleSetRule => {
+  const plain = [makeSwcLoader(target, mode, false)];
+  if (target === 'server') {
+    return { test: SourcePattern, type: 'javascript/auto', use: plain };
+  }
+
+  const compiled = [makeSwcLoader(target, mode, true)];
+  // Rspack resolves workspace symlinks outside node_modules. Include only this app's source tree.
+  const sourceRoot = `${root.replaceAll('\\', '/').replace(/\/$/, '')}/src/`;
+  return {
+    test: SourcePattern,
+    type: 'javascript/auto',
+    use: ({ resource }) => (isApplicationSource(sourceRoot, resource) ? compiled : plain),
+  };
+};
 
 const makeCssRule = (root: string, mode: Environment): RuleSetRule => ({
   test: /\.css$/i,
@@ -146,7 +165,7 @@ const makeIgnoredCssRule = (): RuleSetRule => ({
 // Development only: a production build starts cold in CI, where writing a cache costs more than it
 // saves. Rspack separates caches by compiler name and mode but cannot see these inputs change.
 const makeCache = (root: string): NonNullable<Configuration['cache']> => ({
-  buildDependencies: [`${root}/package.json`, `${root}/tsconfig.json`],
+  buildDependencies: [ConfigModulePath, `${root}/package.json`, `${root}/tsconfig.json`],
   storage: {
     directory: `${root}/${CacheDirectory}`,
     type: 'filesystem',
@@ -195,7 +214,6 @@ const makeRspackConfig = (
       // The RSC client plugin sets `watchOptions.ignored` to a function the native watcher rejects.
       nativeWatcher: false,
     },
-    externals: [guardBrowserModule],
     infrastructureLogging: {
       level: 'error',
     },
@@ -209,7 +227,7 @@ const makeRspackConfig = (
       rules: [
         makeAssetRule('browser', mode),
         makeCssRule(root, mode),
-        makeSwcRule('browser', mode),
+        makeSwcRule(root, 'browser', mode),
       ],
     },
     name: 'client',
@@ -277,7 +295,7 @@ const makeRspackConfig = (
       rules: [
         makeAssetRule('server', mode),
         makeIgnoredCssRule(),
-        makeSwcRule('server', mode),
+        makeSwcRule(root, 'server', mode),
         {
           resource: entries.rsc,
           layer: Layers.rsc,

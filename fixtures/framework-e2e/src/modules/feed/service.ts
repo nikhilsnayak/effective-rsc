@@ -24,9 +24,19 @@ export class FeedService extends Context.Service<FeedService>()(
       let interrupted = 0;
       let started = 0;
       const log: Array<string> = [];
+      const streamLog: Array<string> = [];
 
       return {
-        counters: Effect.sync(() => ({ interrupted, log: [...log], started })),
+        counters: Effect.sync(() => ({
+          interrupted,
+          log: [...log],
+          started,
+          streamLog: [...streamLog],
+        })),
+        recordStreamEvent: (event: 'producer finalized' | 'request released') =>
+          Effect.sync(() => {
+            streamLog.push(event);
+          }),
         search: Effect.fnUntraced(function* ({ cursor, latencyMillis, term }: FeedSearch) {
           started += 1;
           yield* Effect.sleep(`${latencyMillis} millis`).pipe(

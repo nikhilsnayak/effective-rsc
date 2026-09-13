@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, type Scope } from 'effect';
 import { HttpServerRequest } from 'effect/unstable/http';
 import { decodeAction, decodeFormState } from 'react-server-dom-rspack/server.node';
 
@@ -17,7 +17,11 @@ import {
 import { serverFnResponse } from './response';
 
 export type PreparedServerFnMutation<ApplicationServices> = {
-  readonly execute: Effect.Effect<RequestOutcome, ServerFnRequestError, ApplicationServices>;
+  readonly execute: Effect.Effect<
+    RequestOutcome,
+    ServerFnRequestError,
+    ApplicationServices | Scope.Scope
+  >;
   readonly middleware: ReadonlyArray<AnyMiddleware<ApplicationServices>>;
 };
 

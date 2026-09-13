@@ -4,6 +4,7 @@ import { renderToReadableStream } from 'react-server-dom-rspack/server.node';
 
 import type { AnyMiddleware } from '../application/middleware';
 import type { RenderRuntimeContext } from '../application/render-runtime';
+import { nextErrorDigest } from './error-digest';
 
 type FlightStream = ReadableStream<Uint8Array>;
 
@@ -30,6 +31,7 @@ export class FlightRenderer extends Context.Service<FlightRenderer>()(
         renderRuntime,
         temporaryReferences,
       }: FlightRenderOptions<Services>) {
+        const errorDigest = yield* nextErrorDigest;
         const parentScope = yield* Effect.scope;
         const renderScope = yield* Scope.fork(parentScope);
         const release = Scope.close(renderScope, Exit.void);
@@ -42,8 +44,12 @@ export class FlightRenderer extends Context.Service<FlightRenderer>()(
             renderToReadableStream(model, {
               onError: (error) => {
                 if (!signal.aborted) {
-                  void runtime(Effect.logError(error));
+                  void runtime(
+                    Effect.logError(error).pipe(Effect.annotateLogs('errorDigest', errorDigest)),
+                  );
                 }
+
+                return errorDigest;
               },
               signal,
               temporaryReferences,

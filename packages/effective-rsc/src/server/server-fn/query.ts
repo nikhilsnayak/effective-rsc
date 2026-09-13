@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, type Scope } from 'effect';
 import { HttpServerRequest } from 'effect/unstable/http';
 import type { TemporaryReferenceSet } from 'react-server-dom-rspack/server.node';
 
@@ -20,7 +20,11 @@ export type ServerFnQueryOutcome = {
 };
 
 export type PreparedServerFnQuery<ApplicationServices> = {
-  readonly execute: Effect.Effect<ServerFnQueryOutcome, ServerFnRequestError, ApplicationServices>;
+  readonly execute: Effect.Effect<
+    ServerFnQueryOutcome,
+    ServerFnRequestError,
+    ApplicationServices | Scope.Scope
+  >;
   readonly middleware: ReadonlyArray<AnyMiddleware<ApplicationServices>>;
 };
 

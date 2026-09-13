@@ -1,4 +1,4 @@
-import { Array, Effect, Predicate, Schema } from 'effect';
+import { Array, Effect, Predicate, Schema, Stream } from 'effect';
 
 import { ServerFnInputError } from '../rsc/server-fn-error';
 import { attachERSCMember, type ERSCIdentity, type ERSCMember } from './ersc-identity';
@@ -38,12 +38,18 @@ type ServerFnArguments<Input, Side extends 'Type' | 'Encoded'> =
       ? [Input[Side]]
       : never;
 
+type ServerFnWireValue<Output> = [Output] extends [never]
+  ? Output
+  : [Output] extends [Stream.Stream<infer Value, infer _Error, infer _Services>]
+    ? ReadableStream<Value>
+    : Output;
+
 interface ServerFunction<
   Args extends ReadonlyArray<unknown>,
   Output,
   ApplicationServices,
 > extends ERSCMember<ApplicationServices, 'ServerFn'> {
-  (...args: Args): Promise<Output>;
+  (...args: Args): Promise<ServerFnWireValue<Output>>;
 }
 
 type ServerFnOptions<Input, Output, Services> = {
@@ -53,11 +59,34 @@ type ServerFnOptions<Input, Output, Services> = {
   ) => Effect.Effect<Output, never, Services>;
 };
 
+type ValidateServerFnOutput<Output, Services> = [Output] extends [never]
+  ? unknown
+  : [Output] extends [Stream.Stream<infer _Value, infer Error, infer Requirements>]
+    ? [Error] extends [never]
+      ? [Requirements] extends [Services]
+        ? unknown
+        : {
+            readonly 'A streaming Server Function must fit the ERSC service universe': never;
+          }
+      : {
+          readonly 'A streaming Server Function must drive its Stream error channel to never': never;
+        }
+    : [Extract<Output, Stream.Stream<unknown, unknown, unknown>>] extends [never]
+      ? unknown
+      : {
+          readonly 'A Server Function cannot mix Stream and non-stream return values': never;
+        };
+
 export type ServerFnFactory<ApplicationServices, AvailableServices> = {
   readonly make: <const Input extends ServerFnInput<AvailableServices>, Output>(
-    options: ServerFnOptions<Input, Output, AvailableServices>,
+    options: ServerFnOptions<Input, Output, AvailableServices> &
+      ValidateServerFnOutput<Output, AvailableServices>,
   ) => ServerFunction<ServerFnArguments<Input, 'Encoded'>, Output, ApplicationServices>;
 };
+
+export const isServerFnStream = <Services>(
+  output: unknown,
+): output is Stream.Stream<unknown, never, Services> => Stream.isStream(output);
 
 const directInvocationError = () =>
   new TypeError(
@@ -106,7 +135,8 @@ export const makeServerFnFactory = <ApplicationServices, AvailableServices>(
           handler(...(args as ServerFnArguments<typeof input, 'Type'>)),
         ),
       );
-      const unavailable = Promise.reject<Effect.Success<typeof effect>>(directInvocationError());
+      const unavailable =
+        Promise.reject<ServerFnWireValue<Effect.Success<typeof effect>>>(directInvocationError());
       void unavailable.catch(() => undefined);
 
       return Object.assign(unavailable, {

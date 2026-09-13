@@ -2,18 +2,75 @@
 
 // oxlint-disable effecttsgo/async-function -- React Transition Actions are native Promise boundaries.
 
+import { useAtom } from '@effect/atom-react';
+import { Cause, Option } from 'effect';
+import { AsyncResult } from 'effect/unstable/reactivity';
+import { ServerFn, type ServerFnError } from 'effective-rsc/client';
 import { RotateCcw, ScanLine, UserCheck } from 'lucide-react';
-import { startTransition, useActionState, useRef } from 'react';
+import { startTransition, useActionState, useRef, useState } from 'react';
 
 import { RevealTransition } from '@/components/navigation-transition';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import type { CheckInMutationState } from '@/modules/check-in/server-functions';
-import { mutateCheckIn } from '@/modules/check-in/server-functions';
+import { lookupTicket, mutateCheckIn } from '@/modules/check-in/server-functions';
+
+const ticketPreview = ServerFn.queryAtom(lookupTicket);
+
+const describeLookupFailure = (cause: Cause.Cause<ServerFnError>) => {
+  const error = Option.getOrUndefined(Cause.findErrorOption(cause));
+  switch (error?._tag) {
+    case 'ServerFnInputError':
+      return `That ticket code was rejected: ${error.detail.message}`;
+    case 'ServerFnTransportError':
+      return 'Preview could not reach the server.';
+    case 'ServerFnDefect':
+      return error.detail === null
+        ? `Preview failed. Quote reference ${error.digest} to support.`
+        : `Preview failed: ${error.detail.message}`;
+    default:
+      return 'Preview failed.';
+  }
+};
+
+function TicketPreview({
+  eventId,
+  ticketCode,
+}: {
+  readonly eventId: string;
+  readonly ticketCode: string;
+}) {
+  const [preview, lookup] = useAtom(ticketPreview);
+
+  return (
+    <div className='mt-3'>
+      <Button
+        disabled={ticketCode.trim() === ''}
+        onClick={() => lookup([{ eventId, ticketCode: ticketCode.trim() }])}
+        size='sm'
+        type='button'
+        variant='outline'
+      >
+        Preview holder
+      </Button>
+      <p aria-live='polite' className='text-muted-foreground mt-2 text-sm'>
+        {AsyncResult.match(preview, {
+          onInitial: () => 'Preview a credential before committing the check-in.',
+          onSuccess: ({ value }) =>
+            value._tag === 'Found'
+              ? `${value.ticket.holderName} — ${value.ticket.ticketTypeName}`
+              : value.message,
+          onFailure: ({ cause }) => describeLookupFailure(cause),
+        })}
+      </p>
+    </div>
+  );
+}
 
 export function CheckInScanner({ eventId }: { readonly eventId: string }) {
   const input = useRef<HTMLInputElement>(null);
+  const [ticketCode, setTicketCode] = useState('');
   const [state, submit, pending] = useActionState<CheckInMutationState | null, FormData>(
     async (previousState, form) => {
       const result = await mutateCheckIn(previousState, form);
@@ -54,9 +111,11 @@ export function CheckInScanner({ eventId }: { readonly eventId: string }) {
             className='font-mono uppercase'
             id='ticket-code'
             name='ticketCode'
+            onChange={(event) => setTicketCode(event.target.value)}
             placeholder='GTH-…'
             ref={input}
             required
+            value={ticketCode}
           />
         </Field>
         <Button disabled={pending} type='submit'>
@@ -64,6 +123,8 @@ export function CheckInScanner({ eventId }: { readonly eventId: string }) {
           {pending ? 'Checking…' : 'Check in'}
         </Button>
       </form>
+
+      <TicketPreview eventId={eventId} ticketCode={ticketCode} />
 
       {state ? (
         <RevealTransition>

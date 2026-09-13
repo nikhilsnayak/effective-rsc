@@ -64,17 +64,10 @@ export class CheckInService extends Context.Service<CheckInService>()(
           staffUserId: string,
           eventId: string,
           ticketCode: string,
-        ): Effect.fn.Return<
-          CheckInResult,
-          | CheckInAccessDenied
-          | CheckInConcurrentUpdate
-          | CheckInCredentialNotFound
-          | CheckInTicketCancelled
-          | CheckInUnavailable
-        > {
+        ) {
           const ticket = yield* credential(staffUserId, eventId, ticketCode);
           if (ticket.status === 'checked_in') {
-            return { ticket, _tag: 'AlreadyCheckedIn' };
+            return { ticket, _tag: 'AlreadyCheckedIn' } as const;
           }
           if (ticket.status === 'cancelled') {
             return yield* new CheckInTicketCancelled({ ticketCode });
@@ -96,7 +89,7 @@ export class CheckInService extends Context.Service<CheckInService>()(
             return yield* new CheckInConcurrentUpdate({ ticketCode });
           }
 
-          return { ticket: { ...ticket, status: 'checked_in' }, _tag: 'CheckedIn' };
+          return { ticket: { ...ticket, status: 'checked_in' }, _tag: 'CheckedIn' } as const;
         }),
         console: Effect.fn('CheckInService.console')(function* (
           staffUserId: string,
@@ -108,6 +101,13 @@ export class CheckInService extends Context.Service<CheckInService>()(
             .pipe(unavailable('load check-in activity'));
 
           return { audit, event } satisfies CheckInConsole;
+        }),
+        lookup: Effect.fn('CheckInService.lookup')(function* (
+          staffUserId: string,
+          eventId: string,
+          ticketCode: string,
+        ) {
+          return yield* credential(staffUserId, eventId, ticketCode);
         }),
         undo: Effect.fn('CheckInService.undo')(function* (
           staffUserId: string,

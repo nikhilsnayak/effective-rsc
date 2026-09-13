@@ -39,3 +39,26 @@ test('checks in a credential and reverses the operation', async ({ page }) => {
 
   expect(browserErrors).toEqual([]);
 });
+
+test('previews a credential over a query and reports a rejected code', async ({ page }) => {
+  const browserErrors = observeBrowserErrors(page);
+
+  await page.goto('/organizer/check-in/event-effect-systems-summit-2026');
+  await expect(
+    page.getByText('Preview a credential before committing the check-in.'),
+  ).toBeVisible();
+
+  await page.getByLabel('Ticket code').fill('GTH-DEMOADA0001');
+  await page.getByRole('button', { name: 'Preview holder' }).click();
+  await expect(page.getByText('Ada Lovelace —')).toBeVisible();
+
+  await page.getByLabel('Ticket code').fill('GTH-MISSING');
+  await page.getByRole('button', { name: 'Preview holder' }).click();
+  await expect(page.getByText('No ticket matches GTH-MISSING for this event.')).toBeVisible();
+
+  await expect(
+    page.getByText('Arrived', { exact: true }).locator('..').getByText('0', { exact: true }),
+  ).toBeVisible();
+
+  expect(browserErrors).toEqual([]);
+});

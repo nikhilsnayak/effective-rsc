@@ -3,6 +3,11 @@
 import { Effect, Schema } from 'effect';
 
 import { CheckInTicket } from '@/modules/check-in/model';
+import type {
+  CheckInAccessDenied,
+  CheckInCredentialNotFound,
+  CheckInUnavailable,
+} from '@/modules/check-in/model';
 import { type CheckInError, type CheckInResult, CheckInService } from '@/modules/check-in/service';
 import { CurrentOrganizer, OrganizerERSC } from '@/modules/organizer/current-organizer';
 
@@ -92,5 +97,43 @@ export const mutateCheckIn = OrganizerERSC.ServerFn.make({
       return yield* execute(service.checkIn(userId, eventId, ticketCode));
     }
     return yield* execute(service.undo(userId, eventId, ticketCode));
+  }),
+});
+
+const TicketLookupInput = Schema.Struct({
+  eventId: Schema.NonEmptyString,
+  ticketCode: Schema.String.check(Schema.isTrimmed(), Schema.isMinLength(1)),
+});
+
+export type TicketLookupState =
+  | { readonly _tag: 'Found'; readonly ticket: CheckInTicket }
+  | { readonly _tag: 'Rejected'; readonly message: string };
+
+const lookupFailureState = (
+  error: CheckInAccessDenied | CheckInCredentialNotFound | CheckInUnavailable,
+): TicketLookupState => {
+  switch (error._tag) {
+    case '@effective-rsc/example-event-platform/check-in/CheckInCredentialNotFound':
+      return { _tag: 'Rejected', message: `No ticket matches ${error.ticketCode} for this event.` };
+    case '@effective-rsc/example-event-platform/check-in/CheckInAccessDenied':
+      return {
+        _tag: 'Rejected',
+        message: 'Your staff identity cannot preview credentials for this event.',
+      };
+    case '@effective-rsc/example-event-platform/check-in/CheckInUnavailable':
+      return { _tag: 'Rejected', message: `Preview is unavailable while we ${error.operation}.` };
+  }
+};
+
+export const lookupTicket = OrganizerERSC.ServerFn.make({
+  input: TicketLookupInput,
+  handler: Effect.fn('lookupTicket')(function* ({ eventId, ticketCode }) {
+    const { userId } = yield* CurrentOrganizer;
+    const service = yield* CheckInService;
+
+    return yield* service.lookup(userId, eventId, ticketCode).pipe(
+      Effect.map((ticket): TicketLookupState => ({ _tag: 'Found', ticket })),
+      Effect.catch((error) => Effect.succeed(lookupFailureState(error))),
+    );
   }),
 });

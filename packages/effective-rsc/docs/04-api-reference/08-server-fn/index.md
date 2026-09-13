@@ -53,11 +53,17 @@ action to `<form action>`. React supplies previous state and FormData for hydrat
 submissions. Previous state is client input: validate it, but never trust it for authorization or
 authoritative application state. Native `.bind` can prefill leading arguments.
 
-Direct server invocation throws. Encode expected failure in a discriminated output union; unexpected
-failures reject the Promise. Browser requests require an Origin matching the application host and
-may contain at most 10 MiB. See the
+The handler's Effect error channel is `never`; model expected outcomes in its success value.
+Anything else reaches the caller as one of three framework errors: `ServerFnInputError` when the
+arguments failed the input Schema, carrying the validation message; `ServerFnDefect` when the
+handler failed, carrying a digest that matches the server log plus the failure's name and message in
+development; and `ServerFnTransportError` when the request never completed. Promise callers see a
+rejection; queries see them in the Effect error channel.
+
+Direct server invocation throws. Browser requests require an Origin matching the application host
+and may contain at most 10 MiB. See the
 [known limitations](https://github.com/nikhilsnayak/effective-rsc/blob/main/docs/ARCHITECTURE.md#known-limitations)
-for the typed failure channel and progressive bound arguments.
+for the encoded failure shape and progressive bound arguments.
 
 <!-- source-navigation -->
 

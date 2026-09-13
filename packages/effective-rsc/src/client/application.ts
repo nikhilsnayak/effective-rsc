@@ -7,7 +7,6 @@ import { BrowserEffectRunner } from './browser-effect-runner';
 import { BrowserRenderStatus } from './browser-render-status';
 import { BrowserRenderer } from './browser-renderer';
 import { showBrowserFailure } from './browser-screen';
-import { installCallServer } from './call-server';
 import { installClientRouter } from './client-router';
 import { FlightClient } from './flight-client';
 import { InitialFlightStream } from './initial-flight-stream';
@@ -15,6 +14,7 @@ import { NavigationApi } from './navigation-api';
 import { ReactDOMRenderer } from './react-dom-renderer';
 import { RouteLoader } from './route-loader';
 import { installRouteRefresh, RouteRefresher } from './route-refresh';
+import { installCallServer } from './server-fn/call-server';
 
 const BrowserServicesLayer = Layer.mergeAll(
   BrowserEffectRunner.layer,
@@ -36,8 +36,8 @@ const activateBrowser = Effect.gen(function* () {
   const routeLoader = yield* RouteLoader;
   const reactDOMRenderer = yield* ReactDOMRenderer;
 
-  const initialPayload = yield* routeLoader.loadInitial;
-  yield* reactDOMRenderer.hydrate(document, initialPayload);
+  const initialModel = yield* routeLoader.loadInitial;
+  yield* reactDOMRenderer.hydrate(document, initialModel);
   yield* installRouteRefresh;
   yield* installCallServer;
   const mode = yield* navigationMode;

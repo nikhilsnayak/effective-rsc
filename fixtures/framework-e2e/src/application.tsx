@@ -4,6 +4,8 @@ import { HttpRouter } from 'effect/unstable/http';
 
 import { ERSC } from '@/ersc';
 import { catalogRoutes } from '@/modules/catalog/routes';
+import { FeedHttpLayer } from '@/modules/feed/http';
+import { FeedService } from '@/modules/feed/service';
 import { FixtureHomePage } from '@/modules/fixture/components/fixture-home';
 import FixtureShell from '@/modules/fixture/components/fixture-shell';
 import { QueryControl, QueryControlHttpLayer } from '@/modules/fixture/query-control';
@@ -23,10 +25,15 @@ const PublicHttpLayer = HttpRouter.cors({
   allowedOrigins: ['https://app.effective-rsc.example'],
 });
 const ApplicationLayer = Layer.mergeAll(
+  FeedHttpLayer,
   SelectionHttpLayer,
   PublicHttpLayer,
   QueryControlHttpLayer,
-).pipe(Layer.provideMerge(FixtureLayer), Layer.provide(QueryControl.layer));
+).pipe(
+  Layer.provideMerge(FixtureLayer),
+  Layer.provideMerge(FeedService.layer),
+  Layer.provide(QueryControl.layer),
+);
 
 export default ERSC.make({
   routes: ERSC.Routes.make({ layout: FixtureShell })

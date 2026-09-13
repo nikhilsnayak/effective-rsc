@@ -5,6 +5,9 @@ Under the `react-server` condition, the package root exports `Application`.
 `Routes`, `ServerFn`, `withMiddleware`, and `make`. Values from different ERSC identities cannot
 be composed.
 
+`effective-rsc/client` is the entry point for Client Components and exports `ServerFn` query
+helpers.
+
 <!-- source-navigation -->
 
 - [Application](./01-application/index.md)
@@ -15,3 +18,4 @@ be composed.
 - [Middleware](./06-middleware/index.md)
 - [Routes](./07-routes/index.md)
 - [ServerFn](./08-server-fn/index.md)
+- [Query](./09-query/index.md)

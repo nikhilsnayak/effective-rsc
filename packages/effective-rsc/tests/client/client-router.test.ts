@@ -28,7 +28,7 @@ vi.mock('react-server-dom-rspack/client.browser', () => ({
           content: null,
           id: 'root',
         },
-        serverFnResult: null,
+        serverFnResponse: null,
       };
     });
   }),
@@ -253,7 +253,7 @@ const makeStreamingHttpClient = () => {
 };
 
 type BrowserRenderRequest = {
-  readonly _tag: 'Navigation' | 'ServerFunction';
+  readonly _tag: 'Navigation' | 'Mutation';
   readonly routeTree: RouteTreeModel;
 };
 
@@ -281,7 +281,7 @@ const makeBrowserRenderer = (renders: Array<BrowserRenderRequest> = []) => {
     refresh: (routeTree) => {
       const previousNavigation = visibleNavigation;
       visibleNavigation = null;
-      renders.push({ _tag: 'ServerFunction', routeTree });
+      renders.push({ _tag: 'Mutation', routeTree });
       return {
         committed: Promise.resolve().then(() => previousNavigation?.resolve()),
         retired: Promise.withResolvers<void>().promise,
@@ -386,10 +386,10 @@ const listen = (
           ...flightClient,
           loadInitial: Effect.succeed({
             completed: Effect.void,
-            payload: {
+            model: {
               formState: null,
               routeTree: initialRouteTree,
-              serverFnResult: null,
+              serverFnResponse: null,
             },
           }),
         });

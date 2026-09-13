@@ -60,9 +60,9 @@ Details:
 
 ## Known limitations
 
-- **L003 — Server Function failures:** the handler's typed Effect failure is not represented in the
-  client Promise type. Expected failures should be encoded in the output. See
-  [OQ-006](OPEN_QUESTIONS.md#oq-006--server-function-failure-channel).
+- **L003 — Server Function failures:** a handler cannot declare a typed failure. React performs the
+  call for `<form action>` and `useActionState`, so no per-function schema can reach every call path;
+  the client sees one opaque `ServerFnError` instead. See D-072.
 - **L004 — Progressive bound arguments:** binding extra arguments to a Server Function inside a
   Client Component does not progressively enhance without JavaScript because the upstream React
   protocol does not serialize that client-created binding.

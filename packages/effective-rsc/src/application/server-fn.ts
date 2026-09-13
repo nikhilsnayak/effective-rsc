@@ -1,18 +1,14 @@
 import { Array, Effect, Predicate, Schema } from 'effect';
 
+import { ServerFnInputError } from '../rsc/server-fn-error';
 import { attachERSCMember, type ERSCIdentity, type ERSCMember } from './ersc-identity';
 import type { AnyMiddleware } from './middleware';
 
 const ServerFnInvocationTypeId: unique symbol = Symbol.for('ersc/ServerFnInvocation');
 
-class ServerFnOperationError extends Schema.TaggedError<ServerFnOperationError>()(
-  'ServerFnOperationError',
-  { cause: Schema.Defect() },
-) {}
-
 type ServerFnInvocation<ApplicationServices> = {
   readonly [ServerFnInvocationTypeId]: {
-    readonly effect: Effect.Effect<unknown, ServerFnOperationError, ApplicationServices>;
+    readonly effect: Effect.Effect<unknown, ServerFnInputError, ApplicationServices>;
     readonly identity: ERSCIdentity<ApplicationServices>;
     readonly middleware: ReadonlyArray<AnyMiddleware<ApplicationServices>>;
   };
@@ -23,7 +19,7 @@ type ServerFnInvocationMatch<ApplicationServices> =
   | { readonly _tag: 'IdentityMismatch' }
   | {
       readonly _tag: 'Match';
-      readonly effect: Effect.Effect<unknown, ServerFnOperationError, ApplicationServices>;
+      readonly effect: Effect.Effect<unknown, ServerFnInputError, ApplicationServices>;
       readonly middleware: ReadonlyArray<AnyMiddleware<ApplicationServices>>;
     };
 
@@ -50,16 +46,16 @@ interface ServerFunction<
   (...args: Args): Promise<Output>;
 }
 
-type ServerFnOptions<Input, Output, Error, Services> = {
+type ServerFnOptions<Input, Output, Services> = {
   readonly input: Input;
   readonly handler: (
     ...args: ServerFnArguments<Input, 'Type'>
-  ) => Effect.Effect<Output, Error, Services>;
+  ) => Effect.Effect<Output, never, Services>;
 };
 
 export type ServerFnFactory<ApplicationServices, AvailableServices> = {
-  readonly make: <const Input extends ServerFnInput<AvailableServices>, Output, Error>(
-    options: ServerFnOptions<Input, Output, Error, AvailableServices>,
+  readonly make: <const Input extends ServerFnInput<AvailableServices>, Output>(
+    options: ServerFnOptions<Input, Output, AvailableServices>,
   ) => ServerFunction<ServerFnArguments<Input, 'Encoded'>, Output, ApplicationServices>;
 };
 
@@ -101,11 +97,14 @@ export const makeServerFnFactory = <ApplicationServices, AvailableServices>(
     const serverFunction = (...untrustedArgs: ServerFnArguments<typeof input, 'Encoded'>) => {
       // Unary functions still ignore extra native arguments and decode undefined when omitted.
       const effect = decode(Array.isArray(input) ? untrustedArgs : [untrustedArgs[0]]).pipe(
+        Effect.mapError(
+          (cause) =>
+            new ServerFnInputError({ detail: { message: cause.message, name: cause.name } }),
+        ),
         // Normalization preserves the positional Type mapping, which the generic branch erases.
         Effect.flatMap((args: ReadonlyArray<unknown>) =>
           handler(...(args as ServerFnArguments<typeof input, 'Type'>)),
         ),
-        Effect.mapError((cause) => new ServerFnOperationError({ cause })),
       );
       const unavailable = Promise.reject<Effect.Success<typeof effect>>(directInvocationError());
       void unavailable.catch(() => undefined);

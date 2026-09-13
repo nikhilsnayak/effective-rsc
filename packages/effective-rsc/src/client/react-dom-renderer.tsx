@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { hydrateRoot } from 'react-dom/client';
 
-import type { FlightPayload } from '../rsc/flight';
+import type { RouteResponseModel } from '../rsc/flight';
 import { BrowserEffectRunner } from './browser-effect-runner';
 import { BrowserRenderStatus } from './browser-render-status';
 import { type BrowserRender, BrowserRenderer } from './browser-renderer';
@@ -87,7 +87,7 @@ export class ReactDOMRenderer extends Context.Service<ReactDOMRenderer>()(
 
       const hydrate = Effect.fnUntraced(function* (
         container: Element | Document,
-        initialPayload: FlightPayload,
+        initialModel: RouteResponseModel,
       ) {
         const browserRendererReady = Promise.withResolvers<void>();
         const reportError = (error: unknown, info: ErrorInfo) => {
@@ -110,11 +110,11 @@ export class ReactDOMRenderer extends Context.Service<ReactDOMRenderer>()(
         function Root() {
           const [render, setRender] = useState<BrowserRender>(() => ({
             _tag: 'Initial',
-            routeTree: initialPayload.routeTree,
+            routeTree: initialModel.routeTree,
           }));
 
           useLayoutEffect(() => {
-            browserRenderer.initialize(initialPayload.routeTree, setRender);
+            browserRenderer.initialize(initialModel.routeTree, setRender);
             browserRendererReady.resolve();
           }, []);
 
@@ -138,7 +138,7 @@ export class ReactDOMRenderer extends Context.Service<ReactDOMRenderer>()(
                 <StrictMode>
                   <Root />
                 </StrictMode>,
-                { formState: initialPayload.formState },
+                { formState: initialModel.formState },
               ),
             catch: (cause) => new ReactDOMHydrationError({ cause }),
           }),

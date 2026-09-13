@@ -1,10 +1,10 @@
 import type { TemporaryReferenceSet } from 'react-server-dom-rspack/server.node';
 
-import type { FlightPayload } from '../rsc/flight';
+import type { RouteResponseModel } from '../rsc/flight';
 
 export type RequestOutcome = {
-  readonly formState: FlightPayload['formState'];
-  readonly serverFnResult: FlightPayload['serverFnResult'];
+  readonly formState: RouteResponseModel['formState'];
+  readonly serverFnResponse: RouteResponseModel['serverFnResponse'];
   readonly status: 200;
   readonly temporaryReferences?: TemporaryReferenceSet;
 };

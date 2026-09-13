@@ -6,6 +6,9 @@ import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ERSC } from '@/ersc';
 import { cn } from '@/lib/utils';
+import { FeedPanel } from '@/modules/feed/components/feed-panel';
+import type { FeedPage } from '@/modules/feed/model';
+import { FeedService } from '@/modules/feed/service';
 import type { FixtureMetadata, ObservedQuery, SelectionItem } from '@/modules/fixture/model';
 import { FixtureService } from '@/modules/fixture/service';
 import { SelectionToggle } from '@/modules/selection/components/selection-toggle';
@@ -14,6 +17,7 @@ import erscMark from '../ersc-mark.svg';
 import RuntimeProbe from './runtime-probe';
 
 type FixtureHomeProps = {
+  readonly feed: FeedPage;
   readonly fixture: ObservedQuery<FixtureMetadata>;
   readonly selection: ObservedQuery<ReadonlyArray<SelectionItem>>;
 };
@@ -33,7 +37,7 @@ const groups = [
   },
 ] as const;
 
-function FixtureHomeView({ fixture, selection }: FixtureHomeProps) {
+function FixtureHomeView({ feed, fixture, selection }: FixtureHomeProps) {
   return (
     <main className='mx-auto max-w-7xl px-5 py-12 sm:px-8 lg:py-16'>
       <header className='max-w-3xl border-b pb-9'>
@@ -84,6 +88,8 @@ function FixtureHomeView({ fixture, selection }: FixtureHomeProps) {
           </Card>
         ))}
       </section>
+
+      <FeedPanel seed={feed} />
     </main>
   );
 }
@@ -93,7 +99,9 @@ export const FixtureHomePage = ERSC.Page.make({
     const service = yield* FixtureService;
     const fixture = yield* service.fixture;
     const selection = yield* service.selection;
+    const feedService = yield* FeedService;
+    const feed = yield* feedService.search({ cursor: null, latencyMillis: 0, term: '' });
 
-    return <FixtureHomeView fixture={fixture} selection={selection} />;
+    return <FixtureHomeView feed={feed} fixture={fixture} selection={selection} />;
   }),
 });

@@ -10,7 +10,7 @@ import rspack, {
 import { ReactRefreshRspackPlugin } from '@rspack/plugin-react-refresh';
 
 import PackageJson from '../../package.json' with { type: 'json' };
-import { FrameworkAssetPrefix } from '../application/route-path';
+import { FrameworkAssetPrefix } from '../application/namespace';
 import {
   ApplicationEntrySpecifier,
   ClientEntryName,

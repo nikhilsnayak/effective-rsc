@@ -9,7 +9,7 @@ const decodedFlights = vi.hoisted<
   Array<{
     readonly formState: null;
     readonly routeTree: RouteTreeModel;
-    readonly serverFnResult: null;
+    readonly serverFnResponse: null;
   }>
 >(() => []);
 
@@ -91,10 +91,10 @@ const makeRouteLoader = Effect.fnUntraced(function* (
         ...flightClient,
         loadInitial: Effect.succeed({
           completed: initialFlightCompleted,
-          payload: {
+          model: {
             formState: null,
             routeTree: initialRouteTree,
-            serverFnResult: null,
+            serverFnResponse: null,
           },
         }),
       });
@@ -172,7 +172,7 @@ it.effect('invalidates cached history entries before a development refresh', () 
       decodedFlights.push({
         formState: null,
         routeTree: makeRouteTree('reloaded'),
-        serverFnResult: null,
+        serverFnResponse: null,
       });
 
       const resource = yield* load(routeLoader, initialEntry, 'traverse');
@@ -198,7 +198,7 @@ it.effect('fences an in-flight navigation cache write when a refresh invalidates
       decodedFlights.push({
         formState: null,
         routeTree: makeRouteTree('navigation'),
-        serverFnResult: null,
+        serverFnResponse: null,
       });
 
       const routeLoad = yield* load(routeLoader, initialEntry, 'push');
@@ -268,7 +268,7 @@ it.effect('caches the supplied entry and evicts it on disposal', () => {
       decodedFlights.push({
         formState: null,
         routeTree: makeRouteTree('second'),
-        serverFnResult: null,
+        serverFnResponse: null,
       });
 
       const secondResource = yield* load(routeLoader, secondEntry, 'push');
@@ -285,7 +285,7 @@ it.effect('caches the supplied entry and evicts it on disposal', () => {
       decodedFlights.push({
         formState: null,
         routeTree: makeRouteTree('second-reloaded'),
-        serverFnResult: null,
+        serverFnResponse: null,
       });
       const reloaded = yield* load(routeLoader, secondEntry, 'traverse');
 

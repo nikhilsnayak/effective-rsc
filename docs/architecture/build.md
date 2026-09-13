@@ -17,11 +17,13 @@ lives in `.ersc/client/` and `.ersc/server/`; ERSC does not generate proxy sourc
 A checked-in `'use server-entry'` module imports `src/application.tsx` through a private compiler
 alias. Rspack supplies ordered JavaScript and stylesheet metadata to the compiled application.
 
-The browser build targets the Navigation API browser floor and enables the React Compiler. It rejects
-`bun:*` and `@effect/platform-bun` imports, and production output uses compact hashed chunk and module
-identifiers. The server build targets Bun's Node compatibility, leaves `effect`, `@effect/*`, and
-`bun:*` external, and does not run the React Compiler. React, React DOM, and `react-server-dom-rspack`
-use one exact compatible release.
+The browser build targets the Navigation API browser floor and applies the React Compiler only to
+the application's `src/` tree, excluding `node_modules` and workspace-linked dependencies.
+Browser-graph violations are handled by module resolution. Production output uses
+compact hashed chunk and module identifiers. The server build targets Bun's Node compatibility and
+externalizes only `bun:*` and `effect`; other dependencies are bundled so React-dependent packages
+resolve React through their RSC layer. The server build does not run the React Compiler. React, React
+DOM, and `react-server-dom-rspack` use one exact compatible release.
 
 Imported images, fonts, and media become content-addressed assets of the browser build. The server
 graph resolves the same URLs so a Server Component can reference one, without writing the file twice.
@@ -96,7 +98,8 @@ Content-hashed development server bundles and chunks remain available for the de
 
 Development compilation keeps an Rspack persistent cache under `node_modules/.cache/ersc/rspack`, so a
 restarted development server reuses the previous module graph instead of rebuilding it. The framework
-version, the application manifest, and its TypeScript configuration invalidate that cache, and Rspack
+version, the Rspack configuration module, the application manifest, and its TypeScript configuration
+invalidate that cache, and Rspack
 expires unused entries. Production builds compile without a cache, because they usually start cold.
 
 Browser updates use the compiler's HMR protocol; RSC changes refresh the current page through

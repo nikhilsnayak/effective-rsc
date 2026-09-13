@@ -68,6 +68,7 @@
   },
   "devDependencies": {
     "@base-ui/react": "catalog:",
+    "@effect/atom-react": "catalog:",
     "@effect/platform-browser": "catalog:",
     "@effect/platform-bun": "catalog:",
     "@effect/vitest": "catalog:",

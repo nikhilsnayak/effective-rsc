@@ -1,7 +1,7 @@
 /**
  * @title A minimal application
  *
- * Create values from one ERSC identity and close it with ERSC.make.
+ * Define a root Layout and Page, then export the application with ERSC.make.
  */
 import { Effect } from 'effect';
 import { Application } from 'effective-rsc';

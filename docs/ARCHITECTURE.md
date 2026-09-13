@@ -47,7 +47,8 @@ Details:
 - `effective-rsc` exposes its authoring API only under the `react-server` condition and throws in
   other runtimes. Types remain unconditional.
 - `effective-rsc/server` exposes Bun startup; `effective-rsc/build` exports adapter contract types.
-  Other runtime and build modules remain private.
+  `effective-rsc/client` exports query/stream helpers and Server Function errors;
+  `effective-rsc/types` declares asset imports. Other runtime and build modules remain private.
 - `src/application.tsx` is the only application filename with framework semantics.
 - Generated application artifacts live under `.ersc/` and are consumed only through their generated
   entry points. Build hooks may package their supplied output directories without modifying them;
@@ -60,12 +61,12 @@ Details:
 
 ## Known limitations
 
-- **L003 — Server Function failures:** a handler cannot declare a typed failure. React performs the
-  call for `<form action>` and `useActionState`, so no per-function schema can reach every call path;
-  the client sees one opaque `ServerFnError` instead. See D-072.
-- **L004 — Progressive bound arguments:** binding extra arguments to a Server Function inside a
-  Client Component does not progressively enhance without JavaScript because the upstream React
-  protocol does not serialize that client-created binding.
+- **L003 — Server Function failure contract:** handlers and returned Streams require a `never`
+  error channel. Expected application outcomes belong in success values. Browser calls expose
+  `ServerFnInputError`, `ServerFnDefect`, or `ServerFnTransportError`; there is no per-function typed
+  failure codec. This is the chosen ERSC contract (D-072), not a restriction imposed by React.
+- **L004 — Progressive bound arguments:** arguments bound inside a Client Component do not
+  progressively enhance without JavaScript; React does not serialize that client-created binding.
 
 ## Site, examples, and integration fixture
 

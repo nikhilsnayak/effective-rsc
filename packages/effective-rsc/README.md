@@ -21,200 +21,61 @@ native RSC support.
 > Experimental. Uses React Canary, Effect v4 RC, TypeScript 7, Rspack's RSC support, and modern
 > browser APIs. [Current limitations](https://github.com/nikhilsnayak/effective-rsc/blob/main/docs/ARCHITECTURE.md#known-limitations).
 
-## Requirements
-
-- Bun 1.4 or newer is the only supported server runtime.
-- Client navigation requires the Navigation API and `NavigationPrecommitController`; there is no
-  History API fallback. Browsers without them still hydrate Client Components and support Server
-  Functions, but links use full-page navigation. Without JavaScript, links and native forms still work.
-- React, React DOM, Effect, Effect's browser and Bun platforms, and
-  `react-server-dom-rspack` must use the exact compatible versions shown below.
-
 ## Create an application
 
+Requires Bun 1.4 or newer. The scaffold installs compatible React Canary and Effect dependencies.
+
 ```sh
-bunx create-ersc-app my-effective-rsc-app
-cd my-effective-rsc-app
+bunx create-ersc-app my-application
+cd my-application
 bun run dev
 ```
 
-Run `bunx create-ersc-app` without a directory for the interactive flow.
+Open `http://localhost:18193`. Define Pages, Layouts, and Routes in `src/application.tsx`; provide
+application services with one Effect Layer. Server Functions validate inputs with Schema and work
+with native React forms, or as client queries and streams.
+
+Use `bun run check`, `bun run build`, and `bun run start` to verify and run production output.
+
+Client navigation uses the Navigation API and `NavigationPrecommitController`. Browsers missing
+either still hydrate Client Components and support Server Functions; links load full documents.
+Without JavaScript, links and native forms continue to work.
 
 ## Why effective-rsc
 
-effective-rsc is built around three deliberate constraints:
+ERSC brings server-rendered React, Effect services, and streaming work into one typed application.
 
-- **Effect owns the application runtime.** Pages, Layouts, Components, and Server Functions retain
-  inferred service requirements and run as request-scoped Effects. One application Layer provides
-  services and native Effect HTTP; Effect scopes own resources, interruption, and shutdown.
-- **Routes and ownership are explicit.** One application-scoped ERSC identity composes an immutable
-  route graph in `src/application.tsx`. Concern identity, middleware reach, and service requirements
-  remain visible in that composition.
-- **Navigation is browser-native.** ERSC intercepts the Navigation API and settles it at the
-  destination's first UI commit, so URL/history, focus, scroll, and React View Transitions are not
-  blocked by Flight EOF. The router retains the remaining stream until EOF or render retirement,
-  and tags publication with navigation, direction, UA visual-transition, Server Function, and HMR
-  transition types while applications own the `<ViewTransition>` boundaries and CSS.
+- **Native React, with Effect and Schema.** Write Effectful Server Components and validate Server
+  Function arguments with Schema. Service requirements stay inferred, while forms and
+  `useActionState` retain React's native behavior, including submission without JavaScript.
+- **One application runtime.** Provide services once through an Effect Layer and use them in Pages,
+  Components, Server Functions, and native Effect HTTP routes. Middleware supplies request-local
+  services; scopes manage server resources and shutdown.
+- **Routes you can see and compose.** Define Pages, nested Layouts, Loading fallbacks, and middleware
+  together in typed Routes. Only `src/application.tsx` has special meaning; organize the rest around
+  your application.
+- **Streaming UI and data.** Send useful HTML while slower content loads. Query Server Functions for
+  values and React content, or consume their streams as chunks arrive. Effect, Stream, and atom
+  helpers bring those results into client-side logic and state, with typed failures and cancellation.
+- **Browser-native navigation.** Shared Layouts stay mounted while destinations load. URL, history,
+  focus, and scroll advance when the destination first appears, while remaining content streams.
+  Applications own their React View Transition boundaries and CSS; ERSC supplies navigation context.
 
-## Manual installation
+## Documentation
 
-Create a Bun package and install the framework with its exact compatible peers:
+- [Getting started](https://effective-rsc.nikhilsnayak.dev/docs/getting-started), including manual setup and styling.
+- [Guides](https://effective-rsc.nikhilsnayak.dev/docs/guides): forms, queries, services, routing, middleware, HTTP, and deployment.
+- [Advanced](https://effective-rsc.nikhilsnayak.dev/docs/advanced): lifetimes, navigation, refresh behavior, and startup.
+- [API reference](https://effective-rsc.nikhilsnayak.dev/docs/api-reference).
+- [Combined LLM reference](https://github.com/nikhilsnayak/effective-rsc/blob/main/packages/effective-rsc/LLMS.md).
 
-```sh
-mkdir my-effective-rsc-app
-cd my-effective-rsc-app
-bun init -y
-bun add effective-rsc \
-  effect@4.0.0-rc.113 \
-  @effect/platform-browser@4.0.0-rc.113 \
-  @effect/platform-bun@4.0.0-rc.113 \
-  react@19.3.0-canary-1d34f91d-20260909 \
-  react-dom@19.3.0-canary-1d34f91d-20260909 \
-  react-server-dom-rspack@0.1.0
-bun add --dev \
-  typescript@7.0.2 \
-  @types/bun@^1.4.0 \
-  @types/react@19.2.18 \
-  @types/react-dom@19.2.7
-```
+These docs also ship in `node_modules/effective-rsc/docs` and `node_modules/effective-rsc/LLMS.md`.
+Framework contributors should start with the [architecture docs](https://github.com/nikhilsnayak/effective-rsc/blob/main/docs/README.md).
 
-Add the framework commands to `package.json`:
+## Examples
 
-```json
-{
-  "type": "module",
-  "scripts": {
-    "dev": "ersc dev",
-    "check": "tsc --noEmit",
-    "build": "ersc build",
-    "start": "ersc start"
-  }
-}
-```
-
-Create `tsconfig.json`:
-
-```json
-{
-  "compilerOptions": {
-    "target": "ESNext",
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "jsx": "react-jsx",
-    "noEmit": true,
-    "strict": true,
-    "erasableSyntaxOnly": true,
-    "exactOptionalPropertyTypes": true,
-    "noUncheckedIndexedAccess": true,
-    "noUncheckedSideEffectImports": true,
-    "types": ["bun", "react", "react-dom", "react/canary"],
-    "lib": ["ESNext", "DOM", "DOM.Iterable"]
-  },
-  "include": ["src"]
-}
-```
-
-Create `src/environment.d.ts` so TypeScript accepts stylesheet and asset imports:
-
-```ts
-/// <reference types="effective-rsc/types" />
-```
-
-## Quick start
-
-Create `src/application.tsx`:
-
-```tsx
-import { Effect } from 'effect';
-import { Application } from 'effective-rsc';
-
-const ERSC = Application.ersc();
-
-const RootLayout = ERSC.Layout.make({
-  render: ({ children }) =>
-    Effect.succeed(
-      <html lang='en'>
-        <body>{children}</body>
-      </html>,
-    ),
-});
-
-const HomePage = ERSC.Page.make({
-  render: () => Effect.succeed(<h1>Hello from effective-rsc</h1>),
-});
-
-export default ERSC.make({
-  routes: ERSC.Routes.make({ layout: RootLayout }).page('/', HomePage),
-});
-```
-
-Run `bun run dev`, then open `http://localhost:18193`. For a production run, use `bun run check`,
-`bun run build`, and `bun run start`.
-
-For deployment, `ersc start` accepts `--hostname` and `--port`. Command-line flags take precedence
-over `HOST` and `PORT`; the defaults are `localhost` and `18193`.
-
-For a custom Bun entry, await `start({ root, hostname, port })` from `effective-rsc/server`.
-Use `ersc build --adapter <package>` to package deployment output without uploading it.
-See the [production startup guide](https://github.com/nikhilsnayak/effective-rsc/blob/main/packages/effective-rsc/docs/03-advanced/04-production-startup/index.md).
-
-## Styling
-
-Import stylesheets from the modules that use them; there is no framework stylesheet entry point:
-
-```tsx
-import './styles.css';
-```
-
-Tailwind uses the same CSS pipeline. Install it:
-
-```sh
-bun add --dev tailwindcss@4.3.3
-```
-
-Then create a stylesheet, such as `src/styles.css`:
-
-```css
-@import 'tailwindcss';
-```
-
-## Authoring model
-
-`Application.ersc<Services>()` creates one application-scoped ERSC identity and its base authoring
-view:
-
-- `Page` is an Effectful route leaf and may decode typed path parameters with Schema.
-- `Layout` is an Effectful wrapper with one `children` outlet; the root Layout owns the document.
-- `Loading` is a synchronous, service-free Suspense fallback.
-- `Component` defines an Effectful Server Component that is not itself a route.
-- `ServerFn` adds Effect and Schema to React's native Server Function protocol.
-- `Middleware` adapts Effect HTTP middleware and may provide typed request services.
-- `Routes` immutably composes Pages and nested Layout/Loading scopes and activates middleware
-  retained by its authoring view.
-
-Create application values from one ERSC identity and its derived middleware views.
-`ERSC.withMiddleware(middleware)` derives a view whose values retain that middleware scope. Declare
-the complete service universe through `Services` and provide the application Layer at
-`ERSC.make({ layer })`.
-
-## Runtime boundary
-
-The package-root API is available only under the `react-server` condition. The framework build
-enables that condition for application authoring modules; importing `effective-rsc` from another
-runtime, including a Client Component, throws immediately.
-
-## Examples and documentation
-
-- [Hello world](https://github.com/nikhilsnayak/effective-rsc/tree/main/examples/hello-world): a small
-  example with streaming, navigation, a counter, and a Server Function form.
-- [Event platform](https://github.com/nikhilsnayak/effective-rsc/tree/main/examples/event-platform):
-  the complete application example, using local SQLite persistence.
-
-- [Getting started](https://github.com/nikhilsnayak/effective-rsc/blob/main/packages/effective-rsc/docs/01-getting-started/index.md)
-- [Guides](https://github.com/nikhilsnayak/effective-rsc/blob/main/packages/effective-rsc/docs/02-guides/index.md)
-- [Advanced](https://github.com/nikhilsnayak/effective-rsc/blob/main/packages/effective-rsc/docs/03-advanced/index.md)
-- [API reference](https://github.com/nikhilsnayak/effective-rsc/blob/main/packages/effective-rsc/docs/04-api-reference/index.md)
-- [Combined LLM reference](https://github.com/nikhilsnayak/effective-rsc/blob/main/packages/effective-rsc/LLMS.md)
+- [Hello world](https://github.com/nikhilsnayak/effective-rsc/tree/main/examples/hello-world): streaming, navigation, a counter, a form, and Vercel deployment.
+- [Event platform](https://github.com/nikhilsnayak/effective-rsc/tree/main/examples/event-platform): a conference application with SQLite persistence.
 
 ## Credits
 

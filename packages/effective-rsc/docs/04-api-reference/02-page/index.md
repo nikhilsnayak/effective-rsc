@@ -1,17 +1,11 @@
 ## Page
 
-- `ERSC.Page.make({ render })` creates a static route leaf.
-- `ERSC.Page.make({ params, render })` creates a parameterized route leaf.
+`ERSC.Page.make({ render })` defines a static Page. Add `params` to decode path parameters:
+`ERSC.Page.make({ params, render })`. Attach it with `routes.page(path, page)`.
 
-`render` returns an Effect whose requirements fit the ERSC service union. For parameterized Pages,
-the Schema's encoded keys must exactly match the path parameters and accept strings. Compose the
-Page with `Routes.page`.
+`render` returns an Effect producing React output. Its service requirements must be available from
+the application or the Page's middleware view. Parameter Schemas must encode exactly the path's
+parameter names as strings; `render({ params })` receives their decoded values.
 
-Pages produce React output. On GET/HEAD, the request handler decodes parameters once before
-rendering, with services from existing route middleware available. Rejected parameters receive
-an empty `404`, including navigation Flight requests; unmatched routes also receive native `404`
-responses. Other failures keep their existing
-error behavior.
-
-Server Function POST refreshes decode parameters inside Page rendering. A rejection follows React's
-render-error path without replacing the completed Server Function result with a `404`.
+Rejected parameters return `404` on page loads and navigation. During a mutation refresh, rejection
+is a React render error and preserves the completed Server Function result.

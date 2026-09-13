@@ -1,13 +1,11 @@
 ## Services
 
-Define services with Effect, then follow the ERSC composition convention:
+1. Declare application services with `Application.ersc<Catalog | Mailer>()`.
+2. Use those services in Page, Layout, Component, and Server Function Effects.
+3. Provide their Layer once with `ERSC.make({ routes, layer })`.
 
-1. Declare the complete service union with `Application.ersc<Services>()`.
-2. Let Pages, Layouts, Components, and Server Functions require members of that union.
-3. Provide the complete Layer once with `ERSC.make({ layer })`.
-
-This keeps implementations at the application composition boundary while preserving each
-renderer's inferred service requirements.
+The Layer is built at startup and released at shutdown. Use middleware to provide request-local
+services such as the current user.
 
 <!-- source-navigation -->
 

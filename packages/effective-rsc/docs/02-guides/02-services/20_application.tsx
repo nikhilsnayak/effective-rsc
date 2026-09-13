@@ -1,5 +1,5 @@
 /**
- * @title Providing services at the composition boundary
+ * @title Providing application services
  *
  * Declare the service union on ERSC and provide its Layer once at ERSC.make.
  */

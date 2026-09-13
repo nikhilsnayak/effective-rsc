@@ -1,7 +1,8 @@
 ## Component
 
-`ERSC.Component.make({ render })` creates a non-route Effectful Server Component. Props are inferred
-from `render`; requirements must fit the ERSC service union. Use it only in the RSC graph.
+`ERSC.Component.make({ render })` creates an Effectful Server Component. Props are inferred from
+`render`; required services must be available from the application or middleware. Use the component
+within your application's server-rendered tree.
 
 <!-- source-navigation -->
 

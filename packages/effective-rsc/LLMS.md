@@ -2,16 +2,19 @@
 
 # effective-rsc documentation
 
-Use the React and Effect documentation for their underlying concepts. ERSC conventions:
+Build Server Components and Server Functions with React, Schema, and Effect. These docs assume
+familiarity with React and Effect; start with Getting started for a working application.
 
-- Only `src/application.tsx` has framework filename semantics.
-- Create application values from one ERSC identity and its derived middleware views.
-- Provide application services and export the result at `ERSC.make`.
-- Import the package root only from the RSC graph.
+Define your application in `src/application.tsx`. Create its Pages, Layouts, Routes, and Server
+Functions from one `Application.ersc()` instance, then export `ERSC.make(...)`.
+
+Import authoring APIs from `effective-rsc` in server modules. Client Components use
+`effective-rsc/client` for Server Function queries and streams. The package root cannot be imported
+by Client Components.
 
 ## Getting started
 
-Create an application with compatible dependencies and Tailwind support:
+Install Bun 1.4 or newer, then create an application with compatible dependencies and Tailwind:
 
 ```sh
 bunx create-ersc-app my-application
@@ -19,20 +22,33 @@ cd my-application
 bun run dev
 ```
 
-Open `http://localhost:18193`.
+Open `http://localhost:18193`. Omit the directory to use the interactive prompt; pass `--no-install`
+to install dependencies yourself.
 
-In `src/application.tsx`, create one ERSC identity, define a root Layout and Page, compose Routes,
-and export `ERSC.make(...)`.
+The application entry is `src/application.tsx`. It defines a root Layout containing the HTML
+document, attaches Pages to Routes, and exports `ERSC.make(...)`. Other filenames are yours to choose.
 
-For a production check, run `bun run check`, `bun run build`, and `bun run start`. Both
-`ersc dev` and `ersc start` accept `--hostname` and `--port`; flags take precedence over
-`HOST` and `PORT`. See the package README for requirements and manual installation.
+### Styles and assets
 
-Files in `public/` are served from `/` with `Cache-Control: public, max-age=0`.
+Import CSS from the module that uses it. The starter's `src/styles.css` includes Tailwind; plain CSS
+works too. Imported images, fonts, and media resolve to built asset URLs. Reference
+`effective-rsc/types` in `src/environment.d.ts` so TypeScript recognizes these imports.
+Files in `public/` are served from `/`.
+
+### Production
+
+```sh
+bun run check
+bun run build
+bun run start
+```
+
+Both `ersc dev` and `ersc start` accept `--hostname` and `--port`. Flags override `HOST` and `PORT`;
+defaults are `localhost` and `18193`.
 
 ### A minimal application
 
-Create values from one ERSC identity and close it with ERSC.make.
+Define a root Layout and Page, then export the application with ERSC.make.
 
 ```tsx
 import { Effect } from 'effect';
@@ -60,7 +76,78 @@ export default ERSC.make({
 
 ### More examples
 
-- **[Importing styles](./docs/01-getting-started/20_styling.tsx)**: ERSC has no magic stylesheet entry; import styles from their owning module.
+- **[Importing styles](./docs/01-getting-started/20_styling.tsx)**: Import styles from the module that uses them.
+
+## Manual installation
+
+Create a Bun package and install the framework with its exact compatible peers:
+
+```sh
+mkdir my-effective-rsc-app
+cd my-effective-rsc-app
+bun init -y
+bun add effective-rsc@0.1.4 \
+  effect@4.0.0-rc.113 \
+  @effect/platform-browser@4.0.0-rc.113 \
+  @effect/platform-bun@4.0.0-rc.113 \
+  react@19.3.0-canary-1d34f91d-20260909 \
+  react-dom@19.3.0-canary-1d34f91d-20260909 \
+  react-server-dom-rspack@0.1.0
+bun add --dev \
+  typescript@7.0.2 \
+  @types/bun@^1.4.2 \
+  @types/react@19.3.0 \
+  @types/react-dom@19.3.0
+```
+
+Add the framework commands to `package.json`:
+
+```json
+{
+  "type": "module",
+  "scripts": {
+    "dev": "ersc dev",
+    "check": "tsc --noEmit",
+    "build": "ersc build",
+    "start": "ersc start"
+  }
+}
+```
+
+Create `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "strict": true,
+    "erasableSyntaxOnly": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "noUncheckedSideEffectImports": true,
+    "types": ["bun", "react", "react-dom", "react/canary"],
+    "lib": ["ESNext", "DOM", "DOM.Iterable"]
+  },
+  "include": ["src"]
+}
+```
+
+Create `src/environment.d.ts` so TypeScript accepts stylesheet and asset imports:
+
+```ts
+/// <reference types="effective-rsc/types" />
+```
+
+Create `src/application.tsx` using the minimal application example, then run `bun run dev`.
+To add Tailwind, install `tailwindcss@4.3.3` as a dev dependency and put
+`@import 'tailwindcss';` in an imported stylesheet.
+
+Keep the framework and its peers on a compatible release set when upgrading; the scaffold template
+ships that set together.
 
 ## Guides
 
@@ -68,87 +155,93 @@ Familiarity with React Server Components and Effect is assumed.
 
 ## Server Functions
 
-`ERSC.ServerFn.make` decodes Schema input and runs an Effect handler with application services.
+Export `ERSC.ServerFn.make({ input, handler })` from a module marked `'use server'`. `input` is a
+Schema; `handler` returns an Effect and can use application services. Callers pass the Schema's
+encoded type, and the handler receives its decoded type. Let the Schema infer handler parameters.
 
-Callers pass the Schema's encoded type and the handler receives its decoded type. Use an ordinary
-`Schema.Struct(...)` for object input. Use `Schema.fromFormData(...)` when a native form supplies the
-input; a function returning `void` can then be passed directly to `<form action>`. Let the Schema
-infer the handler parameter.
+### Forms and mutations
 
-For form feedback with `useActionState`, use `input: [StateSchema, FormSchema]` and
-`handler: (previousState, form) => ...`. React supplies both arguments; ERSC validates and decodes
-each one. Keep the native Server Function reference intact when passing it to `useActionState`
-to retain progressive enhancement. A single Array or Tuple Schema still describes one argument.
+Use `Schema.fromFormData(...)` for form input and return `void` to pass a function directly to
+`<form action>`. For feedback with `useActionState`, declare
+`input: [StateSchema, FormSchema]` and `handler: (previousState, form) => ...`.
+Pass the native reference to `useActionState` to retain submission without JavaScript.
 
-A successful invocation refreshes the current route.
+Direct browser calls and form actions refresh the current route after execution. The result can
+arrive before suspended content in that refresh finishes.
 
-A handler's Effect error channel is `never`: model expected outcomes in its success value. Anything
-else reaches the caller as `ServerFnInputError`, `ServerFnDefect`, or `ServerFnTransportError`,
-which `Effect.catchTag` distinguishes.
+### Queries and streams
 
-A Server Function that only reads is a query. Import `ServerFn` from `effective-rsc/client` and wrap
-the reference with `query` for an Effect or `queryAtom` for an `@effect/atom-react` atom. Queries
-never refresh the route and abort when superseded or interrupted. Provide one `RegistryProvider` in
-the root Layout and seed with `useAtomInitialValues`.
+Import `ServerFn` from `effective-rsc/client` to query a Server Function or consume its stream.
+`ServerFn.query(reference)(...args)` retrieves the function's result as an Effect;
+`ServerFn.queryAtom(reference)` exposes it as an atom for `@effect/atom-react`.
+The atom helper cancels its previous request when called again.
+
+Return an Effect `Stream` from the server handler to send chunks as they become available.
+Read it with `ServerFn.stream(reference)` or display its latest chunk with
+`ServerFn.streamAtom(reference)`. Both expose chunks as they arrive, so client code can process or
+display an ongoing result.
+
+### Outcomes and failures
+
+Return expected outcomes, such as unavailable data or a declined operation, as a tagged success
+value. The handler and any returned Stream must have a `never` error channel.
+Framework failures reject direct-call Promises; the client helpers expose `ServerFnError` in their
+Effect or Stream error channel. Use `Effect.catchTag` or inspect an atom's `AsyncResult` cause.
 
 - **[Creating the Server Function authoring module](./docs/02-guides/01-server-functions/10_ersc.ts)**
 - **[Defining a Server Function](./docs/02-guides/01-server-functions/20_follow-author.ts)**: ERSC decodes FormData before running the Effect handler.
 - **[Rendering a direct form action](./docs/02-guides/01-server-functions/30_follow-author-button.tsx)**: A FormData Server Function can be passed directly to form action.
-- **[Closing the Server Function application](./docs/02-guides/01-server-functions/40_application.tsx)**
+- **[Composing the Server Function application](./docs/02-guides/01-server-functions/40_application.tsx)**
 - **[Defining a stateful form action](./docs/02-guides/01-server-functions/50_greet.ts)**: A schema list decodes React's previous state and submitted FormData separately.
 - **[Rendering a stateful form](./docs/02-guides/01-server-functions/60_greeting-form.tsx)**: Pass the native reference to useActionState so React also owns progressive form submission.
 - **[Modelling an expected outcome](./docs/02-guides/01-server-functions/70_lookup-author.ts)**: The handler's Effect error channel is `never`, so expected outcomes belong in its success value.
-- **[Reading a Server Function from the browser](./docs/02-guides/01-server-functions/80_author-preview.tsx)**: `queryAtom` reads without refreshing the route; an unexpected failure arrives as `ServerFnError`.
+- **[Reading a Server Function from the browser](./docs/02-guides/01-server-functions/80_author-preview.tsx)**: `queryAtom` exposes the author lookup as atom state, with typed results and `ServerFnError` failures.
 
 ## Services
 
-Define services with Effect, then follow the ERSC composition convention:
+1. Declare application services with `Application.ersc<Catalog | Mailer>()`.
+2. Use those services in Page, Layout, Component, and Server Function Effects.
+3. Provide their Layer once with `ERSC.make({ routes, layer })`.
 
-1. Declare the complete service union with `Application.ersc<Services>()`.
-2. Let Pages, Layouts, Components, and Server Functions require members of that union.
-3. Provide the complete Layer once with `ERSC.make({ layer })`.
-
-This keeps implementations at the application composition boundary while preserving each
-renderer's inferred service requirements.
+The Layer is built at startup and released at shutdown. Use middleware to provide request-local
+services such as the current user.
 
 - **[An application-owned service](./docs/02-guides/02-services/10_catalog.ts)**: ERSC consumes the service contract and Layer; their construction is ordinary Effect code.
-- **[Providing services at the composition boundary](./docs/02-guides/02-services/20_application.tsx)**: Declare the service union on ERSC and provide its Layer once at ERSC.make.
+- **[Providing application services](./docs/02-guides/02-services/20_application.tsx)**: Declare the service union on ERSC and provide its Layer once at ERSC.make.
 
 ## Routing, parameters, and loading
 
-- Routes are immutable and belong to one ERSC identity.
-- `page(path, page)` attaches a Page; `mount(prefix, routes)` nests a route scope.
-- Mounted scopes retain their Layout and Loading ancestry.
-- On GET/HEAD, the request handler decodes Page parameters once before rendering, with services
-  from existing route middleware available. Rejected parameters return an empty `404`, including
-  navigation Flight.
-- Server Function POST refreshes keep parameter rejection in React's render-error path, preserving
-  the completed action result.
-- Effect HTTP owns route matching; ERSC rejects duplicate shapes and invalid composition while
-  building the graph.
+Attach a Page with `routes.page(path, page)`. Group routes under a Layout and optional Loading
+fallback, then nest them with `routes.mount(prefix, childRoutes)`. Each operation returns new Routes;
+mounting preserves the child's layouts, loading fallbacks, and middleware.
+
+Define path parameters in a Page's `params` Schema. Its encoded keys must match the route's
+`:parameters` and accept strings; `render` receives decoded values. Mount prefixes cannot contain
+parameters. Unmatched routes and rejected path parameters return `404`.
+
+The root Routes needs a Layout containing the HTML document and at least one Page. A Loading
+fallback is synchronous and renders below its Layout while descendants suspend.
 
 - **[Creating one routing authoring module](./docs/02-guides/03-routing/10_ersc.ts)**
-- **[Layout and Loading concerns](./docs/02-guides/03-routing/10_layouts.tsx)**: Layout is Effectful; Loading is synchronous and service-free.
+- **[Layouts and loading fallbacks](./docs/02-guides/03-routing/10_layouts.tsx)**: Layout is Effectful; Loading is synchronous and service-free.
 - **[Static and parameterized Pages](./docs/02-guides/03-routing/20_pages.tsx)**: A Page Schema decodes captured path strings for render.
 - **[Composing and mounting Routes](./docs/02-guides/03-routing/30_routes.tsx)**: Mounting retains the child graph's Layout and Loading ancestry.
 - **[Closing the route graph](./docs/02-guides/03-routing/40_application.ts)**
 
 ## Middleware
 
-Create middleware from the base ERSC view, then derive a view with
-`ERSC.withMiddleware(middleware)`. The derived view has the same ERSC identity and retains the
-middleware scope.
+Create middleware with `ERSC.Middleware.make(handler)`, then derive an authoring view with
+`ERSC.withMiddleware(middleware)`. Routes and Server Functions created from that view run through
+the middleware.
 
-Routes and Server Functions created from the derived view activate that scope. Pages, Layouts, and
-Components created from it may require the services declared by the middleware and consume them only
-while rendered inside an active scope.
+Declare request services with `ERSC.Middleware.make<{ provides: CurrentUser }>(handler)` and provide
+them to the downstream Effect. Pages, Layouts, and Components created from the derived view can
+require those services when rendered under its Routes or Server Functions. A derived view belongs
+to the same application.
 
-Use `ERSC.Middleware.make<{ provides: CurrentUser }>(handler)` when a middleware provides a
-request-scoped service. The handler must provide that service to the downstream Effect. Chain
-`withMiddleware` in request order; responses unwind in reverse.
-
-Scoped middleware does not wrap userland HTTP, assets, or unmatched requests. Put server-wide policy
-in native global Effect HTTP middleware supplied through the application Layer.
+Chain `withMiddleware` in request order; responses unwind in reverse. For server-wide policy,
+including assets and unmatched requests, register native global Effect HTTP middleware through the
+application Layer.
 
 - **[Defining an authenticated view](./docs/02-guides/04-middleware/10_auth.ts)**: Middleware can short-circuit a request and provide typed services downstream.
 - **[Consuming middleware data in a Page](./docs/02-guides/04-middleware/20_account-page.tsx)**
@@ -170,9 +263,9 @@ reach.
 
 - **[Composing ERSC and userland HTTP](./docs/02-guides/05-http/10_application-layer.tsx)**: ERSC concerns and native HTTP routes share one application Layer.
 
-### Deploying to Vercel
+## Deploying to Vercel
 
-Deploy to Vercel with Bun 1.4+. Match the adapter version to `effective-rsc`.
+Deploy to Vercel with Bun 1.4+. The `@ersc/vercel` version must match the installed `effective-rsc` version.
 
 ```sh
 bun add --dev @ersc/vercel
@@ -207,93 +300,65 @@ of the Root Directory in the Build Step**. With Turborepo, use
 
 ## Advanced
 
-These guides describe ERSC's runtime guarantees. See the
-[current limitations](https://github.com/nikhilsnayak/effective-rsc/blob/main/docs/ARCHITECTURE.md#known-limitations)
-before adopting them.
+Application behavior to account for when managing resources, navigation, mutations, and deployment.
+ERSC is experimental; each guide calls out relevant limitations.
 
-## Request runtime and lifetimes
+## Resources and cancellation
 
-The server builds the Layer passed to `ERSC.make` once and releases it at shutdown. Its services have
-application lifetime.
+The Layer passed to `ERSC.make` is built once at startup and released at shutdown. Use it for
+application services; use middleware and scoped Effects for request-local resources.
 
-Each HTTP request has an independent Effect scope. Server Function handlers run in the HTTP request
-fiber. Page, Layout, and Component render Effects run in a request-owned render scope.
+Page, Layout, Component, and Server Function Effects run with their request. Response completion,
+disconnection, or interruption closes the request and finalizes its resources. Give background work
+that must outlive the response an explicit application owner.
 
-Closing the response interrupts unfinished request work and runs its finalizers. Acquire
-request-local resources inside the request Effect so their lifetime follows the request
-automatically.
+Interrupting a `ServerFn.query` Effect cancels its pending invocation. A `ServerFn.stream` consumer
+owns the browser request until it completes or is interrupted. Atom helpers cancel an earlier run
+when invoked again.
 
-Give work that must outlive a request an explicit application-owned scope.
+Returned Effect Streams also belong to the request. Cancellation waits for their asynchronous
+finalizers before releasing request resources, including when the client stops consuming a stream.
+
+In development, a successful rebuild interrupts the old application's requests before replacing its
+services. An interrupted Server Function is not automatically retried.
 
 ## Client navigation
 
-ERSC handles eligible document navigations through the browser Navigation API and
-`NavigationPrecommitController`. There is no History API fallback. A browser missing either one
-still hydrates Client Components and supports Server Functions and streamed current-page refreshes,
-including HMR. Links use full-page navigation instead of the client router. Without JavaScript,
-the server-rendered document retains working links and natively submitted forms.
+Use ordinary `<a href>` links. ERSC uses the Navigation API and `NavigationPrecommitController`
+when available. Other browsers use full-page navigation while Client Components, Server Functions,
+and HMR still work. Without JavaScript, links and native forms remain usable.
 
-Development reports a missing navigation API in the console and a dismissible development-panel
-warning. The warning does not block interaction and is absent in production.
+The shared Layout stays mounted across client navigation. URL, history, focus, and default scroll
+advance when the destination first appears; suspended content can continue streaming afterward.
+The current page stays visible while its replacement loads. Later render failures go to React Error
+Boundaries.
 
-An intercepted Page navigation has two milestones:
+Back/Forward can reuse completed route trees. New navigations fetch fresh content, and mutations
+invalidate that history cache. Redirects follow their destination; responses that cannot be rendered
+as a route fall back to full-document navigation.
 
-- **Native commit:** ERSC starts the Flight request in a React Transition, retains the common Layout
-  prefix, and publishes the destination in another Transition after the asynchronous load. The
-  precommit handler settles at the destination's first UI commit. The Navigation API can
-  then commit the URL and history entry, apply focus and default scroll, and finish any React View
-  Transition without waiting for Flight EOF.
-- **Stream completion:** after native commit, the client router owns any remaining Flight stream
-  until EOF or until React confirms that another render retired it. A completed tree is cached for
-  the exact Navigation API history-entry id that committed for that navigation.
-
-Canceling or superseding before commit interrupts the client transport and server request Effects.
-A scheduled destination is discarded before its stream is released, so no rollback is needed. The
-current UI and stream remain live while a successor prepares and retire only after React confirms a
-different render. After native commit, Browser Stop no longer owns the stream; later Flight failures
-use React's Error Boundary handling.
-
-Back/Forward traversal reuses a completed cached payload. Push, replace, and uncached traversal
-fetch fresh Flight. Disposing a history entry evicts its payload; a Server Function refresh clears
-the traversal cache because a mutation may affect any route.
-
-Flight redirects use the response's final URL; a non-success or non-Flight response becomes a
-full-document navigation. Native focus and scroll remain enabled. Because Suspense content may
-continue after native commit, history can remember an intermediate fallback's scroll position;
-stream-aware restoration is not yet implemented.
+**Scroll limitation:** history restoration may clamp a saved position against a Loading fallback
+and keep that position after content arrives. Stream-aware restoration is not implemented.
 
 ### React View Transitions
 
-Applications own React `<ViewTransition>` boundaries and all animation CSS. ERSC does not wrap the
-route tree or call `document.startViewTransition()`. It calls React's `addTransitionType()` inside
-the same Transition that publishes an initial navigation or refresh render, so application
-boundaries can select animation policy without delaying native navigation until Flight EOF.
+Add React `<ViewTransition>` boundaries and CSS in your application. ERSC supplies these additive
+types when it first publishes a navigation or refresh:
 
-The types are additive:
+| Event                              | Types                                                                                |
+| ---------------------------------- | ------------------------------------------------------------------------------------ |
+| Routed navigation                  | `navigation`, plus `navigation-push`, `navigation-replace`, or `navigation-traverse` |
+| Push or forward history traversal  | `navigation-forward`                                                                 |
+| Backward history traversal         | `navigation-backward`                                                                |
+| Browser-provided visual transition | `navigation-ua-visual-transition`                                                    |
+| Mutation refresh                   | `server-function`                                                                    |
+| HMR refresh                        | `hmr-refresh`                                                                        |
 
-| Publication                                            | Added types                                        |
-| ------------------------------------------------------ | -------------------------------------------------- |
-| Every routed navigation                                | `navigation`, `navigation-${event.navigationType}` |
-| Push navigation                                        | `navigation-forward`                               |
-| Backward traversal                                     | `navigation-backward`                              |
-| Forward traversal                                      | `navigation-forward`                               |
-| Navigation with `event.hasUAVisualTransition`          | `navigation-ua-visual-transition`                  |
-| Server Function response tree or current-route refresh | `server-function`                                  |
-| HMR current-route refresh                              | `hmr-refresh`                                      |
+Replace has no direction type. Traversal adds one only when history indices establish a direction.
+Choose whether to animate HMR or browser-provided transitions. Suspense reveals that arrive later
+need their own boundaries and styling; they do not inherit these types.
 
-`event.navigationType` is `push`, `replace`, or `traverse`. Replace has no direction type. A
-traversal has no direction type when either history index is unavailable or the indices are equal.
-Applications may suppress author animation for `navigation-ua-visual-transition` and `hmr-refresh`,
-but ERSC does not impose that policy.
-
-These types describe only the first publication. Suspense content that resolves later renders in a
-separate, untyped React Transition. Applications should use their own Suspense-specific
-`<ViewTransition>` boundaries and styling for those reveals.
-
-#### Application transition types
-
-Add whitespace-separated application transition types to a native link with
-`data-ersc-transition-types`:
+Add application types to a link:
 
 ```tsx
 <a href='/photos/2' data-ersc-transition-types='photo-next'>
@@ -301,50 +366,52 @@ Add whitespace-separated application transition types to a native link with
 </a>
 ```
 
-These are added alongside ERSC's built-in types for that push or replace navigation and can be
-used in your `<ViewTransition>` type maps. They are not replayed on Back/Forward.
+Separate multiple types with spaces. They supplement built-in types for that push or replace and
+are not replayed on Back/Forward. `navigation`, `navigation-*`, `server-function`, and `hmr-refresh`
+are reserved and ignored in the attribute.
 
-The names `navigation`, `navigation-*`, `server-function`, and `hmr-refresh` are reserved for ERSC
-and ignored in the attribute.
+## Results and route refresh
 
-## Server Function execution and refresh
+| Invocation                                  | Result                             | Route behavior              |
+| ------------------------------------------- | ---------------------------------- | --------------------------- |
+| Direct browser call or hydrated form action | Promise or React action state      | Refreshes the current route |
+| Form submission without JavaScript          | New document with React form state | Renders the submitted route |
+| `ServerFn.query` / `queryAtom`              | Effect or atom result              | No refresh                  |
+| `ServerFn.stream` / `streamAtom`            | Stream or latest chunk             | No refresh                  |
 
-Hydrated invocations and progressively enhanced forms execute the same request-scoped Effect
-handler. A hydrated response contains the Server Function result and a refreshed route tree; a
-progressively enhanced response contains a complete document with the refreshed tree and form state.
+For hydrated mutations, the result settles independently of suspended refresh content. Calls may
+execute concurrently. ERSC applies a response tree only while it still belongs to the current page;
+otherwise it fetches a fresh current-page tree. A completed mutation response invalidates cached
+Back/Forward trees, including when its result describes an expected application failure.
 
-For hydrated calls, the result Promise settles independently from the route refresh. ERSC commits
-the refreshed tree in a React transition and keeps the request active through React commit and
-Flight EOF. Disconnecting interrupts unfinished request work and the response stream.
+Handle expected outcomes in the returned value. Input-validation and server-defect failures reject
+the hydrated invocation, but its response can still refresh the route. A route-render failure uses
+React's Error Boundaries and does not replace an already completed function result.
 
-Hydrated invocations may execute concurrently. Only the latest invocation may apply its response's
-route tree while its original history entry remains current and no navigation is active. Other
-responses trigger a fresh current-route refresh. A response tree interrupts any older current-route
-refresh before rendering, then rechecks applicability after cleanup completes. Effect owns refresh
-loading and cancellation; the React Transition publishes the tree without waiting for its own
-commit inside an async Action.
-
-After a successful mutation, ERSC clears the Back/Forward traversal cache because any route may have
-changed.
+Without JavaScript, native forms receive a complete document with updated form state. Invalid input
+returns `400`; an unhandled server failure follows the server error response path. Passing the native
+reference to `useActionState` preserves this form behavior. Extra arguments bound inside a Client
+Component currently do not work without JavaScript; bind them on the server when progressive
+submission is required.
 
 ## Production startup
 
-Run `ersc build`, then `ersc start`. A custom Bun entry can await
-`start({ root, hostname, port })` from `effective-rsc/server`. All options are required;
-`root` is the application directory. Deploy its `.ersc/`, `public/`, and runtime dependencies.
+Run `ersc build`, then `ersc start`. Deploy `.ersc/`, `public/`, and runtime dependencies with
+Bun 1.4 or newer. Flags `--hostname` and `--port` override `HOST` and `PORT`; defaults are
+`localhost` and `18193`.
 
-The Promise resolves when ready; startup failures reject and exit. ERSC owns signal handling
-and cleanup, so do not wrap it in `BunRuntime.runMain`.
+For a custom Bun entry, await `start({ root, hostname, port })` from `effective-rsc/server`.
+All options are required; `root` is the application directory. The Promise resolves when ready.
+Startup failures reject and exit. ERSC handles signals and cleanup; do not wrap it in
+`BunRuntime.runMain`.
 
 ### Deployment adapters
 
-`ersc build --adapter <package>` runs an installed adapter after compilation; it does not upload.
-Without the flag, packaging is skipped and previous output remains.
+`ersc build --adapter <package>` packages the build using an installed adapter. It does not upload;
+follow the deployment provider's setup. Omitting `--adapter` skips packaging and leaves any previous
+adapter output in place.
 
-Adapters export `build: BuildHook` from `./build`, with types from `effective-rsc/build`.
-The hook receives absolute `root`, `serverDir`, `clientDir`, and `publicDir` paths and returns
-`Effect<void, Error, Scope>`. Inputs are read-only; adapters provide dependencies and ERSC owns
-cleanup/cancellation. Failures stop the build.
+Adapter authors can use the [framework build contract](https://github.com/nikhilsnayak/effective-rsc/blob/main/docs/architecture/build.md#deployment-adapters).
 
 ### Server entry
 
@@ -362,119 +429,114 @@ await start({
 
 ## API reference
 
-Under the `react-server` condition, the package root exports `Application`.
-`Application.ersc<Services>()` returns `Component`, `Layout`, `Loading`, `Page`, `Middleware`,
-`Routes`, `ServerFn`, `withMiddleware`, and `make`. Values from different ERSC identities cannot
-be composed.
+| Import                 | Use                                                      |
+| ---------------------- | -------------------------------------------------------- |
+| `effective-rsc`        | `Application` and server authoring factories             |
+| `effective-rsc/client` | `ServerFn` query/stream helpers and error types          |
+| `effective-rsc/server` | Custom Bun startup with `start`                          |
+| `effective-rsc/build`  | Deployment adapter types                                 |
+| `effective-rsc/types`  | TypeScript declarations for stylesheet and asset imports |
 
-`effective-rsc/client` is the entry point for Client Components and exports `ServerFn` query
-helpers.
+`Application.ersc<Services>()` returns `Page`, `Layout`, `Loading`, `Component`, `Middleware`,
+`Routes`, `ServerFn`, `withMiddleware`, and `make`. Create values from one instance and its derived
+views. The package root is server-only; importing it from a Client Component throws.
 
 ## Application
 
-`Application.ersc<Services>()` creates one application-scoped ERSC identity and its base authoring
-view. `Services` is the complete server-service union; omit it for a service-free application.
+`Application.ersc<Services>()` creates the application's authoring API. Declare the application
+service union in `Services`, or omit it when no services are needed. Create all application values
+from this instance or its `withMiddleware` views.
 
-`ERSC.make({ routes, layer })` closes the route graph and application runtime. Export its result from
-`src/application.tsx`. `layer` is required unless `Services` is `never`; it may provide the declared
-services and register native Effect HTTP on the framework router.
+`ERSC.make({ routes, layer })` returns the application definition to export from
+`src/application.tsx`. `layer` must provide the declared services and may register native Effect
+HTTP routes. It is optional when `Services` is `never` and is built once at startup.
 
 ## Page
 
-- `ERSC.Page.make({ render })` creates a static route leaf.
-- `ERSC.Page.make({ params, render })` creates a parameterized route leaf.
+`ERSC.Page.make({ render })` defines a static Page. Add `params` to decode path parameters:
+`ERSC.Page.make({ params, render })`. Attach it with `routes.page(path, page)`.
 
-`render` returns an Effect whose requirements fit the ERSC service union. For parameterized Pages,
-the Schema's encoded keys must exactly match the path parameters and accept strings. Compose the
-Page with `Routes.page`.
+`render` returns an Effect producing React output. Its service requirements must be available from
+the application or the Page's middleware view. Parameter Schemas must encode exactly the path's
+parameter names as strings; `render({ params })` receives their decoded values.
 
-Pages produce React output. On GET/HEAD, the request handler decodes parameters once before
-rendering, with services from existing route middleware available. Rejected parameters receive
-an empty `404`, including navigation Flight requests; unmatched routes also receive native `404`
-responses. Other failures keep their existing
-error behavior.
-
-Server Function POST refreshes decode parameters inside Page rendering. A rejection follows React's
-render-error path without replacing the completed Server Function result with a `404`.
+Rejected parameters return `404` on page loads and navigation. During a mutation refresh, rejection
+is a React render error and preserves the completed Server Function result.
 
 ## Layout
 
-`ERSC.Layout.make({ render })` creates an Effectful wrapper with one `children` outlet. It may require
-ERSC application services. The root Layout owns the HTML document; nested Layouts own route scopes.
+`ERSC.Layout.make({ render })` creates a wrapper whose `render({ children })` returns an Effect
+producing React output. It can use application and middleware services. The root Layout must include
+`<html>` and `<body>`; nested Layouts wrap their child routes.
 
 ## Loading
 
-`ERSC.Loading.make({ render })` creates a Routes-scope fallback. `render` is synchronous and cannot
-require services. A scope accepts at most one Loading value.
+`ERSC.Loading.make({ render })` creates a Suspense fallback for a Routes scope. `render` returns
+React output synchronously and cannot require services. Each scope accepts at most one Loading value,
+rendered below its Layout.
 
 ## Component
 
-`ERSC.Component.make({ render })` creates a non-route Effectful Server Component. Props are inferred
-from `render`; requirements must fit the ERSC service union. Use it only in the RSC graph.
+`ERSC.Component.make({ render })` creates an Effectful Server Component. Props are inferred from
+`render`; required services must be available from the application or middleware. Use the component
+within your application's server-rendered tree.
 
-- **[An Effectful Server Component](./docs/04-api-reference/05-component/10_component.tsx)**: Component runs its render Effect in the current ERSC render scope.
+- **[An Effectful Server Component](./docs/04-api-reference/05-component/10_component.tsx)**: Use Effect to render a Server Component with typed props.
 
 ## Middleware
 
-`ERSC.Middleware.make(handler)` adapts an Effect HTTP middleware to the current ERSC identity.
-`ERSC.withMiddleware(middleware)` returns a derived authoring view of that same identity.
+`ERSC.Middleware.make(handler)` accepts an Effect HTTP middleware.
+`ERSC.withMiddleware(middleware)` returns a view of the same application with that middleware attached.
 
-Use `ERSC.Middleware.make<{ provides: CurrentUser }>(handler)` when the handler provides a service to
-the downstream Effect. Multiple services use a union. The derived view adds those services to the
-requirements available to Page, Layout, Component, ServerFn, Routes, Middleware, and further derived
-views.
+Use `ERSC.Middleware.make<{ provides: CurrentUser }>(handler)` to declare a service provided to the
+downstream Effect; use a union for multiple services. All factories on the derived view can use those
+services. Routes and ServerFn activate middleware; Page, Layout, and Component consume it while
+rendered in that scope. Rendering outside a required scope throws `TypeError`.
 
-Routes and ServerFn activate retained middleware. Page, Layout, and Component consume its services
-only while React renders them inside an active scope. Rendering one outside its required scope is a
-programmer error and throws `TypeError`.
+Chain middleware in request order. Ancestors run first; response transformations unwind in reverse.
+Repeating a middleware in one resolved route chain is rejected. Shared middleware across mounted
+scopes runs once.
 
-Chain `withMiddleware` in request order. Ancestors run before descendants; response transformations
-unwind in reverse. A middleware repeated in one resolved mounted route chain is rejected. Shared
-middleware across mounted scopes runs once.
+### Reach
 
-## Reach
+| Request                             | Route middleware               | Server Function middleware | Global middleware |
+| ----------------------------------- | ------------------------------ | -------------------------- | ----------------- |
+| Page load or navigation             | Matched route chain            | No                         | Yes               |
+| Hydrated or progressive mutation    | Remaining chain around refresh | Function chain             | Yes               |
+| Query or stream helper              | No                             | Function chain             | Yes               |
+| User HTTP, assets, unmatched routes | No                             | No                         | Yes               |
 
-| Request                          | Route scope                          | Server Function scope | Native global middleware |
-| -------------------------------- | ------------------------------------ | --------------------- | ------------------------ |
-| Page GET/HEAD                    | Matched chain                        | No                    | Yes                      |
-| Hydrated Server Function POST    | Remaining route chain around refresh | Server Function chain | Yes                      |
-| Progressive Server Function POST | Remaining route chain around refresh | Server Function chain | Yes                      |
-| Userland HTTP, assets, unmatched | No                                   | No                    | Yes                      |
-
-During a Server Function request, middleware already active for the Server Function is not
-executed again for the refreshed route, even if it appears at another position in that route chain.
-Remaining route middleware wraps refreshed rendering.
-
-Native global Effect HTTP middleware is separate. Register it through the application Layer for
-server-wide policy.
+A mutation refresh skips middleware already active for its Server Function. Register native global
+Effect HTTP middleware through the application Layer for server-wide policy.
 
 ## Routes
 
-`ERSC.Routes.make({ layout?, loading? })` creates an immutable route scope.
+`ERSC.Routes.make({ layout?, loading? })` creates a route scope. Its methods return new Routes:
 
-- `routes.page(path, page)` adds a Page at an absolute Effect HTTP pattern. Parameter Schema keys
-  must exactly match path parameters.
-- `routes.mount(prefix, childRoutes)` mounts a non-empty graph of the same ERSC identity below an
-  absolute, parameter-free prefix.
-- Mounted scopes retain their Layout, Loading, and middleware ancestry.
+- `page(path, page)` adds a Page at an absolute Effect HTTP pattern. Parameter Schema keys must
+  exactly match path parameters.
+- `mount(prefix, childRoutes)` mounts non-empty Routes from the same application below an absolute,
+  parameter-free prefix, retaining Layout, Loading, and middleware ancestry.
 
-Both operations return new Routes values. Conflicting matcher shapes and `/_ersc/assets` are
-rejected. Root Routes require a Layout and at least one Page.
-
-Routes created from a derived authoring view activate its middleware.
+Conflicting matcher shapes and the `/_ersc` namespace are rejected. The root Routes must have a
+Layout and at least one Page. Routes created from a `withMiddleware` view activate that middleware.
 
 ## ServerFn
 
-`ERSC.ServerFn.make({ input, handler })` creates a native React Server Function reference. `input`
-decodes the invocation payload and infers the handler parameter; do not annotate it. The handler
-returns an Effect whose requirements fit the ERSC service universe. The client reference accepts the
-Schema's encoded type and resolves `Promise<Output>`; the handler receives its decoded type.
+Export `ERSC.ServerFn.make({ input, handler })` from a `'use server'` module. It creates a native
+React Server Function: callers pass encoded Schema values; the Effect handler receives decoded
+values and may require application or middleware services. Direct server invocation throws.
 
-For multiple positional arguments, supply a readonly schema list as `input`. Each caller argument
-uses its Schema's encoded type; each handler argument uses its decoded type, in the same order.
-Inline lists infer their tuple shape without `as const`. Use `input: []` for no arguments.
-`input: Schema.Array(...)` and `input: Schema.Tuple(...)` still describe one argument, not a
-positional argument list.
+### Arguments
+
+| `input`              | Caller and handler arguments      |
+| -------------------- | --------------------------------- |
+| One Schema           | One argument                      |
+| Readonly schema list | One argument per Schema, in order |
+| `[]`                 | No arguments                      |
+
+An Array or Tuple Schema describes one argument. Inline schema lists infer tuples without
+`as const`; let the Schema infer handler parameters.
 
 ```ts
 const followAuthor = ERSC.ServerFn.make({
@@ -483,8 +545,9 @@ const followAuthor = ERSC.ServerFn.make({
 });
 ```
 
-Schema transformations may use a different encoded type. To pass a Server Function directly to
-`form.action`, decode `FormData` and return `void`:
+### Forms
+
+To use `<form action>`, decode FormData and return `void`:
 
 ```tsx
 const followAuthorForm = ERSC.ServerFn.make({
@@ -498,36 +561,44 @@ const followAuthorForm = ERSC.ServerFn.make({
 </form>;
 ```
 
-A ServerFn created from a derived view activates its middleware for the POST. The Middleware
-reference defines refresh reach and ordering.
-
-For a `useActionState` form, declare both the previous state and submitted FormData:
+For `useActionState`, declare previous state and FormData as positional arguments:
 
 ```ts
-const StateSchema = Schema.Struct({ message: Schema.String });
-const FormSchema = Schema.fromFormData(Schema.Struct({ name: Schema.NonEmptyString }));
-
 const greet = ERSC.ServerFn.make({
-  input: [StateSchema, FormSchema],
+  input: [
+    Schema.Struct({ message: Schema.String }),
+    Schema.fromFormData(Schema.Struct({ name: Schema.NonEmptyString })),
+  ],
   handler: (_previousState, { name }) => Effect.succeed({ message: `Hello, ${name}` }),
 });
 ```
 
-Pass the native reference directly to `useActionState(greet, { message: '' })` and its returned
-action to `<form action>`. React supplies previous state and FormData for hydrated and progressive
-submissions. Previous state is client input: validate it, but never trust it for authorization or
-authoritative application state. Native `.bind` can prefill leading arguments.
+Pass `greet` to `useActionState(greet, { message: '' })`, and its returned action to the form.
+Previous state is client input; never use it as authority for authorization or stored application
+state. Native `.bind` can prefill leading arguments. Bind on the server when the form must work
+without JavaScript; client-created bindings currently do not progressively enhance.
 
-The handler's Effect error channel is `never`; model expected outcomes in its success value.
-Anything else reaches the caller as one of three framework errors: `ServerFnInputError` when the
-arguments failed the input Schema, carrying the validation message; `ServerFnDefect` when the
-handler failed, carrying a digest that matches the server log plus the failure's name and message in
-development; and `ServerFnTransportError` when the request never completed. Promise callers see a
-rejection; queries see them in the Effect error channel.
+### Outcomes and errors
 
-When the handler's Effect succeeds with a `Stream`, ERSC streams it to the caller instead of
-buffering it. Its error channel must be `never`, like the handler's; a failure part way through
-arrives as a `ServerFnDefect` carrying the render's digest.
+The handler's Effect error channel must be `never`. Return expected application outcomes in the
+success value, for example a tagged union. Client references resolve `Promise<Output>` or reject
+with a `ServerFnError`, exported from `effective-rsc/client`:
+
+| Error                    | Meaning                                        | Data                                                        |
+| ------------------------ | ---------------------------------------------- | ----------------------------------------------------------- |
+| `ServerFnInputError`     | Arguments failed Schema validation             | `detail.message`                                            |
+| `ServerFnDefect`         | Unhandled server failure                       | `digest` matching the server log; development error details |
+| `ServerFnTransportError` | Encoding, request, or response decoding failed | `detail`, when available                                    |
+
+Production redacts server failure details. Query and stream helpers expose these errors in their
+Effect or Stream error channel; atom helpers expose them through `AsyncResult`.
+
+### Streaming output
+
+When the handler returns an Effect `Stream`, the client Promise resolves a `ReadableStream` of its
+chunks. Consume it with `ServerFn.stream` or `streamAtom`. A failure during streaming reaches those
+helpers as a `ServerFnDefect` when React supplies a server digest; transport failures remain
+`ServerFnTransportError`.
 
 ```ts
 const readTicks = ERSC.ServerFn.make({
@@ -536,36 +607,49 @@ const readTicks = ERSC.ServerFn.make({
 });
 ```
 
-The client reference resolves what crosses the wire, so a streaming Server Function resolves
-`Promise<ReadableStream<A>>`; `ServerFn.stream` adapts that to an Effect `Stream`. `<form action>`
-rejects it outright, since React requires `Promise<void>` there.
+Every returned Stream must have a `never` error channel and require only available services.
+All return alternatives must be Streams or all must be non-stream values. Unions of valid Streams
+combine their chunk types; `Stream<A> | null` is rejected. Return `Stream.empty` for no chunks.
+A streaming function cannot be a direct form action, which requires `Promise<void>`.
 
-Neither end applies backpressure: a producer faster than the network or the consumer buffers on both
-sides, so rate-limit the Stream itself rather than relying on demand.
+Rate-limit producers: Flight does not apply consumer backpressure, so faster producers can buffer
+on the server and client. Cancellation awaits the returned Stream's finalizers before releasing
+request resources; see Resources and cancellation.
 
-Direct server invocation throws. Browser requests require an Origin matching the application host
-and may contain at most 10 MiB. See the
-[known limitations](https://github.com/nikhilsnayak/effective-rsc/blob/main/docs/ARCHITECTURE.md#known-limitations)
-for the encoded failure shape and progressive bound arguments.
+Functions created from a middleware view activate that middleware for mutations and queries.
+Browser requests require an Origin matching the application host and are limited to 10 MiB.
 
-## Query
+## Client queries and streams
 
-`effective-rsc/client` exports `ServerFn` for reading a Server Function from a Client Component.
-Pass the Server Function reference itself to `<form action>` and `useActionState`; those are not
-queries.
+Import `ServerFn` from `effective-rsc/client` to query a Server Function for a value or consume its
+stream. The helpers expose results as Effects, Streams, or atoms, with typed failures and cancellation.
 
-`ServerFn.query(serverFn)` returns a function taking the encoded arguments and yielding an Effect.
-`ServerFn.queryAtom(serverFn)` returns an `Atom.AtomResultFn` for `@effect/atom-react`. Both abort
-the request when the caller is interrupted; new atom arguments supersede an in-flight read, and
-`Atom.Interrupt` cancels one.
+| Helper                    | Server return type | Client result                                                                               |
+| ------------------------- | ------------------ | ------------------------------------------------------------------------------------------- |
+| `ServerFn.query(fn)`      | Non-stream value   | Function returning `Effect<Output, ServerFnError>`                                          |
+| `ServerFn.queryAtom(fn)`  | Non-stream value   | `Atom.AtomResultFn<Args, Output, ServerFnError>`                                            |
+| `ServerFn.stream(fn)`     | Effect `Stream<A>` | Function returning `Stream<A, ServerFnError>`                                               |
+| `ServerFn.streamAtom(fn)` | Effect `Stream<A>` | Atom of the latest chunk; may also fail with `Cause.NoSuchElementError` for an empty stream |
 
-Both fail with `ServerFnError`, the union of the three framework failures, read from the
-`AsyncResult` cause. Queries never refresh the route.
+Function helpers take the original encoded arguments: `ServerFn.query(lookupAuthor)({ authorId })`.
+Atom setters take an argument tuple: `lookup([{ authorId }])`.
 
-`ServerFn.stream(serverFn)` reads a Server Function whose handler returns a `Stream`, yielding a
-`Stream` whose scope owns the request; `ServerFn.streamAtom` exposes the latest chunk as its
-`AsyncResult`, and `Atom.pull` accumulates chunks instead. Passing a streaming Server Function to
-`query` is a type error naming `stream`, and the reverse is too.
+Value helpers reject any return union containing a `ReadableStream`. Stream helpers require every
+return alternative to be a `ReadableStream`, as exposed by a streaming Server Function reference.
 
-Provide one `RegistryProvider` in the root Layout and seed atoms with `useAtomInitialValues`. A
-nested provider replaces the registry for its subtree.
+Queries and streams do not trigger a route refresh. For React forms and `useActionState`, pass the
+native Server Function reference directly.
+
+### Cancellation and atoms
+
+Interrupting a query Effect cancels its pending invocation. A stream consumer owns its browser
+request through completion or interruption. Each atom helper supersedes its own in-flight run when
+called again; `Atom.Interrupt` cancels it explicitly. Plain query calls run independently.
+
+With `@effect/atom-react`, provide a `RegistryProvider` above consumers; a Client Component wrapper
+can be rendered by the root Layout. A nested provider gives its subtree a separate registry.
+`useAtomInitialValues` can seed values. Shared atom instances share state within that registry; create
+separate instances when reads should be independent.
+
+Read successes and failure causes from `AsyncResult`. `streamAtom` keeps the latest chunk;
+`Atom.pull` can accumulate chunks from an Effect Stream. Pulling does not add network backpressure.

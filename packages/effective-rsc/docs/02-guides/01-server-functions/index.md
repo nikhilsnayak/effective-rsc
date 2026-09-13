@@ -1,27 +1,37 @@
 ## Server Functions
 
-`ERSC.ServerFn.make` decodes Schema input and runs an Effect handler with application services.
+Export `ERSC.ServerFn.make({ input, handler })` from a module marked `'use server'`. `input` is a
+Schema; `handler` returns an Effect and can use application services. Callers pass the Schema's
+encoded type, and the handler receives its decoded type. Let the Schema infer handler parameters.
 
-Callers pass the Schema's encoded type and the handler receives its decoded type. Use an ordinary
-`Schema.Struct(...)` for object input. Use `Schema.fromFormData(...)` when a native form supplies the
-input; a function returning `void` can then be passed directly to `<form action>`. Let the Schema
-infer the handler parameter.
+### Forms and mutations
 
-For form feedback with `useActionState`, use `input: [StateSchema, FormSchema]` and
-`handler: (previousState, form) => ...`. React supplies both arguments; ERSC validates and decodes
-each one. Keep the native Server Function reference intact when passing it to `useActionState`
-to retain progressive enhancement. A single Array or Tuple Schema still describes one argument.
+Use `Schema.fromFormData(...)` for form input and return `void` to pass a function directly to
+`<form action>`. For feedback with `useActionState`, declare
+`input: [StateSchema, FormSchema]` and `handler: (previousState, form) => ...`.
+Pass the native reference to `useActionState` to retain submission without JavaScript.
 
-A successful invocation refreshes the current route.
+Direct browser calls and form actions refresh the current route after execution. The result can
+arrive before suspended content in that refresh finishes.
 
-A handler's Effect error channel is `never`: model expected outcomes in its success value. Anything
-else reaches the caller as `ServerFnInputError`, `ServerFnDefect`, or `ServerFnTransportError`,
-which `Effect.catchTag` distinguishes.
+### Queries and streams
 
-A Server Function that only reads is a query. Import `ServerFn` from `effective-rsc/client` and wrap
-the reference with `query` for an Effect or `queryAtom` for an `@effect/atom-react` atom. Queries
-never refresh the route and abort when superseded or interrupted. Provide one `RegistryProvider` in
-the root Layout and seed with `useAtomInitialValues`.
+Import `ServerFn` from `effective-rsc/client` to query a Server Function or consume its stream.
+`ServerFn.query(reference)(...args)` retrieves the function's result as an Effect;
+`ServerFn.queryAtom(reference)` exposes it as an atom for `@effect/atom-react`.
+The atom helper cancels its previous request when called again.
+
+Return an Effect `Stream` from the server handler to send chunks as they become available.
+Read it with `ServerFn.stream(reference)` or display its latest chunk with
+`ServerFn.streamAtom(reference)`. Both expose chunks as they arrive, so client code can process or
+display an ongoing result.
+
+### Outcomes and failures
+
+Return expected outcomes, such as unavailable data or a declined operation, as a tagged success
+value. The handler and any returned Stream must have a `never` error channel.
+Framework failures reject direct-call Promises; the client helpers expose `ServerFnError` in their
+Effect or Stream error channel. Use `Effect.catchTag` or inspect an atom's `AsyncResult` cause.
 
 <!-- source-navigation -->
 
@@ -33,3 +43,12 @@ the root Layout and seed with `useAtomInitialValues`.
 - [Compose the application](./40_application.tsx)
 - [Define a stateful form action](./50_greet.ts)
 - [Render a stateful form](./60_greeting-form.tsx)
+
+- [Return an expected outcome](./70_lookup-author.ts)
+- [Read a query from a Client Component](./80_author-preview.tsx)
+
+### Related
+
+- [ServerFn reference](../../04-api-reference/08-server-fn/index.md)
+- [Client query and stream helpers](../../04-api-reference/09-client-queries-and-streams/index.md)
+- [Results and route refresh](../../03-advanced/03-server-function-execution-and-refresh/index.md)

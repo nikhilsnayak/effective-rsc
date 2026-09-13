@@ -1,7 +1,7 @@
 # Event platform
 
-The real-world effective-rsc product example: a multi-organization, multi-event conference
-operations platform. Framework-mechanism coverage lives separately in `fixtures/framework-e2e`.
+A conference operations application spanning organizations and events. Framework protocol and
+lifecycle verification lives in `fixtures/framework-e2e`.
 
 ## Run it
 
@@ -24,11 +24,9 @@ bun run test      # Vitest: calendar formatting, repository, service
 bun run test:e2e  # Playwright: product journeys in production and development
 ```
 
-After a build, `test:e2e` runs every product journey twice: once against `ersc start` on port 18204
-and once against `ersc dev` on port 18205. Each journey starts a fresh server with its own in-memory
-SQLite database and seed data. Retries and repeated runs therefore do not inherit earlier purchases,
-refunds, or edits. The suite
-uses one worker and owns both E2E ports; the normal development server can keep running on port 18193.
+After a build, E2E journeys run against production on port 18204 and development on 18205. Each
+journey gets a fresh server and seeded in-memory SQLite database, including retries. The suite uses
+one worker and owns both ports; normal development can continue on 18193.
 
 ## What it exercises
 
@@ -51,57 +49,43 @@ uses one worker and owns both E2E ports; the normal development server can keep 
 `src/ersc.ts` declares the service universe once; application values come from one ERSC identity
 and its derived middleware views.
 
-## Current product surface
+## Product features
 
-- Public catalog spanning multiple organizations and events.
-- Tenant-scoped event addresses at `/events/:organizationSlug/:eventSlug`.
-- Durable organizations, memberships, events, and agenda state with migration-owned seed data.
-- Organization-scoped organizer studio at `/organizer`, including role-aware access and guarded event
-  lifecycle transitions.
-- Event authoring for owner, admin, and event-manager roles, including private draft creation,
-  public copy, venue and timezone-aware scheduling, capacity, optimistic edits, and ticket-type
-  inventory and visibility controls.
-- Programme management at `/organizer/events/:eventId/programme`, including reusable rooms and
-  speaker profiles, timezone-aware session scheduling, room and speaker conflict prevention,
-  capacity constraints, and per-session draft, published, and cancelled states. Event edits must
-  keep existing sessions within the event’s dates and capacity.
-- Database-backed public programmes at
-  `/events/:organizationSlug/:eventSlug/programme`; only published sessions are visible.
-- Public registration at `/events/:organizationSlug/:eventSlug/register`, with ticket inventory,
-  idempotent orders, atomic limited-use discounts, server-validated custom attendee questions,
-  deterministic payment approval/decline, and issued ticket codes.
-- Sold-out ticket waitlists with idempotent public joining and manager-driven status updates at
-  `/organizer/events/:eventId/waitlist`.
-- Manager-owned registration questions at `/organizer/events/:eventId/registration`, including
-  text and select answers, required-field enforcement, archival, and answer visibility on orders.
-- Attendee hub at `/attendee`, with magic-link session exchange, ownership-scoped ticket access,
-  scannable QR credentials, holder corrections, and a local transactional-email mailbox.
-- Staff check-in console at `/organizer/check-in/:eventId`, with organization-role authorization,
-  credential lookup, idempotent scans, reversible check-ins, live attendance totals, and an
-  immutable operator audit trail.
-- Manager-only event reporting at `/organizer/events/:eventId/reports`, combining ticket inventory,
-  paid revenue, payment outcomes, issued credentials, and check-in conversion.
-- Manager-only attendee communications at `/organizer/events/:eventId/communications`, with saved
-  drafts, operational audience targeting, transactional outbox delivery, retryable pending messages,
-  and delivery totals surfaced back to organizers.
-- Manager-only order administration at `/organizer/events/:eventId/orders`, with purchase history,
-  atomic audited refunds, credential cancellation, inventory restoration, and attendee notification.
-- Completed-event archives remain discoverable and use the same database-backed programme as live
-  events.
+- Public multi-organization catalog at `/events/:organizationSlug/:eventSlug`, including completed
+  events and published, database-backed programmes.
+- Role-aware organizer studio at `/organizer`: private drafts, public copy, venues, timezone-aware
+  scheduling, capacity, optimistic edits, and ticket inventory/visibility for owners, admins, and
+  event managers. Organizations, memberships, events, and agenda state are durable and seeded by
+  migrations.
+- Programme editor at `/organizer/events/:eventId/programme`: reusable rooms/speakers, conflict
+  prevention, session capacities and draft/published/cancelled states. Event edits preserve session
+  date and capacity constraints.
+- Public registration at `/events/:organizationSlug/:eventSlug/register`: idempotent orders,
+  atomic limited-use discounts, validated attendee questions, deterministic payment outcomes, and
+  ticket codes. Sold-out waitlists support idempotent joining and manager status updates.
+- Registration settings at `/organizer/events/:eventId/registration`: text/select questions,
+  required fields, archival, and answers visible on orders.
+- Attendee hub at `/attendee`: magic-link sessions, ownership-scoped tickets, QR credentials,
+  holder corrections, and a local transactional-email mailbox.
+- Staff console at `/organizer/check-in/:eventId`: organization-role authorization, credential
+  lookup, idempotent/reversible scans, live totals, and an immutable operator audit trail.
+- Manager tools under `/organizer/events/:eventId`: `/reports` combines inventory, revenue,
+  payments, credentials, and check-ins; `/communications` provides audience-targeted drafts, outbox
+  delivery, retryable messages, and totals; `/orders` provides purchase history and audited refunds
+  with credential cancellation, inventory restoration, and attendee notification. `/waitlist`
+  manages waiting attendees.
 
-The local authentication adapter selects seeded organizer `user-nikhil` by default. Set a
-`gather-organizer` cookie to another seeded or unknown user ID to exercise role and access-denied
-paths without an external identity provider. Nikhil is also seeded as check-in staff for Effect
-Systems Summit; use ticket code `GTH-DEMOADA0001` in its console to exercise venue operations.
+## Local adapters
 
-The attendee adapter selects seeded session `demo-attendee-ada` by default. Its lifetime and the
-seeded ticket-sale and discount windows are intentionally long-lived so the fixture does not expire.
-A completed checkout creates an independent, cryptographically random 30-day attendee session and
-returns its `/attendee/access/:token` magic-link path. The token cannot be derived from the QR-visible
-ticket code. The endpoint validates it before storing it in the HTTP-only
-`gather-attendee-session` cookie.
+Organizer authentication defaults to seeded `user-nikhil`. Set a `gather-organizer` cookie to another
+seeded or unknown user ID to exercise authorization. Nikhil is check-in staff for Effect Systems
+Summit; ticket `GTH-DEMOADA0001` exercises its console.
 
-This is a 0.1 showcase, not a production service. Identity, payment, and email use deterministic
-local adapters, and all organizations, events, outcomes, messages, and operational records are
-fictional. Provider integrations, multi-ticket carts, scheduled communications, and capacity-backed
-waitlist claims are intentionally outside this release.
+Attendee authentication defaults to `demo-attendee-ada`. Seeded sessions, sale windows, and discounts
+are long-lived to keep the example usable. Checkout creates a random 30-day attendee session and
+returns `/attendee/access/:token`; the endpoint validates the token before setting the HTTP-only
+`gather-attendee-session` cookie. Tokens cannot be derived from QR-visible ticket codes.
+
+All identities, payments, emails, and operational records are fictional local adapters. This showcase
+excludes production provider integrations, multi-ticket carts, scheduled communications, and
+capacity-backed waitlist claims.

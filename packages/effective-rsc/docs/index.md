@@ -1,11 +1,14 @@
 # effective-rsc documentation
 
-Use the React and Effect documentation for their underlying concepts. ERSC conventions:
+Build Server Components and Server Functions with React, Schema, and Effect. These docs assume
+familiarity with React and Effect; start with Getting started for a working application.
 
-- Only `src/application.tsx` has framework filename semantics.
-- Create application values from one ERSC identity and its derived middleware views.
-- Provide application services and export the result at `ERSC.make`.
-- Import the package root only from the RSC graph.
+Define your application in `src/application.tsx`. Create its Pages, Layouts, Routes, and Server
+Functions from one `Application.ersc()` instance, then export `ERSC.make(...)`.
+
+Import authoring APIs from `effective-rsc` in server modules. Client Components use
+`effective-rsc/client` for Server Function queries and streams. The package root cannot be imported
+by Client Components.
 
 <!-- source-navigation -->
 

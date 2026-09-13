@@ -4,19 +4,14 @@ Status: **Current** under [D-063, D-066, D-067, and D-071](../DECISIONS.md).
 
 ## Purpose
 
-Hydration, Server Functions, and current-page refreshes do not require the Navigation API. Only
-client-router installation requires both the Navigation API and `NavigationPrecommitController`.
-When either is missing, links use native full-page navigation while Client Components remain
-interactive. This does not introduce a History API router or polyfill other browser APIs.
+`installClientRouter` installs the Navigation API subscription in the browser scope and exposes no
+lifecycle handles. Installation requires both Navigation API and `NavigationPrecommitController`;
+if either is missing, links load documents while hydration, Server Functions, and refreshes still work.
+There is no History API fallback.
 
-The client router is a private deep module whose sole interface, `installClientRouter`, installs the
-Navigation API subscription in the browser scope. Behind it, the router selects routed navigations,
-loads Flight, publishes React renders, coordinates native completion with the first UI commit, and
-owns postcommit streams. Callers do not receive lifecycle state or operations.
-
-`NavigationApi` remains the browser adapter and `BrowserRenderer` remains the React publication
-adapter. Neither owns the end-to-end routing policy. Refresh, Server Function, and HMR selection
-remain separate modules; they do not enter a global router scheduler.
+The router owns navigation selection, Flight loading, React publication, native completion, and
+postcommit streams. `NavigationApi` adapts the browser; `BrowserRenderer` adapts React. Refresh,
+Server Function, and HMR selection remain separate, without a global scheduler.
 
 ## Native and Flight lifetimes
 
@@ -29,7 +24,7 @@ sequenceDiagram
 
   Navigation->>Router: routed navigate event
   Router->>Server: GET Flight in owned Effect scope
-  Server-->>Router: root route payload; stream continues
+  Server-->>Router: root route payload, stream continues
   Router->>React: publish in a Transition
   React-->>Router: destination UI commits
   Router-->>Navigation: settle precommit handler
@@ -45,11 +40,8 @@ ends after scheduling publication; outside it, the handler waits for the rendere
 promise. The framework root's layout effect resolves that promise, allowing URL/history commit,
 browser focus and scroll, and React's View Transition to proceed without waiting for Flight EOF.
 
-The browser currently owns the default forward-navigation scroll reset. This is not a complete
-scroll-restoration design: a history entry can observe the intermediate Suspense fallback even
-though its route continues streaming after native navigation finishes. Router-owned history scroll
-restoration is therefore deferred in [OQ-009](../OPEN_QUESTIONS.md); D-066 does not treat the
-browser's remembered position as a stable streamed-route position.
+Native scroll reset remains enabled. History may remember a position against a Suspense fallback
+that later content outgrows; stream-aware restoration remains [OQ-009](../OPEN_QUESTIONS.md).
 
 The `NavigateEvent.signal` owns interruption until the destination commits. Ownership of a remaining
 stream then transfers once to an ERSC Effect scope. Browser Stop cannot cancel later chunks; this is
@@ -87,26 +79,19 @@ A replace navigation has no direction type. A traversal also has no direction ty
 index is unavailable or equal to its destination index. Applications may use the UA visual and HMR
 types to suppress author animation, but ERSC does not impose that styling policy.
 
-For routed push and replace navigations, a native `<a href>` may supply a whitespace-separated
-`data-ersc-transition-types` attribute. When `NavigateEvent.sourceElement` is an `HTMLAnchorElement`,
-the router reads its `dataset.erscTransitionTypes` once, synchronously when accepting the event,
-and appends its unique types after the built-in types at route publication. Changing or removing the link while Flight
-loads cannot change that navigation's types. Types stay local to that navigation, including an
-intercepted Flight redirect; they are not stored in URLs, history entries, or router state.
-Superseded loading work cannot publish its types. A full-document fallback carries no custom types.
+For routed push/replace events whose `sourceElement` is an `HTMLAnchorElement`, snapshot the
+whitespace-separated `data-ersc-transition-types` synchronously at acceptance. Append unique tokens
+in attribute order after built-ins at publication. Link edits during loading cannot change them;
+intercepted redirects retain them. Superseded candidates and document fallbacks cannot publish them.
 
-Only ERSC-owned names are reserved: `navigation`, `navigation-*`, `server-function`, and
-`hmr-refresh`. These names are matched case-sensitively and ignored in the attribute. All other
-non-whitespace tokens pass through unchanged; ERSC does not validate React or CSS naming rules.
-Duplicate tokens are added once, preserving attribute order. Absent attributes or source links
-contribute no types. Traversal never reads or
-replays link metadata, and ineligible navigations retain native behavior.
+Ignore the case-sensitive reserved names `navigation`, `navigation-*`, `server-function`, and
+`hmr-refresh`. Other tokens pass through without React/CSS name validation. Missing links or
+attributes contribute nothing. Traversal never reads or replays link metadata; types are not stored
+in history or URLs, and ineligible navigation stays native.
 
-Application types are additive context, not overrides of history facts: a Previous link can carry
-both `navigation-forward` (a push) and `docs-previous` (document order). React combines matching
-classes from a `<ViewTransition>` type map; applications resolve animation precedence in their CSS.
-Typed authoring helpers and public client navigation APIs remain deferred in
-[OQ-010](../OPEN_QUESTIONS.md).
+Application types supplement history facts: a Previous link may add `docs-previous` alongside
+`navigation-forward` for a push. React combines matching type-map classes; CSS determines animation
+precedence. Typed navigation APIs remain [OQ-010](../OPEN_QUESTIONS.md).
 
 These types describe the first publication only. Nested Suspense content can reveal in later React
 Transitions after native navigation has finished; React does not carry the router's types into those
@@ -258,10 +243,6 @@ does not expose Flight completion, a stable-tree snapshot, history rollback, or 
   render is the only signal that permits the old streaming scope to close.
 - If the old stream reaches EOF first, it becomes eligible for caching and no longer owns a stream.
 - Returning to an entry whose earlier stream retired before EOF performs a new Flight request.
-
-This preserves the selling point: ERSC owns the full streamed response, keeps the revealed route
-usable while its replacement prepares, and interrupts obsolete browser and server work as soon as
-React proves it is unreachable.
 
 ## Cache identity
 

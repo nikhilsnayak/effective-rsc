@@ -1,6 +1,6 @@
-### Deploying to Vercel
+## Deploying to Vercel
 
-Deploy to Vercel with Bun 1.4+. Match the adapter version to `effective-rsc`.
+Deploy to Vercel with Bun 1.4+. The `@ersc/vercel` version must match the installed `effective-rsc` version.
 
 ```sh
 bun add --dev @ersc/vercel

@@ -1,13 +1,22 @@
-## Request runtime and lifetimes
+## Resources and cancellation
 
-The server builds the Layer passed to `ERSC.make` once and releases it at shutdown. Its services have
-application lifetime.
+The Layer passed to `ERSC.make` is built once at startup and released at shutdown. Use it for
+application services; use middleware and scoped Effects for request-local resources.
 
-Each HTTP request has an independent Effect scope. Server Function handlers run in the HTTP request
-fiber. Page, Layout, and Component render Effects run in a request-owned render scope.
+Page, Layout, Component, and Server Function Effects run with their request. Response completion,
+disconnection, or interruption closes the request and finalizes its resources. Give background work
+that must outlive the response an explicit application owner.
 
-Closing the response interrupts unfinished request work and runs its finalizers. Acquire
-request-local resources inside the request Effect so their lifetime follows the request
-automatically.
+Interrupting a `ServerFn.query` Effect cancels its pending invocation. A `ServerFn.stream` consumer
+owns the browser request until it completes or is interrupted. Atom helpers cancel an earlier run
+when invoked again.
 
-Give work that must outlive a request an explicit application-owned scope.
+Returned Effect Streams also belong to the request. Cancellation waits for their asynchronous
+finalizers before releasing request resources, including when the client stops consuming a stream.
+
+In development, a successful rebuild interrupts the old application's requests before replacing its
+services. An interrupted Server Function is not automatically retried.
+
+<!-- source-navigation -->
+
+- [Client query and stream helpers](../../04-api-reference/09-client-queries-and-streams/index.md)

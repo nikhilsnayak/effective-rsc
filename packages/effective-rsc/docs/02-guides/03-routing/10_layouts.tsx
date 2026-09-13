@@ -1,5 +1,5 @@
 /**
- * @title Layout and Loading concerns
+ * @title Layouts and loading fallbacks
  *
  * Layout is Effectful; Loading is synchronous and service-free.
  */

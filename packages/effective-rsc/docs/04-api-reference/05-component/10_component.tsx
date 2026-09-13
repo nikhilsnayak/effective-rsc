@@ -1,7 +1,7 @@
 /**
  * @title An Effectful Server Component
  *
- * Component runs its render Effect in the current ERSC render scope.
+ * Use Effect to render a Server Component with typed props.
  */
 import { Effect } from 'effect';
 import { Application } from 'effective-rsc';

@@ -1,6 +1,6 @@
 /**
  * @title Importing styles
  *
- * ERSC has no magic stylesheet entry; import styles from their owning module.
+ * Import styles from the module that uses them.
  */
 import './styles.css';

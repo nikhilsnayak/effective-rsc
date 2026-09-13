@@ -1,12 +1,6 @@
 # create-ersc-app
 
-Scaffold an effective-rsc application with Bun.
-
-## Requirements
-
-- Bun 1.4 or newer
-
-## Create an application
+Create an effective-rsc application with Bun 1.4 or newer:
 
 ```sh
 bunx create-ersc-app my-application
@@ -14,26 +8,13 @@ cd my-application
 bun run dev
 ```
 
-Open `http://localhost:18193`.
+Open `http://localhost:18193`. The scaffold includes strict TypeScript, Tailwind in `src/styles.css`,
+and the exact Effect, React Canary, and `react-server-dom-rspack` versions tested with its framework
+release. Bun may report a React peer warning because `react-server-dom-rspack` declares stable peer
+ranges; retain the scaffolded compatible versions.
 
-The command creates a strict TypeScript application, imports Tailwind from `src/styles.css`, and
-installs the exact Effect, React Canary, and RSDR versions compatible with its effective-rsc
-release.
+Omit the directory for an interactive prompt. Pass `--no-install` to create files without running
+`bun install`, or `--help` for all options.
 
-RSDR currently declares stable React peer ranges, so Bun may label the pinned React Canary as an
-incorrect peer dependency. The scaffolded versions are the tested set; the warning is upstream
-package metadata.
-
-Pass `--no-install` to write the application without running `bun install`:
-
-```sh
-bunx create-ersc-app my-application --no-install
-```
-
-Omit the directory for an interactive prompt:
-
-```sh
-bunx create-ersc-app
-```
-
-Run `bunx create-ersc-app --help` for the complete command help.
+[Application documentation](https://effective-rsc.nikhilsnayak.dev/docs/getting-started) also ships in
+`node_modules/effective-rsc/docs`, with a combined `node_modules/effective-rsc/LLMS.md` reference.

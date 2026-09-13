@@ -1,10 +1,7 @@
 # effective-rsc framework E2E fixture
 
-The repository's framework-oriented integration fixture. This is deliberately not a product
-example: its neutral catalog, selection state, artificial latency, and stable labels exist only to
-make framework behavior observable and assertable.
-
-Use [`examples/event-platform`](../../examples/event-platform) for a realistic application.
+A neutral catalog with selection state, artificial latency, and stable labels for framework protocol
+and lifecycle tests. Use [`examples/event-platform`](../../examples/event-platform) for a realistic application.
 
 ## Run it
 

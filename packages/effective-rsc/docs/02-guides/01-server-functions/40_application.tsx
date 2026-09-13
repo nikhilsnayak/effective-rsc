@@ -1,5 +1,5 @@
 /**
- * @title Closing the Server Function application
+ * @title Composing the Server Function application
  */
 import { Effect } from 'effect';
 

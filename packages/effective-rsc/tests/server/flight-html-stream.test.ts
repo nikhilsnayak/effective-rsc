@@ -9,7 +9,7 @@ import {
   type EmbeddedFlightChunk,
   makeInitialFlightStream,
 } from '../../src/client/initial-flight-stream';
-import { injectFlightPayload } from '../../src/server/flight-html-stream';
+import { injectFlightStream } from '../../src/server/flight-html-stream';
 
 const Encoder = new TextEncoder();
 
@@ -58,13 +58,13 @@ const embeddedFlightQueue = (html: string, nonce?: string) => {
 const reconstructFlight = (html: string, nonce?: string) =>
   streamToBytes(makeInitialFlightStream(embeddedFlightQueue(html, nonce), (close) => close()));
 
-describe('injectFlightPayload', () => {
+describe('injectFlightStream', () => {
   it.effect('embeds text chunks and reconstructs the original Flight bytes', () =>
     Effect.gen(function* () {
       const html = streamFrom(['<html><body><h1>Test</h1>', '<p>Hello world</p></body></html>']);
       const flight = streamFrom(['foo bar', 'baz qux', 'abcdef']);
 
-      const result = yield* streamToText(html.pipeThrough(injectFlightPayload(flight)));
+      const result = yield* streamToText(html.pipeThrough(injectFlightStream(flight)));
 
       expect(result).toBe(
         '<html><body><h1>Test</h1><p>Hello world</p>' +
@@ -83,7 +83,7 @@ describe('injectFlightPayload', () => {
       const html = streamFrom(['<html><body><h1>Test</h1></body></html>']);
       const flight = streamFrom(['foo bar', binary]);
 
-      const result = yield* streamToText(html.pipeThrough(injectFlightPayload(flight)));
+      const result = yield* streamToText(html.pipeThrough(injectFlightStream(flight)));
 
       expect(result).toContain(
         '<script>(self.__FLIGHT_DATA||=[]).push(' +
@@ -106,7 +106,7 @@ describe('injectFlightPayload', () => {
       ]);
       const flight = streamFrom(['foo bar', () => continueFlight.promise, 'baz qux', 'abcdef']);
 
-      const result = yield* streamToText(html.pipeThrough(injectFlightPayload(flight)));
+      const result = yield* streamToText(html.pipeThrough(injectFlightStream(flight)));
 
       expect(result).toBe(
         '<html><body><h1>Test</h1>' +
@@ -124,7 +124,7 @@ describe('injectFlightPayload', () => {
       const flight = streamFrom(['foo bar']);
 
       const result = yield* streamToText(
-        html.pipeThrough(injectFlightPayload(flight, { nonce: 'test' })),
+        html.pipeThrough(injectFlightStream(flight, { nonce: 'test' })),
       );
 
       expect(result).toBe(
@@ -149,7 +149,7 @@ describe('injectFlightPayload', () => {
       ]);
       const flight = streamFrom(['foo bar']);
 
-      const result = yield* streamToText(html.pipeThrough(injectFlightPayload(flight)));
+      const result = yield* streamToText(html.pipeThrough(injectFlightStream(flight)));
 
       expect(result).toBe(
         '<html><body><h1>Test</h1>🙂<p>Hello world</p>' +
@@ -163,7 +163,7 @@ describe('injectFlightPayload', () => {
       const html = streamFrom(['<html><body>Test</body></html>']);
       const flight = streamFrom(['<!--</ScRiPt>']);
 
-      const result = yield* streamToText(html.pipeThrough(injectFlightPayload(flight)));
+      const result = yield* streamToText(html.pipeThrough(injectFlightStream(flight)));
 
       expect(result).toContain('<\\!--</\\ScRiPt>');
       const reconstructed = yield* reconstructFlight(result);
@@ -175,7 +175,7 @@ describe('injectFlightPayload', () => {
     Effect.gen(function* () {
       const html = streamFrom(['<html><body><h1>html</h1></body></html>']);
       const flight = streamFrom(['rsc']);
-      const reader = html.pipeThrough(injectFlightPayload(flight)).getReader();
+      const reader = html.pipeThrough(injectFlightStream(flight)).getReader();
 
       const read = reader.read();
       yield* Effect.promise(() => Bun.sleep(0));

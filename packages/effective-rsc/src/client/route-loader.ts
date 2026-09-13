@@ -118,11 +118,11 @@ export class RouteLoader extends Context.Service<RouteLoader>()('ersc/client/Rou
       }
       return {
         _tag: 'Route',
-        cache: cacheRoute(cache, resource.payload.routeTree),
+        cache: cacheRoute(cache, resource.model.routeTree),
         completed: resource.completed,
         release: resource.release,
         resolvedUrl: resource.resolvedUrl,
-        routeTree: resource.payload.routeTree,
+        routeTree: resource.model.routeTree,
       } satisfies RouteLoad;
     });
 
@@ -136,7 +136,7 @@ export class RouteLoader extends Context.Service<RouteLoader>()('ersc/client/Rou
           Effect.andThen(
             Effect.sync(() => {
               if (MutableRef.get(cacheRef) === cache && entry.index !== -1) {
-                store(cache, entry, resource.payload.routeTree);
+                store(cache, entry, resource.model.routeTree);
               }
             }),
           ),
@@ -144,7 +144,7 @@ export class RouteLoader extends Context.Service<RouteLoader>()('ersc/client/Rou
         );
       }
 
-      return resource.payload;
+      return resource.model;
     });
 
     yield* Effect.addFinalizer(() => Effect.sync(() => clear(MutableRef.get(cacheRef))));

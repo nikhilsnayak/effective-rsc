@@ -3,22 +3,22 @@ import { Effect, Fiber, Layer } from 'effect';
 import { HttpClient, HttpClientRequest, HttpClientResponse } from 'effect/unstable/http';
 
 import { InitialFlightStream } from '../../src/client/initial-flight-stream';
-import { ServerFnIdHeader, type FlightPayload } from '../../src/rsc/flight';
+import { ServerFnIdHeader, type RouteResponseModel } from '../../src/rsc/flight';
 
-const decodedPayload = {
+const decodedModel = {
   formState: null,
   routeTree: {
     child: null,
     content: null,
     id: 'root',
   },
-  serverFnResult: null,
-} satisfies FlightPayload;
+  serverFnResponse: null,
+} satisfies RouteResponseModel;
 const decodeFlight = vi.fn(
   (
     _stream: ReadableStream<Uint8Array>,
     _options?: { readonly startTime?: number; readonly temporaryReferences?: unknown },
-  ) => Promise.resolve(decodedPayload),
+  ) => Promise.resolve(decodedModel),
 );
 
 vi.doMock('react-server-dom-rspack/client.browser', () => ({
@@ -45,7 +45,7 @@ const loadFlight = Effect.fnUntraced(function* (request: FlightRequest) {
 
 beforeEach(() => {
   decodeFlight.mockReset();
-  decodeFlight.mockImplementation((_stream, _options) => Promise.resolve(decodedPayload));
+  decodeFlight.mockImplementation((_stream, _options) => Promise.resolve(decodedModel));
 });
 
 const makeClient = (
@@ -75,7 +75,7 @@ it.effect('loads the embedded initial Flight without waiting for stream completi
       const reader = stream.getReader();
       return reader.read().then(() => {
         void reader.read();
-        return decodedPayload;
+        return decodedModel;
       });
     });
     const client = yield* FlightClient;
@@ -89,7 +89,7 @@ it.effect('loads the embedded initial Flight without waiting for stream completi
     const completion = yield* resource.completed.pipe(Effect.forkChild);
     yield* Effect.yieldNow;
 
-    expect(resource.payload).toBe(decodedPayload);
+    expect(resource.model).toBe(decodedModel);
     expect(completion.pollUnsafe()).toBeUndefined();
 
     initialFlightController.close();
@@ -123,7 +123,7 @@ it.effect('requests and decodes a whole-tree Flight response', () =>
       return yield* Effect.die('Expected a Flight response.');
     }
 
-    expect(response.payload).toBe(decodedPayload);
+    expect(response.model).toBe(decodedModel);
     expect(response.resolvedUrl.href).toBe('https://effective-rsc.test/schedule/day-two');
     expect(observedRequest?.method).toBe('GET');
     expect(observedRequest?.url).toBe('https://effective-rsc.test/schedule/day-two');
@@ -134,7 +134,7 @@ it.effect('requests and decodes a whole-tree Flight response', () =>
   }),
 );
 
-it.effect('keeps streamed chunks cancellable after the root payload resolves', () =>
+it.effect('keeps streamed chunks cancellable after the root model resolves', () =>
   Effect.gen(function* () {
     const responseConsumptionStopped = Promise.withResolvers<void>();
     let requestSignal: AbortSignal | undefined;
@@ -143,7 +143,7 @@ it.effect('keeps streamed chunks cancellable after the root payload resolves', (
         .getReader()
         .read()
         .catch(() => responseConsumptionStopped.resolve());
-      return Promise.resolve(decodedPayload);
+      return Promise.resolve(decodedModel);
     });
     const client = makeClient((_request, signal) => {
       requestSignal = signal;
@@ -160,7 +160,7 @@ it.effect('keeps streamed chunks cancellable after the root payload resolves', (
     yield* response.release;
     yield* Effect.promise(() => responseConsumptionStopped.promise);
 
-    expect(response.payload).toBe(decodedPayload);
+    expect(response.model).toBe(decodedModel);
     expect(requestSignal?.aborted).toBe(true);
   }),
 );
@@ -170,7 +170,7 @@ it.effect('closes the response scope when the Flight stream reaches EOF', () =>
     let requestSignal: AbortSignal | undefined;
     decodeFlight.mockImplementationOnce((stream) => {
       const reader = stream.getReader();
-      return reader.read().then(() => decodedPayload);
+      return reader.read().then(() => decodedModel);
     });
     const client = makeClient((_request, signal) => {
       requestSignal = signal;
@@ -189,7 +189,7 @@ it.effect('closes the response scope when the Flight stream reaches EOF', () =>
       return yield* Effect.die('Expected a Flight response.');
     }
 
-    expect(response.payload).toBe(decodedPayload);
+    expect(response.model).toBe(decodedModel);
     expect(requestSignal?.aborted).toBe(true);
   }),
 );
@@ -203,7 +203,7 @@ it.effect('cancels an unfinished decoded stream when the browser scope closes', 
         .getReader()
         .read()
         .catch(() => responseConsumptionStopped.resolve());
-      return Promise.resolve(decodedPayload);
+      return Promise.resolve(decodedModel);
     });
     const client = makeClient((_request, signal) => {
       requestSignal = signal;
@@ -275,7 +275,7 @@ it.effect('rejects a Flight response without its resolved location', () =>
 it.effect('releases the Flight transport when decoding fails', () =>
   Effect.gen(function* () {
     let requestSignal: AbortSignal | undefined;
-    decodeFlight.mockRejectedValueOnce(new Error('invalid Flight payload'));
+    decodeFlight.mockRejectedValueOnce(new Error('invalid Flight model'));
     const client = makeClient((_request, signal) => {
       requestSignal = signal;
       return makePendingFlightResponse(signal);
@@ -294,7 +294,7 @@ it.effect('releases the Flight transport when decoding fails', () =>
 
 it.effect('rejects a non-Flight Server Function response', () =>
   loadFlight({
-    _tag: 'ServerFunction',
+    _tag: 'Mutation',
     body: 'encoded-arguments',
     destination: new URL('https://effective-rsc.test/'),
     id: 'server-function-id',
@@ -322,7 +322,7 @@ it.effect('decodes a Server Function response with its temporary references', ()
     const temporaryReferences = {};
     let observedRequest: HttpClientRequest.HttpClientRequest | undefined;
     const response = yield* loadFlight({
-      _tag: 'ServerFunction',
+      _tag: 'Mutation',
       body: 'encoded-arguments',
       destination: new URL('https://effective-rsc.test/'),
       id: 'server-function-id',
@@ -363,7 +363,7 @@ it.effect('cancels Flight response consumption when loading is interrupted', () 
       return stream
         .getReader()
         .read()
-        .then(() => decodedPayload)
+        .then(() => decodedModel)
         .catch((cause) => {
           responseConsumptionStopped.resolve();
           throw cause;

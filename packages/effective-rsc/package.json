@@ -31,20 +31,24 @@
     "README.md"
   ],
   "type": "module",
-  "types": "./dist/index.d.ts",
+  "types": "./dist/exports/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "react-server": "./dist/index.js",
-      "default": "./dist/unsupported.js"
+      "types": "./dist/exports/index.d.ts",
+      "react-server": "./dist/exports/index.js",
+      "default": "./dist/exports/unsupported.js"
+    },
+    "./client": {
+      "types": "./dist/exports/client.d.ts",
+      "default": "./dist/exports/client.js"
     },
     "./server": {
-      "types": "./dist/server/start.d.ts",
-      "default": "./dist/server/start.js"
+      "types": "./dist/exports/server.d.ts",
+      "default": "./dist/exports/server.js"
     },
     "./build": {
-      "types": "./dist/build/hook.d.ts",
-      "default": "./dist/build/hook.js"
+      "types": "./dist/exports/build.d.ts",
+      "default": "./dist/exports/build.js"
     },
     "./types": {
       "types": "./dist/types.d.ts"

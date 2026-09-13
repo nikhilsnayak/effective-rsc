@@ -37,15 +37,13 @@ it.effect('interrupts application work when its Flight render is released', () =
       };
       const renderer = yield* FlightRenderer;
       const flight = yield* renderer.render<never>({
-        formState: null,
         middleware: [],
-        renderRuntime,
-        routeTree: {
-          child: null,
-          content: null,
-          id: 'root',
+        model: {
+          formState: null,
+          routeTree: { child: null, content: null, id: 'root' },
+          serverFnResponse: null,
         },
-        serverFnResult: null,
+        renderRuntime,
       });
       if (runApplicationWork === undefined) {
         return yield* Effect.die('Expected Flight rendering to bind its request runtime.');

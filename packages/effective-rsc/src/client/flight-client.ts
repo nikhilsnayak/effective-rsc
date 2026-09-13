@@ -6,7 +6,12 @@ import {
   type TemporaryReferenceSet,
 } from 'react-server-dom-rspack/client.browser';
 
-import { FlightMediaType, ServerFnIdHeader, type FlightPayload } from '../rsc/flight';
+import {
+  FlightMediaType,
+  ServerFnIdHeader,
+  type RouteResponseModel,
+  type ServerFnResponseModel,
+} from '../rsc/flight';
 import { InitialFlightStream } from './initial-flight-stream';
 
 export class FlightLoadError extends Schema.TaggedError<FlightLoadError>()('FlightLoadError', {
@@ -20,23 +25,29 @@ export type FlightRequest =
       readonly destination: URL;
     }
   | {
-      readonly _tag: 'ServerFunction';
+      readonly _tag: 'Mutation' | 'Query';
       readonly body: BodyInit;
       readonly destination: URL;
       readonly id: string;
       readonly temporaryReferences: TemporaryReferenceSet;
     };
 
-type DecodedFlight = {
+type DecodedFlight<Model> = {
   readonly completed: Effect.Effect<void, FlightLoadError>;
-  readonly payload: FlightPayload;
+  readonly model: Model;
 };
 
-type FlightResource = DecodedFlight & {
+type FlightResource<Model> = DecodedFlight<Model> & {
   readonly _tag: 'Flight';
   readonly release: Effect.Effect<void>;
   readonly resolvedUrl: URL;
 };
+
+type FlightResponseModel<Request extends FlightRequest> = Request extends {
+  readonly _tag: 'Query';
+}
+  ? ServerFnResponseModel
+  : RouteResponseModel;
 
 type DocumentResource = {
   readonly _tag: 'Document';
@@ -56,9 +67,9 @@ export class FlightClient extends Context.Service<FlightClient>()('ersc/client/F
           transform: (chunk, controller) => controller.enqueue(chunk),
         }),
       );
-      const payload = yield* Effect.tryPromise({
+      const model = yield* Effect.tryPromise({
         try: () =>
-          createFromReadableStream<FlightPayload>(
+          createFromReadableStream<RouteResponseModel>(
             stream,
             process.env.NODE_ENV === 'development' ? { startTime: 0 } : undefined,
           ),
@@ -67,11 +78,13 @@ export class FlightClient extends Context.Service<FlightClient>()('ersc/client/F
 
       return {
         completed: Effect.promise(() => completed.promise),
-        payload,
-      } satisfies DecodedFlight;
+        model,
+      } satisfies DecodedFlight<RouteResponseModel>;
     });
 
-    const load = Effect.fnUntraced(function* (flightRequest: FlightRequest) {
+    const load = Effect.fnUntraced(function* <Request extends FlightRequest>(
+      flightRequest: Request,
+    ) {
       const parentScope = yield* Effect.scope;
       const responseScope = yield* Scope.fork(parentScope);
       const release = Scope.close(responseScope, Exit.void);
@@ -83,7 +96,10 @@ export class FlightClient extends Context.Service<FlightClient>()('ersc/client/F
             ? HttpClientRequest.get(flightRequest.destination).pipe(
                 HttpClientRequest.setHeader('accept', FlightMediaType),
               )
-            : HttpClientRequest.post(flightRequest.destination).pipe(
+            : HttpClientRequest.make(
+                // @ts-expect-error Effect's HttpMethod union predates RFC 10008 QUERY.
+                flightRequest._tag === 'Query' ? 'QUERY' : 'POST',
+              )(flightRequest.destination).pipe(
                 HttpClientRequest.setHeaders({
                   accept: FlightMediaType,
                   [ServerFnIdHeader]: flightRequest.id,
@@ -163,7 +179,7 @@ export class FlightClient extends Context.Service<FlightClient>()('ersc/client/F
           ),
         );
         const decodeOptions =
-          flightRequest._tag === 'ServerFunction'
+          flightRequest._tag !== 'Navigation'
             ? process.env.NODE_ENV === 'development'
               ? {
                   startTime: requestStartTime,
@@ -175,8 +191,9 @@ export class FlightClient extends Context.Service<FlightClient>()('ersc/client/F
                   startTime: requestStartTime,
                 }
               : undefined;
-        const payload = yield* Effect.tryPromise({
-          try: () => createFromReadableStream<FlightPayload>(responseBody, decodeOptions),
+        const model = yield* Effect.tryPromise({
+          try: () =>
+            createFromReadableStream<FlightResponseModel<Request>>(responseBody, decodeOptions),
           catch: (cause) =>
             new FlightLoadError({
               cause,
@@ -187,10 +204,10 @@ export class FlightClient extends Context.Service<FlightClient>()('ersc/client/F
         return {
           _tag: 'Flight',
           completed: Deferred.await(completed),
-          payload,
+          model,
           release,
           resolvedUrl,
-        } satisfies FlightResource;
+        } satisfies FlightResource<FlightResponseModel<Request>>;
       }).pipe(Effect.onError(() => release));
     });
 

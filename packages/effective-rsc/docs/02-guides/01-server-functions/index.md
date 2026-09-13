@@ -14,6 +14,15 @@ to retain progressive enhancement. A single Array or Tuple Schema still describe
 
 A successful invocation refreshes the current route.
 
+A handler's Effect error channel is `never`: model expected outcomes in its success value. Anything
+else reaches the caller as `ServerFnInputError`, `ServerFnDefect`, or `ServerFnTransportError`,
+which `Effect.catchTag` distinguishes.
+
+A Server Function that only reads is a query. Import `ServerFn` from `effective-rsc/client` and wrap
+the reference with `query` for an Effect or `queryAtom` for an `@effect/atom-react` atom. Queries
+never refresh the route and abort when superseded or interrupted. Provide one `RegistryProvider` in
+the root Layout and seed with `useAtomInitialValues`.
+
 <!-- source-navigation -->
 
 ### Examples

@@ -1,16 +1,23 @@
 import { beforeEach, expect, it } from '@effect/vitest';
-import { Deferred, Effect, Exit, Fiber, Layer, MutableRef } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Layer, MutableRef, type Scope } from 'effect';
 import { HttpClient } from 'effect/unstable/http';
+import { encodeReply } from 'react-server-dom-rspack/client.browser';
 import { vi } from 'vitest';
 
-import { BrowserEffectRunner } from '../../src/client/browser-effect-runner';
-import { type BrowserRender, BrowserRenderer } from '../../src/client/browser-renderer';
-import { FlightClient } from '../../src/client/flight-client';
-import { NavigationApi } from '../../src/client/navigation-api';
-import { RouteLoader } from '../../src/client/route-loader';
-import { RouteRefresher } from '../../src/client/route-refresh';
-import type { FlightPayload } from '../../src/rsc/flight';
-import type { RouteTreeModel } from '../../src/rsc/route-tree';
+import { BrowserEffectRunner } from '../../../src/client/browser-effect-runner';
+import { type BrowserRender, BrowserRenderer } from '../../../src/client/browser-renderer';
+import {
+  FlightClient,
+  FlightLoadError,
+  type FlightRequest,
+} from '../../../src/client/flight-client';
+import { NavigationApi } from '../../../src/client/navigation-api';
+import { RouteLoader } from '../../../src/client/route-loader';
+import { RouteRefresher } from '../../../src/client/route-refresh';
+import { query } from '../../../src/client/server-fn/query';
+import type { RouteResponseModel } from '../../../src/rsc/flight';
+import type { RouteTreeModel } from '../../../src/rsc/route-tree';
+import { ServerFnTransportError } from '../../../src/rsc/server-fn-error';
 
 type ServerCallback = (id: string, args: ReadonlyArray<unknown>) => Promise<unknown>;
 
@@ -36,9 +43,13 @@ vi.mock('react-server-dom-rspack/client.browser', () => ({
   }),
 }));
 
-const { installCallServer } = await import('../../src/client/call-server');
+const { installCallServer } = await import('../../../src/client/server-fn/call-server');
 
 const makeRouteTree = (id: string): RouteTreeModel => ({ child: null, content: null, id });
+
+const stubLoad = (
+  load: (request: FlightRequest) => Effect.Effect<unknown, FlightLoadError, Scope.Scope>,
+) => load as FlightClient['Service']['load'];
 
 const makeNavigationEntry = (id: string, url: string) =>
   Object.assign(new EventTarget(), {
@@ -57,20 +68,20 @@ const secondEntry = makeNavigationEntry('entry-two', 'https://effective-rsc.test
 const makeFlight = (id: string, value: unknown, release: Effect.Effect<void>) => ({
   _tag: 'Flight' as const,
   completed: Effect.void,
-  payload: {
+  model: {
     formState: null,
     routeTree: makeRouteTree(id),
-    serverFnResult: { _tag: 'Success' as const, value },
-  } satisfies FlightPayload,
+    serverFnResponse: { _tag: 'Success' as const, value },
+  } satisfies RouteResponseModel,
   release,
   resolvedUrl: new URL(firstEntry.url),
 });
 
-const invokeServerFn = (id: string) => {
+const invokeServerFn = (id: string, args: ReadonlyArray<unknown> = []) => {
   if (reactClient.serverCallback === undefined) {
     throw new TypeError('Expected the React Server Function callback to be installed.');
   }
-  return reactClient.serverCallback(id, []);
+  return reactClient.serverCallback(id, args);
 };
 
 beforeEach(() => {
@@ -97,6 +108,159 @@ const listen = Effect.fnUntraced(function* (
   yield* Effect.raceFirst(Deferred.await(installed), Fiber.join(running));
 });
 
+it.effect('preserves mutation arguments containing malformed query metadata', () =>
+  Effect.gen(function* () {
+    const load = vi.fn((_request: FlightRequest) =>
+      Effect.fail(new FlightLoadError({ cause: 'offline', reason: 'RequestFailed' })),
+    );
+    yield* listen(
+      Layer.mergeAll(
+        BrowserEffectRunner.layer,
+        BrowserRenderer.layerTest({
+          commit: () => undefined,
+          initialize: () => undefined,
+          navigate: () => {
+            throw new TypeError('Unexpected navigation render.');
+          },
+          refresh: () => {
+            throw new TypeError('Unexpected route refresh.');
+          },
+        }),
+        FlightClient.layerTest({ load: stubLoad(load) }),
+        NavigationApi.layerTest({
+          getCurrentEntry: () => firstEntry,
+          getCurrentUrl: () => firstEntry.url,
+          getTransition: () => null,
+          navigate: () => {
+            throw new TypeError('Unexpected navigation.');
+          },
+          reloadDocument: () => undefined,
+          replaceDocument: () => undefined,
+          subscribe: () => () => undefined,
+        }),
+        RouteLoader.layerTest({
+          invalidate: () => undefined,
+          prepareRefresh: () => () => undefined,
+        }),
+        RouteRefresher.layerTest({}),
+      ),
+    );
+
+    for (const metadata of [
+      null,
+      undefined,
+      {},
+      { signal: 'invalid' },
+      {
+        get signal() {
+          throw new Error('Metadata inspection failed.');
+        },
+      },
+    ]) {
+      const args = ['first', { id: 'ticket-1', [Symbol.for('ersc/ServerFnQuery')]: metadata }];
+      const error = yield* Effect.promise(() =>
+        invokeServerFn('mutation', args).then(
+          () => expect.unreachable('Expected the offline transport to reject.'),
+          (cause: unknown) => cause,
+        ),
+      );
+
+      expect(error).toBeInstanceOf(ServerFnTransportError);
+      expect(load).toHaveBeenLastCalledWith(expect.objectContaining({ _tag: 'Mutation' }));
+      expect(encodeReply).toHaveBeenLastCalledWith(args, expect.anything());
+    }
+  }).pipe(
+    Effect.scoped,
+    Effect.provideService(
+      HttpClient.HttpClient,
+      HttpClient.make(() => Effect.die('Unexpected HTTP request.')),
+    ),
+  ),
+);
+
+for (const mode of ['Mutation', 'Query'] as const) {
+  for (const failure of ['Encoding', 'RequestFailed', 'DecodeFailed'] as const) {
+    it.effect(`reports ${failure} as a transport error for ${mode}`, () =>
+      Effect.gen(function* () {
+        const load = vi.fn((request: FlightRequest) => {
+          expect(request._tag).toBe(mode);
+          return Effect.fail(
+            new FlightLoadError({
+              cause: new Error('unavailable'),
+              reason: failure === 'Encoding' ? 'RequestFailed' : failure,
+            }),
+          );
+        });
+        yield* listen(
+          Layer.mergeAll(
+            BrowserEffectRunner.layer,
+            BrowserRenderer.layerTest({
+              commit: () => undefined,
+              initialize: () => undefined,
+              navigate: () => {
+                throw new TypeError('Unexpected navigation render.');
+              },
+              refresh: () => {
+                throw new TypeError('Unexpected route refresh.');
+              },
+            }),
+            FlightClient.layerTest({ load: stubLoad(load) }),
+            NavigationApi.layerTest({
+              getCurrentEntry: () => firstEntry,
+              getCurrentUrl: () => firstEntry.url,
+              getTransition: () => null,
+              navigate: () => {
+                throw new TypeError('Unexpected navigation.');
+              },
+              reloadDocument: () => undefined,
+              replaceDocument: () => undefined,
+              subscribe: () => () => undefined,
+            }),
+            RouteLoader.layerTest({
+              invalidate: () => undefined,
+              prepareRefresh: () => () => undefined,
+            }),
+            RouteRefresher.layerTest({}),
+          ),
+        );
+        if (failure === 'Encoding') {
+          vi.mocked(encodeReply).mockRejectedValueOnce(new Error('cannot encode argument'));
+        }
+        const serverFn = (...args: ReadonlyArray<unknown>) => invokeServerFn('failure', args);
+        const error = yield* mode === 'Query'
+          ? Effect.match(query(serverFn)(), {
+              onFailure: (cause) => cause,
+              onSuccess: () => expect.unreachable('Expected the query to fail.'),
+            })
+          : Effect.promise(() =>
+              serverFn().then(
+                () => expect.unreachable('Expected the invocation to reject.'),
+                (cause: unknown) => cause,
+              ),
+            );
+
+        expect(error).toBeInstanceOf(ServerFnTransportError);
+        expect(error).toMatchObject({
+          _tag: 'ServerFnTransportError',
+          detail: {
+            message:
+              failure === 'Encoding'
+                ? 'Failed to encode arguments.'
+                : 'Server Function request failed.',
+          },
+        });
+        expect(load).toHaveBeenCalledTimes(failure === 'Encoding' ? 0 : 1);
+      }).pipe(
+        Effect.scoped,
+        Effect.provideService(
+          HttpClient.HttpClient,
+          HttpClient.make(() => Effect.die('Unexpected HTTP request.')),
+        ),
+      ),
+    );
+  }
+}
+
 it.effect('releases an incomplete Server Function response', () =>
   Effect.scoped(
     Effect.gen(function* () {
@@ -113,18 +277,19 @@ it.effect('releases an incomplete Server Function response', () =>
         subscribe: () => () => undefined,
       });
       const flightClientLayer = FlightClient.layerTest({
-        load: () =>
+        load: stubLoad(() =>
           Effect.succeed({
             _tag: 'Flight' as const,
             completed: Effect.void,
-            payload: {
+            model: {
               formState: null,
               routeTree: makeRouteTree('incomplete'),
-              serverFnResult: null,
+              serverFnResponse: null,
             },
             release: Effect.sync(released),
             resolvedUrl: new URL(firstEntry.url),
           }),
+        ),
         loadInitial: Effect.die('Unexpected initial Flight load.'),
       });
       yield* listen(
@@ -198,10 +363,11 @@ const staleResponseScenario = (
         subscribe: () => () => undefined,
       });
       const flightClientLayer = FlightClient.layerTest({
-        load: () =>
+        load: stubLoad(() =>
           Deferred.succeed(requestStarted, undefined).pipe(
             Effect.andThen(Deferred.await(response)),
           ),
+        ),
         loadInitial: Effect.die('Unexpected initial Flight load.'),
       });
       const browserRendererLayer = BrowserRenderer.layerTest({
@@ -309,8 +475,8 @@ it.effect('does not let an older invocation response overwrite a newer response'
         subscribe: () => () => undefined,
       });
       const flightClientLayer = FlightClient.layerTest({
-        load: (request) => {
-          if (request._tag !== 'ServerFunction') {
+        load: stubLoad((request) => {
+          if (request._tag !== 'Mutation') {
             return Effect.die('Unexpected navigation Flight load.');
           }
           return request.id === 'first'
@@ -320,7 +486,7 @@ it.effect('does not let an older invocation response overwrite a newer response'
             : Deferred.succeed(secondStarted, undefined).pipe(
                 Effect.andThen(Deferred.await(secondResponse)),
               );
-        },
+        }),
         loadInitial: Effect.die('Unexpected initial Flight load.'),
       });
       const browserRendererLayer = BrowserRenderer.layerTest({
@@ -408,11 +574,12 @@ it.effect('releases a visible Server Function refresh when its replacement commi
         BrowserEffectRunner.layer,
         BrowserRenderer.layerTest(browserRenderer),
         FlightClient.layerTest({
-          load: () =>
+          load: stubLoad(() =>
             Effect.succeed({
               ...makeFlight('refreshed', 'saved', Effect.sync(released)),
               completed: Effect.never,
             }),
+          ),
         }),
         NavigationApi.layerTest({
           getCurrentEntry: () => firstEntry,
@@ -468,7 +635,9 @@ it.effect('releases a never-committed Server Function refresh after its successo
         BrowserEffectRunner.layer,
         BrowserRenderer.layerTest(browserRenderer),
         FlightClient.layerTest({
-          load: () => Effect.succeed(makeFlight('refreshed', 'saved', Effect.sync(released))),
+          load: stubLoad(() =>
+            Effect.succeed(makeFlight('refreshed', 'saved', Effect.sync(released))),
+          ),
         }),
         NavigationApi.layerTest({
           getCurrentEntry: () => firstEntry,

@@ -8,12 +8,12 @@ import { isValidElement } from 'react';
 
 import { Application } from '../../src/application/ersc';
 import type { PageComponent, PageRuntimeProps } from '../../src/application/page';
-import { type FlightPayload, FlightMediaType, ServerFnIdHeader } from '../../src/rsc/flight';
+import { type RouteResponseModel, FlightMediaType, ServerFnIdHeader } from '../../src/rsc/flight';
 import { ServerConfig } from '../../src/server/server-config';
 
 let action: () => Promise<string>;
-const renderFlight = vi.fn((payload: FlightPayload) => {
-  let leaf = payload.routeTree;
+const renderFlight = vi.fn((model: RouteResponseModel) => {
+  let leaf = model.routeTree;
   while (leaf.child !== null) {
     leaf = leaf.child;
   }
@@ -31,7 +31,7 @@ const renderFlight = vi.fn((payload: FlightPayload) => {
         )
         .then((page) => {
           controller.enqueue(
-            new TextEncoder().encode(JSON.stringify({ page, result: payload.serverFnResult })),
+            new TextEncoder().encode(JSON.stringify({ page, result: model.serverFnResponse })),
           );
           controller.close();
         });

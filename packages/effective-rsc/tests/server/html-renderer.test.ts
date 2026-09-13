@@ -4,7 +4,7 @@ import { isValidElement, type ReactNode } from 'react';
 import type { ReactFormState } from 'react-dom/client';
 import type { RenderToReadableStreamOptions } from 'react-dom/server';
 
-import type { FlightPayload } from '../../src/rsc/flight';
+import type { RouteResponseModel } from '../../src/rsc/flight';
 import { FlightHtmlInjector } from '../../src/server/flight-html-stream';
 import type { FlightRender } from '../../src/server/flight-renderer';
 import { ServerConfig } from '../../src/server/server-config';
@@ -36,15 +36,15 @@ const decodeFlight = vi.fn((_stream: ReadableStream<Uint8Array>) =>
       content: null,
       id: 'root',
     },
-    serverFnResult: null,
-  } satisfies FlightPayload),
+    serverFnResponse: null,
+  } satisfies RouteResponseModel),
 );
 const renderDocument = vi.fn((root: ReactNode, options?: RenderToReadableStreamOptions) => {
   renderedRoot = root;
   renderOptions = options;
   return Promise.resolve(new ReadableStream<Uint8Array>());
 });
-const injectPayload = vi.fn(() => new TransformStream<Uint8Array, Uint8Array>());
+const injectStream = vi.fn(() => new TransformStream<Uint8Array, Uint8Array>());
 
 vi.doMock('react-server-dom-rspack/client', () => ({
   createFromReadableStream: decodeFlight,
@@ -54,7 +54,7 @@ vi.doMock('react-dom/server.bun', () => ({
 }));
 const { HtmlRenderError, HtmlRenderer } = await import('../../src/server/html-renderer');
 const fizz = await vi.importActual<typeof import('react-dom/server.bun')>('react-dom/server.bun');
-const FlightHtmlInjectorTestLayer = FlightHtmlInjector.layerTest({ inject: injectPayload });
+const FlightHtmlInjectorTestLayer = FlightHtmlInjector.layerTest({ inject: injectStream });
 const HtmlRendererTestLayer = HtmlRenderer.layer.pipe(
   Layer.provide(FlightHtmlInjectorTestLayer),
   Layer.provide(Layer.succeed(ServerConfig, serverConfig)),
@@ -62,7 +62,7 @@ const HtmlRendererTestLayer = HtmlRenderer.layer.pipe(
 
 beforeEach(() => {
   decodeFlight.mockClear();
-  injectPayload.mockClear();
+  injectStream.mockClear();
   renderDocument.mockClear();
   renderedRoot = undefined;
   renderOptions = undefined;
@@ -120,7 +120,7 @@ describe('HtmlRenderer', () => {
       expect(renderedRoot.props.children).toBeUndefined();
       expect(renderOptions?.bootstrapScripts).toEqual(clientBootstrapScripts);
       expect(renderOptions?.formState).toBe(formState);
-      expect(injectPayload).toHaveBeenCalledWith(expect.any(ReadableStream));
+      expect(injectStream).toHaveBeenCalledWith(expect.any(ReadableStream));
       const renderError = new Error('render failed');
       renderOptions?.onError?.(renderError, { componentStack: '\n    at Page' });
       yield* Effect.promise(() => logged.promise);
@@ -144,7 +144,7 @@ describe('HtmlRenderer', () => {
 
       expect(error).toBeInstanceOf(HtmlRenderError);
       expect(error.cause).toBe(shellFailure);
-      expect(injectPayload).not.toHaveBeenCalled();
+      expect(injectStream).not.toHaveBeenCalled();
     }).pipe(Effect.provide(HtmlRendererTestLayer));
   });
 

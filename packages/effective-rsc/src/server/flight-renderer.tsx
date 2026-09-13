@@ -4,8 +4,6 @@ import { renderToReadableStream } from 'react-server-dom-rspack/server.node';
 
 import type { AnyMiddleware } from '../application/middleware';
 import type { RenderRuntimeContext } from '../application/render-runtime';
-import type { FlightPayload, ServerFnResult } from '../rsc/flight';
-import type { RouteTreeModel } from '../rsc/route-tree';
 
 type FlightStream = ReadableStream<Uint8Array>;
 
@@ -16,11 +14,9 @@ export type FlightRender = {
 };
 
 export type FlightRenderOptions<Services> = {
-  readonly formState: FlightPayload['formState'];
   readonly middleware: ReadonlyArray<AnyMiddleware<Services>>;
+  readonly model: unknown;
   readonly renderRuntime: RenderRuntimeContext;
-  readonly routeTree: RouteTreeModel;
-  readonly serverFnResult: ServerFnResult | null;
   readonly temporaryReferences?: TemporaryReferenceSet;
 };
 
@@ -29,17 +25,11 @@ export class FlightRenderer extends Context.Service<FlightRenderer>()(
   {
     make: Effect.succeed({
       render: Effect.fn('FlightRenderer.render')(function* <Services>({
-        formState,
         middleware,
+        model,
         renderRuntime,
-        routeTree,
-        serverFnResult,
         temporaryReferences,
-      }: FlightRenderOptions<Services>): Effect.fn.Return<
-        FlightRender,
-        never,
-        Services | Scope.Scope
-      > {
+      }: FlightRenderOptions<Services>) {
         const parentScope = yield* Effect.scope;
         const renderScope = yield* Scope.fork(parentScope);
         const release = Scope.close(renderScope, Exit.void);
@@ -48,9 +38,8 @@ export class FlightRenderer extends Context.Service<FlightRenderer>()(
             Scope.provide(renderScope),
           );
           const signal = yield* Effect.abortSignal.pipe(Scope.provide(renderScope));
-          const stream = renderRuntime.bind(runtime, middleware, () => {
-            const payload = { formState, routeTree, serverFnResult } satisfies FlightPayload;
-            return renderToReadableStream(payload, {
+          const stream = renderRuntime.bind(runtime, middleware, () =>
+            renderToReadableStream(model, {
               onError: (error) => {
                 if (!signal.aborted) {
                   void runtime(Effect.logError(error));
@@ -58,8 +47,8 @@ export class FlightRenderer extends Context.Service<FlightRenderer>()(
               },
               signal,
               temporaryReferences,
-            });
-          });
+            }),
+          );
           return { release, signal, stream } satisfies FlightRender;
         }).pipe(Effect.onError(() => release));
       }),

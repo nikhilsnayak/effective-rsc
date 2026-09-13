@@ -58,7 +58,7 @@ it.effect(
       const path = yield* Path.Path;
       const frameworkRoot = path.resolve('.');
       const frameworkDist = path.join(frameworkRoot, 'dist');
-      const applicationModule = path.join(frameworkDist, 'index.js');
+      const applicationModule = path.join(frameworkDist, 'exports', 'index.js');
       const directory = yield* makeFixtureDirectory('ersc-rspack-dev-');
       const sourceDirectory = path.join(directory, 'src');
       const application = path.join(sourceDirectory, 'application.tsx');
@@ -134,7 +134,7 @@ it.effect(
       const path = yield* Path.Path;
       const frameworkRoot = path.resolve('.');
       const frameworkDist = path.join(frameworkRoot, 'dist');
-      const applicationModule = path.join(frameworkDist, 'index.js');
+      const applicationModule = path.join(frameworkDist, 'exports', 'index.js');
       const directory = yield* makeFixtureDirectory('ersc-rspack-build-');
       const sourceDirectory = path.join(directory, 'src');
       const application = path.join(sourceDirectory, 'application.tsx');

@@ -5,7 +5,7 @@ import { renderToReadableStream } from 'react-dom/server.bun';
 import { createFromReadableStream } from 'react-server-dom-rspack/client';
 
 import { RouteTree } from '../client/route-tree';
-import type { FlightPayload } from '../rsc/flight';
+import type { RouteResponseModel } from '../rsc/flight';
 import { FlightHtmlInjector } from './flight-html-stream';
 import type { FlightRender } from './flight-renderer';
 import { ServerConfig } from './server-config';
@@ -29,12 +29,12 @@ export class HtmlRenderer extends Context.Service<HtmlRenderer>()(
           formState,
         }: {
           readonly flight: FlightRender;
-          readonly formState: FlightPayload['formState'];
+          readonly formState: RouteResponseModel['formState'];
         }): Effect.fn.Return<HtmlStream, HtmlRenderError, Scope.Scope> {
           const signal = yield* Effect.abortSignal;
           const runtime = yield* FiberSet.makeRuntimePromise<never>();
           const [ssrFlightStream, browserFlightStream] = flight.stream.tee();
-          let payload: PromiseLike<FlightPayload> | null = null;
+          let model: PromiseLike<RouteResponseModel> | null = null;
 
           function SsrRoot() {
             // Emit CSS without server-only siblings that shift hydration's useId paths.
@@ -42,7 +42,7 @@ export class HtmlRenderer extends Context.Service<HtmlRenderer>()(
               preinit(href, { as: 'style', precedence: 'default' });
             }
             const { routeTree } = use(
-              (payload ??= createFromReadableStream<FlightPayload>(ssrFlightStream)),
+              (model ??= createFromReadableStream<RouteResponseModel>(ssrFlightStream)),
             );
             return <RouteTree root={routeTree} />;
           }

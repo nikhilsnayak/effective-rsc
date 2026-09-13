@@ -160,7 +160,7 @@ const makeHtmlWriter = () => {
   };
 };
 
-export const injectFlightPayload = (
+export const injectFlightStream = (
   flightStream: ReadableStream<Uint8Array>,
   options?: FlightHtmlStreamOptions,
 ) => {
@@ -227,7 +227,7 @@ export const injectFlightPayload = (
 export class FlightHtmlInjector extends Context.Service<FlightHtmlInjector>()(
   'ersc/server/flight-html-stream/FlightHtmlInjector',
   {
-    make: Effect.succeed({ inject: injectFlightPayload }),
+    make: Effect.succeed({ inject: injectFlightStream }),
   },
 ) {
   static readonly layer = Layer.effect(this, this.make);

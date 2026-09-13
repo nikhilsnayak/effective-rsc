@@ -75,6 +75,8 @@ entry; read Git history for what it said.
 | D-069 | Decode Page params once in the request handler before GET/HEAD rendering; rejection returns an empty 404, including Flight. POST keeps render-time decoding and completed Server Function outcomes. Resolves OQ-003.                                                    |
 | D-070 | Select one installed deployment adapter with ersc build --adapter <package>; invoke its fixed ./build export after compilation. No dependency scanning, manifest marker, automatic installation, or upload. Core remains host-independent.                              |
 | D-071 | Read additive application transition types from native links via data-ersc-transition-types at navigation start; publish them with the route and do not persist them in history. Typed client navigation APIs remain deferred.                                          |
+| D-072 | Give a Server Function handler a `never` error channel: expected outcomes belong in the success value, and everything else reaches the client as one of three framework errors for rejected input, a logged server defect, and an incomplete request.                   |
+| D-073 | Use QUERY /_ersc/query for result-only Server Function reads, preserving native React encoding and Flight. Client Effect and atom helpers cancel reads without refreshing routes.                                                                                       |
 
 ## Deferred
 

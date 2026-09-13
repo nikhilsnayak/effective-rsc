@@ -82,12 +82,23 @@ to retain progressive enhancement. A single Array or Tuple Schema still describe
 
 A successful invocation refreshes the current route.
 
+A handler's Effect error channel is `never`: model expected outcomes in its success value. Anything
+else reaches the caller as `ServerFnInputError`, `ServerFnDefect`, or `ServerFnTransportError`,
+which `Effect.catchTag` distinguishes.
+
+A Server Function that only reads is a query. Import `ServerFn` from `effective-rsc/client` and wrap
+the reference with `query` for an Effect or `queryAtom` for an `@effect/atom-react` atom. Queries
+never refresh the route and abort when superseded or interrupted. Provide one `RegistryProvider` in
+the root Layout and seed with `useAtomInitialValues`.
+
 - **[Creating the Server Function authoring module](./docs/02-guides/01-server-functions/10_ersc.ts)**
 - **[Defining a Server Function](./docs/02-guides/01-server-functions/20_follow-author.ts)**: ERSC decodes FormData before running the Effect handler.
 - **[Rendering a direct form action](./docs/02-guides/01-server-functions/30_follow-author-button.tsx)**: A FormData Server Function can be passed directly to form action.
 - **[Closing the Server Function application](./docs/02-guides/01-server-functions/40_application.tsx)**
 - **[Defining a stateful form action](./docs/02-guides/01-server-functions/50_greet.ts)**: A schema list decodes React's previous state and submitted FormData separately.
 - **[Rendering a stateful form](./docs/02-guides/01-server-functions/60_greeting-form.tsx)**: Pass the native reference to useActionState so React also owns progressive form submission.
+- **[Modelling an expected outcome](./docs/02-guides/01-server-functions/70_lookup-author.ts)**: The handler's Effect error channel is `never`, so expected outcomes belong in its success value.
+- **[Reading a Server Function from the browser](./docs/02-guides/01-server-functions/80_author-preview.tsx)**: `queryAtom` reads without refreshing the route; an unexpected failure arrives as `ServerFnError`.
 
 ## Services
 
@@ -356,6 +367,9 @@ Under the `react-server` condition, the package root exports `Application`.
 `Routes`, `ServerFn`, `withMiddleware`, and `make`. Values from different ERSC identities cannot
 be composed.
 
+`effective-rsc/client` is the entry point for Client Components and exports `ServerFn` query
+helpers.
+
 ## Application
 
 `Application.ersc<Services>()` creates one application-scoped ERSC identity and its base authoring
@@ -504,8 +518,31 @@ action to `<form action>`. React supplies previous state and FormData for hydrat
 submissions. Previous state is client input: validate it, but never trust it for authorization or
 authoritative application state. Native `.bind` can prefill leading arguments.
 
-Direct server invocation throws. Encode expected failure in a discriminated output union; unexpected
-failures reject the Promise. Browser requests require an Origin matching the application host and
-may contain at most 10 MiB. See the
+The handler's Effect error channel is `never`; model expected outcomes in its success value.
+Anything else reaches the caller as one of three framework errors: `ServerFnInputError` when the
+arguments failed the input Schema, carrying the validation message; `ServerFnDefect` when the
+handler failed, carrying a digest that matches the server log plus the failure's name and message in
+development; and `ServerFnTransportError` when the request never completed. Promise callers see a
+rejection; queries see them in the Effect error channel.
+
+Direct server invocation throws. Browser requests require an Origin matching the application host
+and may contain at most 10 MiB. See the
 [known limitations](https://github.com/nikhilsnayak/effective-rsc/blob/main/docs/ARCHITECTURE.md#known-limitations)
-for the typed failure channel and progressive bound arguments.
+for the encoded failure shape and progressive bound arguments.
+
+## Query
+
+`effective-rsc/client` exports `ServerFn` for reading a Server Function from a Client Component.
+Pass the Server Function reference itself to `<form action>` and `useActionState`; those are not
+queries.
+
+`ServerFn.query(serverFn)` returns a function taking the encoded arguments and yielding an Effect.
+`ServerFn.queryAtom(serverFn)` returns an `Atom.AtomResultFn` for `@effect/atom-react`. Both abort
+the request when the caller is interrupted; new atom arguments supersede an in-flight read, and
+`Atom.Interrupt` cancels one.
+
+Both fail with `ServerFnError`, the union of the three framework failures, read from the
+`AsyncResult` cause. Queries never refresh the route.
+
+Provide one `RegistryProvider` in the root Layout and seed atoms with `useAtomInitialValues`. A
+nested provider replaces the registry for its subtree.

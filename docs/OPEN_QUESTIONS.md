@@ -17,16 +17,6 @@ IDs are append-only and never reused, including after a question is resolved.
 - **Resolution:** Unresolved.
 - **Status:** Open.
 
-### OQ-006 — Server Function failure channel
-
-- **Question:** How should a Server Function handler's typed failure reach its caller?
-- **Why:** Effect owns the application runtime, but a handler's error type is the one part of its signature the client contract does not carry.
-- **Affected:** `ERSC.ServerFn.make` typing, Flight payloads, client call sites, and error boundaries.
-- **Evidence:** `ServerFnOperationError` stores the failure as `Schema.Defect` and `serverFnOutcome` squashes it, so `ServerFunction<Input, Output, Services>` resolves `Promise<Output>` and delivers failures as `unknown`. The framework E2E fixture encodes its own `SelectionMutationState` result in `Output` to work around this.
-- **Related:** D-009, D-036, D-040.
-- **Resolution:** Unresolved.
-- **Status:** Open.
-
 ## Deferred
 
 ### OQ-002 — Suspensing Loading diagnostics

@@ -18,10 +18,11 @@ import {
   type AnyMiddleware,
   getScopedHttpMiddleware,
 } from '../application/middleware';
+import { FrameworkAssetNamespace, FrameworkQueryPath } from '../application/namespace';
 import type { EncodedPageParams, PageParams } from '../application/page';
 import type { CompiledDestination } from '../application/route-graph';
-import { FrameworkAssetNamespace, isAbsolutePath } from '../application/route-path';
-import { FlightMediaType } from '../rsc/flight';
+import { isAbsolutePath } from '../application/route-path';
+import { FlightMediaType, type RouteResponseModel } from '../rsc/flight';
 import { renderRouteTree } from '../rsc/render-route-tree';
 import { FlightHtmlInjector } from './flight-html-stream';
 import { FlightRenderer } from './flight-renderer';
@@ -33,10 +34,11 @@ import {
   ServerConfig,
 } from './server-config';
 import {
-  prepareServerFnRequest,
-  type PreparedServerFnRequest,
-  type ServerFnRequestFailure,
-} from './server-fn-request';
+  prepareServerFnMutation,
+  type PreparedServerFnMutation,
+  type ServerFnMutationFailure,
+} from './server-fn/mutation';
+import { prepareServerFnQuery, type ServerFnQueryOutcome } from './server-fn/query';
 
 const RenderersLayer = Layer.mergeAll(FlightRenderer.layer, HtmlRenderer.layer).pipe(
   Layer.provide(FlightHtmlInjector.layer),
@@ -124,7 +126,7 @@ const combinePageMiddleware = <Services>(
 type HttpApplicationRequirements =
   | ServerConfig
   | Layer.Services<ReturnType<typeof HttpStaticServer.layer>>
-  | HttpRouter.Request.From<'Error', HtmlRenderError | ServerFnRequestFailure>;
+  | HttpRouter.Request.From<'Error', HtmlRenderError | ServerFnMutationFailure>;
 
 export type HttpApplicationLayer<ApplicationError> = Layer.Layer<
   never,
@@ -148,7 +150,7 @@ const httpLayer = <Services, ApplicationError>(
     formState,
     middleware,
     request,
-    serverFnResult,
+    serverFnResponse,
     status,
     temporaryReferences,
   }: RenderOptions<Services>) {
@@ -171,11 +173,9 @@ const httpLayer = <Services, ApplicationError>(
       });
       const flightRenderer = yield* FlightRenderer;
       const flight = yield* flightRenderer.render({
-        formState,
         middleware,
+        model: { formState, routeTree, serverFnResponse } satisfies RouteResponseModel,
         renderRuntime: identity.renderRuntime,
-        routeTree,
-        serverFnResult,
         temporaryReferences,
       });
 
@@ -224,7 +224,7 @@ const httpLayer = <Services, ApplicationError>(
   });
 
   const executeServerFnAndRefresh = (
-    prepared: PreparedServerFnRequest<Services>,
+    prepared: PreparedServerFnMutation<Services>,
     destination: CompiledDestination<Services>,
     request: HttpServerRequest.HttpServerRequest,
   ) => {
@@ -250,6 +250,29 @@ const httpLayer = <Services, ApplicationError>(
     return applyMiddleware(prepared.middleware, response);
   };
 
+  const renderQuery = Effect.fnUntraced(function* (
+    outcome: ServerFnQueryOutcome,
+    middleware: ReadonlyArray<AnyMiddleware<Services>>,
+  ) {
+    const flightRenderer = yield* FlightRenderer;
+    const flight = yield* flightRenderer.render({
+      middleware,
+      model: outcome.result,
+      renderRuntime: identity.renderRuntime,
+      temporaryReferences: outcome.temporaryReferences,
+    });
+    return HttpServerResponse.stream(
+      fromWebStream(flight.stream, { releaseLockOnEnd: true }).pipe(
+        Stream.ensuring(flight.release),
+      ),
+      {
+        contentType: `${FlightMediaType};charset=utf-8`,
+        headers: DynamicResponseHeaders,
+        status: 200,
+      },
+    );
+  });
+
   const RequestLayer = Layer.mergeAll(RenderersLayer, applicationState.layer);
   const ApplicationRoutesLayer = Layer.unwrap(
     Effect.map(Layer.build(RequestLayer), (applicationServices) => {
@@ -265,7 +288,7 @@ const httpLayer = <Services, ApplicationError>(
             formState: null,
             middleware: destination.middleware,
             request,
-            serverFnResult: null,
+            serverFnResponse: null,
             status: 200,
           }).pipe(HttpEffect.withPreResponseHandler(acceptVaryPreResponseHandler)),
         );
@@ -278,7 +301,7 @@ const httpLayer = <Services, ApplicationError>(
               );
         const PageLayer = GetLayer.pipe(Layer.provide(PageMiddleware.layer));
         const ServerFnLayer = HttpRouter.add('POST', destination.pattern, (request) =>
-          prepareServerFnRequest(request, identity).pipe(
+          prepareServerFnMutation(request, identity).pipe(
             Effect.flatMap((prepared) => executeServerFnAndRefresh(prepared, destination, request)),
             Effect.catchTag('ServerFnRequestError', (error) =>
               Effect.succeed(
@@ -294,8 +317,33 @@ const httpLayer = <Services, ApplicationError>(
 
         return Layer.mergeAll(PageLayer, ServerFnLayer);
       };
+      const QueryLayer = HttpRouter.add(
+        // @ts-expect-error Effect's HttpMethod union predates RFC 10008 QUERY.
+        'QUERY',
+        FrameworkQueryPath,
+        (request) =>
+          prepareServerFnQuery(request, identity).pipe(
+            Effect.flatMap((prepared) =>
+              applyMiddleware(
+                prepared.middleware,
+                prepared.execute.pipe(
+                  Effect.flatMap((outcome) => renderQuery(outcome, prepared.middleware)),
+                ),
+              ),
+            ),
+            Effect.catchTag('ServerFnRequestError', (error) =>
+              Effect.succeed(
+                HttpServerResponse.text(error.message, {
+                  headers: DynamicResponseHeaders,
+                  status: error.status,
+                }),
+              ),
+            ),
+          ),
+      ).pipe(Layer.provide(RequestContextMiddleware.layer));
       const [firstDestination, ...remainingDestinations] = applicationState.routes;
       return Layer.mergeAll(
+        QueryLayer,
         makeRouteLayer(firstDestination),
         ...remainingDestinations.map(makeRouteLayer),
       );

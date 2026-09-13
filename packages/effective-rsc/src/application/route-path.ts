@@ -1,3 +1,5 @@
+import { FrameworkNamespace } from './namespace';
+
 export type AbsolutePath = `/${string}`;
 
 // Compile-time and runtime route grammars are deliberately paired. Any grammar change must update
@@ -93,12 +95,6 @@ export type JoinPath<Prefix extends AbsolutePath, Path extends AbsolutePath> = P
   : Path extends '/'
     ? Prefix
     : `${Prefix}${Path}`;
-
-export const FrameworkNamespace = '/_ersc';
-
-export const FrameworkAssetNamespace = `${FrameworkNamespace}/assets`;
-
-export const FrameworkAssetPrefix = `${FrameworkAssetNamespace}/` as const;
 
 type SegmentCanMatch<Segment extends string, Expected extends string> = Segment extends `:${string}`
   ? true

@@ -1,3 +1,4 @@
+import { RegistryProvider } from '@effect/atom-react';
 import { Effect } from 'effect';
 import { Layers3 } from 'lucide-react';
 
@@ -45,7 +46,7 @@ export default ERSC.Layout.make({
             </div>
           </header>
 
-          {children}
+          <RegistryProvider>{children}</RegistryProvider>
 
           <footer className='border-t'>
             <div className='text-muted-foreground mx-auto flex max-w-7xl flex-col gap-1 px-5 py-6 text-xs sm:px-8 lg:flex-row lg:justify-between'>

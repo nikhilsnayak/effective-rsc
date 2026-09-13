@@ -12,5 +12,10 @@ the request when the caller is interrupted; new atom arguments supersede an in-f
 Both fail with `ServerFnError`, the union of the three framework failures, read from the
 `AsyncResult` cause. Queries never refresh the route.
 
+`ServerFn.stream(serverFn)` reads a Server Function whose handler returns a `Stream`, yielding a
+`Stream` whose scope owns the request; `ServerFn.streamAtom` exposes the latest chunk as its
+`AsyncResult`, and `Atom.pull` accumulates chunks instead. Passing a streaming Server Function to
+`query` is a type error naming `stream`, and the reverse is too.
+
 Provide one `RegistryProvider` in the root Layout and seed atoms with `useAtomInitialValues`. A
 nested provider replaces the registry for its subtree.

@@ -1,16 +1,32 @@
 'use client';
 
 import { useAtom, useAtomInitialValues } from '@effect/atom-react';
+import { Cause, Option } from 'effect';
 import { AsyncResult, Atom } from 'effect/unstable/reactivity';
-import { ServerFn } from 'effective-rsc/client';
+import { type ServerFnError, ServerFn } from 'effective-rsc/client';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import type { FeedPage } from '@/modules/feed/model';
-import { describeActor, searchFeed } from '@/modules/feed/server-functions';
+import { describeActor, searchFeed, streamTicks } from '@/modules/feed/server-functions';
 
 const feedQuery = ServerFn.queryAtom(searchFeed);
 const actorQuery = ServerFn.queryAtom(describeActor);
+const ticksQuery = ServerFn.streamAtom(streamTicks);
+
+const describeStreamFailure = (cause: Cause.Cause<ServerFnError | Cause.NoSuchElementError>) => {
+  const error = Option.getOrUndefined(Cause.findErrorOption(cause));
+  switch (error?._tag) {
+    case 'ServerFnDefect':
+      return `defect ${error.digest}`;
+    case 'ServerFnInputError':
+      return `input ${error.detail.message}`;
+    case 'ServerFnTransportError':
+      return 'transport';
+    default:
+      return 'unknown';
+  }
+};
 
 const SearchLatencyMillis = 400;
 const PageLatencyMillis = 80;
@@ -20,7 +36,7 @@ type FeedPanelProps = {
   readonly seed: FeedPage;
 };
 
-const statusOf = (result: AsyncResult.AsyncResult<FeedPage, unknown>) => {
+const statusOf = (result: AsyncResult.AsyncResult<unknown, unknown>) => {
   if (result.waiting) {
     return 'waiting';
   }
@@ -36,6 +52,7 @@ const statusOf = (result: AsyncResult.AsyncResult<FeedPage, unknown>) => {
 function FeedView() {
   const [actor, describe] = useAtom(actorQuery);
   const [result, run] = useAtom(feedQuery);
+  const [ticks, runTicks] = useAtom(ticksQuery);
   const [term, setTerm] = useState('');
   const visible = AsyncResult.getOrElse(result, () => EmptyPage);
 
@@ -93,6 +110,44 @@ function FeedView() {
         </Button>
         <span className='text-muted-foreground text-xs'>
           {AsyncResult.getOrElse(actor, () => null)}
+        </span>
+      </div>
+      <div className='mt-4 flex flex-wrap items-center gap-3'>
+        <Button
+          data-testid='ticks-start'
+          onClick={() => runTicks([{ count: 4, failAt: null, intervalMillis: 250 }])}
+          size='sm'
+          type='button'
+          variant='outline'
+        >
+          Stream ticks
+        </Button>
+        <Button
+          data-testid='ticks-fail'
+          onClick={() => runTicks([{ count: 4, failAt: 3, intervalMillis: 120 }])}
+          size='sm'
+          type='button'
+          variant='outline'
+        >
+          Stream failure
+        </Button>
+        <Button
+          data-testid='ticks-cancel'
+          onClick={() => runTicks(Atom.Interrupt)}
+          size='sm'
+          type='button'
+          variant='outline'
+        >
+          Cancel ticks
+        </Button>
+        <span className='text-muted-foreground text-xs' data-testid='ticks-status'>
+          {statusOf(ticks)}
+        </span>
+        <span className='text-muted-foreground text-xs' data-testid='ticks-latest'>
+          {AsyncResult.isSuccess(ticks) ? ticks.value.label : ''}
+        </span>
+        <span className='text-muted-foreground text-xs' data-testid='ticks-error'>
+          {AsyncResult.isFailure(ticks) ? describeStreamFailure(ticks.cause) : ''}
         </span>
       </div>
       <ul className='mt-5 grid gap-2' data-testid='feed-entries'>

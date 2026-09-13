@@ -525,6 +525,24 @@ handler failed, carrying a digest that matches the server log plus the failure's
 development; and `ServerFnTransportError` when the request never completed. Promise callers see a
 rejection; queries see them in the Effect error channel.
 
+When the handler's Effect succeeds with a `Stream`, ERSC streams it to the caller instead of
+buffering it. Its error channel must be `never`, like the handler's; a failure part way through
+arrives as a `ServerFnDefect` carrying the render's digest.
+
+```ts
+const readTicks = ERSC.ServerFn.make({
+  input: Schema.Struct({ count: Schema.Finite }),
+  handler: ({ count }) => Effect.succeed(Stream.range(1, count)),
+});
+```
+
+The client reference resolves what crosses the wire, so a streaming Server Function resolves
+`Promise<ReadableStream<A>>`; `ServerFn.stream` adapts that to an Effect `Stream`. `<form action>`
+rejects it outright, since React requires `Promise<void>` there.
+
+Neither end applies backpressure: a producer faster than the network or the consumer buffers on both
+sides, so rate-limit the Stream itself rather than relying on demand.
+
 Direct server invocation throws. Browser requests require an Origin matching the application host
 and may contain at most 10 MiB. See the
 [known limitations](https://github.com/nikhilsnayak/effective-rsc/blob/main/docs/ARCHITECTURE.md#known-limitations)
@@ -543,6 +561,11 @@ the request when the caller is interrupted; new atom arguments supersede an in-f
 
 Both fail with `ServerFnError`, the union of the three framework failures, read from the
 `AsyncResult` cause. Queries never refresh the route.
+
+`ServerFn.stream(serverFn)` reads a Server Function whose handler returns a `Stream`, yielding a
+`Stream` whose scope owns the request; `ServerFn.streamAtom` exposes the latest chunk as its
+`AsyncResult`, and `Atom.pull` accumulates chunks instead. Passing a streaming Server Function to
+`query` is a type error naming `stream`, and the reverse is too.
 
 Provide one `RegistryProvider` in the root Layout and seed atoms with `useAtomInitialValues`. A
 nested provider replaces the registry for its subtree.

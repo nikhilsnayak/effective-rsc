@@ -1,10 +1,10 @@
 // oxlint-disable effecttsgo/async-function, effecttsgo/global-timers, effecttsgo/new-promise -- These tests model the native Promise boundary React gives a server reference, which is exactly what queryAtom adapts.
 import { expect, it } from '@effect/vitest';
-import { Effect, Fiber } from 'effect';
+import { Effect, Fiber, Stream } from 'effect';
 import { AsyncResult, Atom, AtomRegistry } from 'effect/unstable/reactivity';
 
 import { matchServerFnQuery } from '../../../src/client/server-fn/protocol';
-import { query, queryAtom } from '../../../src/client/server-fn/query';
+import { query, queryAtom, stream } from '../../../src/client/server-fn/query';
 import {
   ServerFnDefect,
   ServerFnInputError,
@@ -160,7 +160,7 @@ it.effect('reports a transport rejection as a ServerFnError without a digest', (
   }),
 );
 
-it.effect('preserves framework errors through the value query adapter', () =>
+it.effect('preserves framework errors through value and stream query adapters', () =>
   Effect.gen(function* () {
     const detail = { message: 'rejected', name: 'Error', stack: null };
     for (const failure of [
@@ -169,10 +169,13 @@ it.effect('preserves framework errors through the value query adapter', () =>
       new ServerFnTransportError({ detail }),
     ]) {
       const search = query(() => Promise.reject<string>(failure));
+      const read = stream(() => Promise.reject<ReadableStream<string>>(failure));
 
       const queryError = yield* Effect.flip(search());
+      const streamError = yield* Effect.flip(Stream.runDrain(read()));
 
       expect(queryError).toBe(failure);
+      expect(streamError).toBe(failure);
     }
   }),
 );

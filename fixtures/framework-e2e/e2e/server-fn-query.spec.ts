@@ -5,6 +5,7 @@ type FeedCounters = {
   readonly interrupted: number;
   readonly log: ReadonlyArray<string>;
   readonly started: number;
+  readonly streamLog: ReadonlyArray<string>;
 };
 
 const counters = async (request: APIRequestContext): Promise<FeedCounters> => {
@@ -124,4 +125,48 @@ test('renders an Effectful Server Component from a query, with its middleware sc
 
   await expect(page.getByTestId('feed-actor')).toContainText('Ada');
   await expect(page.getByTestId('feed-actor')).toContainText('queries');
+});
+
+test('streams a Server Function Stream chunk by chunk', async ({ page, request }) => {
+  await page.goto('/');
+  const before = await counters(request);
+
+  await page.getByTestId('ticks-start').click();
+
+  await expect(page.getByTestId('ticks-latest')).toHaveText('tick-1');
+  await expect(page.getByTestId('ticks-status')).toHaveText('waiting');
+  await expect(page.getByTestId('ticks-latest')).toHaveText('tick-2');
+  await expect(page.getByTestId('ticks-latest')).toHaveText('tick-4');
+  await expect(page.getByTestId('ticks-status')).toHaveText('ready');
+  await expect
+    .poll(async () => (await counters(request)).streamLog.slice(before.streamLog.length))
+    .toEqual(['producer finalized', 'request released']);
+});
+
+test('reports a mid-stream failure as a redacted defect', async ({ page }) => {
+  await page.goto('/');
+
+  await page.getByTestId('ticks-fail').click();
+
+  await expect(page.getByTestId('ticks-latest')).toHaveText('tick-2');
+  await expect(page.getByTestId('ticks-status')).toHaveText('failed');
+  await expect(page.getByTestId('ticks-error')).toHaveText(/^defect .+/);
+  await expect(page.getByTestId('ticks-error')).not.toContainText('fixture stream failed');
+});
+
+test('awaits stream cleanup before releasing its request on cancellation', async ({
+  page,
+  request,
+}) => {
+  await page.goto('/');
+  const before = await counters(request);
+
+  await page.getByTestId('ticks-start').click();
+  await expect(page.getByTestId('ticks-latest')).toHaveText('tick-1');
+  await page.getByTestId('ticks-cancel').click();
+
+  await expect(page.getByTestId('ticks-status')).toHaveText('interrupted');
+  await expect
+    .poll(async () => (await counters(request)).streamLog.slice(before.streamLog.length))
+    .toEqual(['producer finalized', 'request released']);
 });

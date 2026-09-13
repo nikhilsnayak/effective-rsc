@@ -1,6 +1,7 @@
-import { Effect, Schema } from 'effect';
+import { Effect, Predicate, Schema, Stream } from 'effect';
 
 import {
+  ServerFnDefect,
   type ServerFnError,
   serverFnErrorDetail,
   ServerFnFailure,
@@ -11,8 +12,6 @@ const isServerFnError = Schema.is(Schema.Union([ServerFnFailure, ServerFnTranspo
 
 const ServerFnQueryTypeId: unique symbol = Symbol.for('ersc/ServerFnQuery');
 const isQueryOptions = Schema.is(Schema.Struct({ signal: Schema.instanceOf(AbortSignal) }));
-
-type ServerFnQueryTarget<Output> = (...args: ReadonlyArray<unknown>) => Promise<Output>;
 
 export type MatchedQuery = {
   readonly args: ReadonlyArray<unknown>;
@@ -37,17 +36,47 @@ export const matchServerFnQuery = (args: ReadonlyArray<unknown>): MatchedQuery |
 export const transportError = (cause: unknown) =>
   new ServerFnTransportError({ detail: serverFnErrorDetail(cause) });
 
+const streamError = (cause: unknown): ServerFnError => {
+  if (!Predicate.hasProperty(cause, 'digest') || typeof cause.digest !== 'string') {
+    return transportError(cause);
+  }
+
+  return new ServerFnDefect({ detail: serverFnErrorDetail(cause), digest: cause.digest });
+};
+
+const invoke = <Args extends ReadonlyArray<unknown>>(
+  serverFn: (...args: Args) => Promise<unknown>,
+  args: Args,
+  signal: AbortSignal,
+) => {
+  const target = serverFn as (...args: ReadonlyArray<unknown>) => Promise<unknown>;
+
+  return target(...args, { [ServerFnQueryTypeId]: { signal } });
+};
+
 export const invocationError = (cause: unknown): ServerFnError =>
   isServerFnError(cause) ? cause : transportError(cause);
 
-export const callQuery = <Args extends ReadonlyArray<unknown>, Output>(
-  serverFn: (...args: Args) => Promise<Output>,
+export const callQueryValue = <Args extends ReadonlyArray<unknown>>(
+  serverFn: (...args: Args) => Promise<unknown>,
   args: Args,
-): Effect.Effect<Output, ServerFnError> =>
+) =>
   Effect.tryPromise({
-    try: (signal) =>
-      (serverFn as ServerFnQueryTarget<Output>)(...args, {
-        [ServerFnQueryTypeId]: { signal },
-      }),
+    try: (signal) => invoke(serverFn, args, signal),
     catch: invocationError,
   });
+
+export const callQueryStream = Effect.fnUntraced(function* <Args extends ReadonlyArray<unknown>>(
+  serverFn: (...args: Args) => Promise<unknown>,
+  args: Args,
+) {
+  const signal = yield* Effect.abortSignal;
+
+  return yield* Effect.tryPromise({
+    try: () => invoke(serverFn, args, signal),
+    catch: invocationError,
+  });
+});
+
+export const readableToStream = <Value>(value: ReadableStream<Value>) =>
+  Stream.fromReadableStream({ evaluate: () => value, onError: streamError });

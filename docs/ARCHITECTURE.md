@@ -77,5 +77,7 @@ deployment-scoped CDN caching are site-owned; native streaming is unchanged. See
 [`examples/hello-world`](../examples/hello-world) is the introductory example for streaming,
 hydration, navigation, and Server Functions. It is also the Bun deployment example for Vercel.
 [`examples/event-platform`](../examples/event-platform) is the real-world product example.
+[`examples/streaming-feed`](../examples/streaming-feed) demonstrates server-seeded atoms and
+incremental Server Components read from SQLite and accumulated through a stream-backed atom.
 [`fixtures/framework-e2e`](../fixtures/framework-e2e) is the neutral framework integration fixture;
 its routes, data, artificial latency, and UI exist to expose protocol and lifecycle behavior.

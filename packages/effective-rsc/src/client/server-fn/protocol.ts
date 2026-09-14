@@ -1,4 +1,4 @@
-import { Effect, Predicate, Schema, Stream } from 'effect';
+import { Deferred, Effect, Predicate, Schema, Stream } from 'effect';
 
 import {
   ServerFnDefect,
@@ -11,11 +11,19 @@ import {
 const isServerFnError = Schema.is(Schema.Union([ServerFnFailure, ServerFnTransportError]));
 
 const ServerFnQueryTypeId: unique symbol = Symbol.for('ersc/ServerFnQuery');
-const isQueryOptions = Schema.is(Schema.Struct({ signal: Schema.instanceOf(AbortSignal) }));
+const QueryOptions = Schema.Union([
+  Schema.TaggedStruct('Query', {
+    signal: Schema.instanceOf(AbortSignal),
+  }),
+  Schema.TaggedStruct('Stream', {
+    signal: Schema.instanceOf(AbortSignal),
+    completed: Schema.declare(Deferred.isDeferred<void, ServerFnError>),
+  }),
+]);
+const isQueryOptions = Schema.is(QueryOptions);
 
-export type MatchedQuery = {
+export type MatchedQuery = typeof QueryOptions.Type & {
   readonly args: ReadonlyArray<unknown>;
-  readonly signal: AbortSignal;
 };
 
 export const matchServerFnQuery = (args: ReadonlyArray<unknown>): MatchedQuery | null => {
@@ -26,7 +34,7 @@ export const matchServerFnQuery = (args: ReadonlyArray<unknown>): MatchedQuery |
     }
 
     const options = last[ServerFnQueryTypeId];
-    return isQueryOptions(options) ? { args: args.slice(0, -1), signal: options.signal } : null;
+    return isQueryOptions(options) ? { ...options, args: args.slice(0, -1) } : null;
   } catch {
     // Application arguments may expose throwing getters or Proxy traps.
     return null;
@@ -47,11 +55,11 @@ const streamError = (cause: unknown): ServerFnError => {
 const invoke = <Args extends ReadonlyArray<unknown>>(
   serverFn: (...args: Args) => Promise<unknown>,
   args: Args,
-  signal: AbortSignal,
+  options: typeof QueryOptions.Type,
 ) => {
   const target = serverFn as (...args: ReadonlyArray<unknown>) => Promise<unknown>;
 
-  return target(...args, { [ServerFnQueryTypeId]: { signal } });
+  return target(...args, { [ServerFnQueryTypeId]: options });
 };
 
 export const invocationError = (cause: unknown): ServerFnError =>
@@ -62,7 +70,7 @@ export const callQueryValue = <Args extends ReadonlyArray<unknown>>(
   args: Args,
 ) =>
   Effect.tryPromise({
-    try: (signal) => invoke(serverFn, args, signal),
+    try: (signal) => invoke(serverFn, args, { _tag: 'Query', signal }),
     catch: invocationError,
   });
 
@@ -71,12 +79,17 @@ export const callQueryStream = Effect.fnUntraced(function* <Args extends Readonl
   args: Args,
 ) {
   const signal = yield* Effect.abortSignal;
+  const completed = yield* Deferred.make<void, ServerFnError>();
 
-  return yield* Effect.tryPromise({
-    try: () => invoke(serverFn, args, signal),
+  const value = yield* Effect.tryPromise({
+    try: () => invoke(serverFn, args, { _tag: 'Stream', signal, completed }),
     catch: invocationError,
   });
+  return Stream.fromReadableStream({
+    evaluate: () => value as ReadableStream<unknown>,
+    onError: streamError,
+  }).pipe(
+    // The returned stream can end before Flight delivers its pending Server Components.
+    Stream.onEnd(Deferred.await(completed)),
+  );
 });
-
-export const readableToStream = <Value>(value: ReadableStream<Value>) =>
-  Stream.fromReadableStream({ evaluate: () => value, onError: streamError });

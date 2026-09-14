@@ -2,7 +2,7 @@ import { type Cause, Effect, Stream } from 'effect';
 import { Atom } from 'effect/unstable/reactivity';
 
 import type { ServerFnError } from '../../rsc/server-fn-error';
-import { callQueryStream, callQueryValue, readableToStream } from './protocol';
+import { callQueryStream, callQueryValue } from './protocol';
 
 type AnyReadable = ReadableStream<unknown>;
 
@@ -31,11 +31,10 @@ const readStream = <Args extends ReadonlyArray<unknown>, Output>(
   serverFn: ServerFnTarget<Args, Output>,
   args: Args,
 ): Stream.Stream<StreamValue<Output>, ServerFnError> => {
-  return Stream.unwrap(
-    Effect.map(callQueryStream(serverFn, args), (value) =>
-      readableToStream(value as ReadableStream<StreamValue<Output>>),
-    ),
-  );
+  return Stream.unwrap(callQueryStream(serverFn, args)) as Stream.Stream<
+    StreamValue<Output>,
+    ServerFnError
+  >;
 };
 
 export const query = <Args extends ReadonlyArray<unknown>, Output>(

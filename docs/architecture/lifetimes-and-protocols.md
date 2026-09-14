@@ -29,7 +29,12 @@ Bun server scope
 Effect interruption and Web Stream cancellation propagate across these boundaries. Work retained
 beyond its caller has an explicit lifetime owner.
 
-Browser `ServerFn.stream` consumption owns its request signal through completion or interruption.
+Browser `ServerFn.stream` consumption owns its request through both returned-stream EOF and Flight
+response completion. Values are emitted immediately; after returned-stream EOF the consumer awaits
+the response's completion, including trailing Server Component content. Early termination,
+interruption, or failure cancels unfinished request work. Response failures remain stream failures
+even after the last value. Successful completion means delivery finished, not that received React
+content rendered successfully. Nested render errors remain React errors at their point of use.
 A plain `query` Effect owns only the pending result; the browser runtime retains any remaining
 Flight content. Atom helpers interrupt superseded runs. See [request flows](request-flows.md).
 

@@ -645,9 +645,15 @@ native Server Function reference directly.
 
 ### Cancellation and atoms
 
-Interrupting a query Effect cancels its pending invocation. A stream consumer owns its browser
-request through completion or interruption. Each atom helper supersedes its own in-flight run when
-called again; `Atom.Interrupt` cancels it explicitly. Plain query calls run independently.
+Interrupting a query Effect cancels its pending invocation. Streams emit values immediately and
+complete only after both the returned stream and its server response finish. Until then, interruption
+or early termination cancels unfinished work, including pending Server Components in received values.
+A late transport failure fails the stream; nested React render errors remain local to their content.
+Completion means delivery finished, not that the UI rendered successfully.
+
+Each atom helper supersedes its own in-flight run when called again; `Atom.Interrupt` cancels it
+explicitly. `streamAtom` publishes values as they arrive and stays `waiting` until the full response
+finishes. Plain query calls run independently.
 
 With `@effect/atom-react`, provide a `RegistryProvider` above consumers; a Client Component wrapper
 can be rendered by the root Layout. A nested provider gives its subtree a separate registry.

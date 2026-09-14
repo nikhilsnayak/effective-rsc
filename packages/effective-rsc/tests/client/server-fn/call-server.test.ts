@@ -1,5 +1,5 @@
 import { beforeEach, expect, it } from '@effect/vitest';
-import { Deferred, Effect, Exit, Fiber, Layer, MutableRef, type Scope } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Layer, MutableRef, type Scope, Stream } from 'effect';
 import { HttpClient } from 'effect/unstable/http';
 import { encodeReply } from 'react-server-dom-rspack/client.browser';
 import { vi } from 'vitest';
@@ -14,7 +14,7 @@ import {
 import { NavigationApi } from '../../../src/client/navigation-api';
 import { RouteLoader } from '../../../src/client/route-loader';
 import { RouteRefresher } from '../../../src/client/route-refresh';
-import { query } from '../../../src/client/server-fn/query';
+import { query, stream } from '../../../src/client/server-fn/query';
 import type { RouteResponseModel } from '../../../src/rsc/flight';
 import type { RouteTreeModel } from '../../../src/rsc/route-tree';
 import { ServerFnTransportError } from '../../../src/rsc/server-fn-error';
@@ -108,6 +108,140 @@ const listen = Effect.fnUntraced(function* (
   yield* Effect.raceFirst(Deferred.await(installed), Fiber.join(running));
 });
 
+for (const outcome of [
+  'Success',
+  'TransportFailure',
+  'Interrupt',
+  'SourceFailure',
+  'EarlyStop',
+] as const) {
+  it.effect(`owns a streaming query through full response completion: ${outcome}`, () =>
+    Effect.gen(function* () {
+      const completed = yield* Deferred.make<void, FlightLoadError>();
+      const released = yield* Deferred.make<void>();
+      const received = yield* Deferred.make<void>();
+      const release = vi.fn(() => Deferred.succeed(released, undefined));
+      let controller!: ReadableStreamDefaultController<string>;
+      const value = new ReadableStream<string>({
+        start(streamController) {
+          controller = streamController;
+          controller.enqueue('card');
+          if (outcome !== 'SourceFailure') {
+            controller.close();
+          }
+        },
+      });
+      yield* listen(
+        Layer.mergeAll(
+          BrowserEffectRunner.layer,
+          BrowserRenderer.layerTest({
+            commit: () => undefined,
+            initialize: () => undefined,
+            navigate: () => {
+              throw new TypeError('Unexpected navigation render.');
+            },
+            refresh: () => {
+              throw new TypeError('Unexpected route refresh.');
+            },
+          }),
+          NavigationApi.layerTest({
+            getCurrentUrl: () => firstEntry.url,
+            getCurrentEntry: () => firstEntry,
+            getTransition: () => null,
+            navigate: () => {
+              throw new TypeError('Unexpected navigation.');
+            },
+            reloadDocument: () => undefined,
+            replaceDocument: () => undefined,
+            subscribe: () => () => undefined,
+          }),
+          FlightClient.layerTest({
+            load: stubLoad((request) => {
+              expect(request._tag).toBe('Query');
+              return Effect.succeed({
+                _tag: 'Flight',
+                model: { _tag: 'Success', value },
+                completed: Deferred.await(completed),
+                release: Effect.suspend(release),
+                resolvedUrl: new URL(firstEntry.url),
+              });
+            }),
+          }),
+          RouteLoader.layerTest({
+            invalidate: () => undefined,
+            prepareRefresh: () => () => undefined,
+          }),
+          RouteRefresher.layerTest({}),
+        ),
+      );
+      const read = stream(
+        (...args: ReadonlyArray<unknown>) =>
+          invokeServerFn('stream', args) as Promise<ReadableStream<string>>,
+      );
+      const values: string[] = [];
+      const source = read('input').pipe(
+        Stream.tap((value) =>
+          Effect.sync(() => {
+            values.push(value);
+            Deferred.doneUnsafe(received, Effect.void);
+          }),
+        ),
+      );
+      const consumer = yield* Stream.runDrain(
+        outcome === 'EarlyStop' ? source.pipe(Stream.take(1)) : source,
+      ).pipe(Effect.forkScoped);
+      yield* Deferred.await(received);
+      yield* Effect.yieldNow;
+      expect(values).toEqual(['card']);
+      expect(encodeReply).toHaveBeenLastCalledWith(['input'], expect.anything());
+      if (outcome !== 'EarlyStop') {
+        expect(consumer.pollUnsafe()).toBeUndefined();
+        expect(release).not.toHaveBeenCalled();
+      }
+
+      switch (outcome) {
+        case 'Success':
+          yield* Deferred.succeed(completed, undefined);
+          yield* Fiber.join(consumer);
+          break;
+        case 'TransportFailure': {
+          yield* Deferred.fail(
+            completed,
+            new FlightLoadError({
+              cause: new Error('connection lost after last item'),
+              reason: 'RequestFailed',
+            }),
+          );
+          const failure = yield* Effect.flip(Fiber.join(consumer));
+          expect(failure._tag).toBe('ServerFnTransportError');
+          break;
+        }
+        case 'Interrupt':
+          yield* Fiber.interrupt(consumer);
+          break;
+        case 'SourceFailure': {
+          controller.error(Object.assign(new Error('producer failed'), { digest: 'stream-error' }));
+          const failure = yield* Effect.flip(Fiber.join(consumer));
+          expect(failure).toMatchObject({ _tag: 'ServerFnDefect', digest: 'stream-error' });
+          break;
+        }
+        case 'EarlyStop':
+          yield* Fiber.join(consumer);
+          break;
+      }
+      yield* Deferred.await(released);
+      expect(release).toHaveBeenCalledOnce();
+      expect(values).toEqual(['card']);
+    }).pipe(
+      Effect.scoped,
+      Effect.provideService(
+        HttpClient.HttpClient,
+        HttpClient.make(() => Effect.die('Unexpected HTTP request.')),
+      ),
+    ),
+  );
+}
+
 it.effect('preserves mutation arguments containing malformed query metadata', () =>
   Effect.gen(function* () {
     const load = vi.fn((_request: FlightRequest) =>
@@ -152,6 +286,7 @@ it.effect('preserves mutation arguments containing malformed query metadata', ()
       {},
       { signal: 'invalid' },
       {
+        _tag: 'Query',
         get signal() {
           throw new Error('Metadata inspection failed.');
         },

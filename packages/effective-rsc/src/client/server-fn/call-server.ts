@@ -1,4 +1,4 @@
-import { Effect, MutableRef, Schema } from 'effect';
+import { Deferred, Effect, Exit, MutableRef, Schema } from 'effect';
 import { addTransitionType, startTransition } from 'react';
 import {
   createTemporaryReferenceSet,
@@ -184,17 +184,23 @@ export const installCallServer = Effect.gen(function* () {
     const destination = new URL(FrameworkQueryPath, navigationApi.getCurrentUrl());
     const resource = yield* loadServerFn('Query', id, args, destination);
     settleInvocation(invocationResult, resource.model);
-    yield* resource.completed.pipe(Effect.ignore, Effect.ensuring(resource.release));
+    yield* resource.completed.pipe(Effect.ensuring(resource.release));
   });
 
   yield* Effect.sync(() => {
     setServerCallback((id, args) => {
       const invocationResult = Promise.withResolvers<unknown>();
       const query = matchServerFnQuery(args);
-      const effect =
+      let effect =
         query !== null
           ? callQuery(id, query.args, invocationResult)
           : callMutation(id, args, invocationResult);
+      if (query?._tag === 'Stream') {
+        const completed = query.completed;
+        effect = effect.pipe(
+          Effect.onExit((exit) => Deferred.done(completed, Exit.mapError(exit, invocationError))),
+        );
+      }
       const options = query !== null ? { signal: query.signal } : undefined;
 
       void run(effect, options).catch((cause) => invocationResult.reject(invocationError(cause)));

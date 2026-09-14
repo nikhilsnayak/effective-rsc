@@ -106,9 +106,12 @@ cache invalidated, or mutation ordering counter advanced.
 
 The callback settles the result Promise once the Flight result model is available and retains the
 response in the browser runtime until EOF or interruption. `query` owns pending invocation through
-its Effect's abort signal; `stream` retains a signal through stream consumption. Atom helpers
-supersede their previous run. Resolving a plain query can precede completion of nested Flight
-content; its completed Effect no longer owns that remaining work.
+its Effect's abort signal; `stream` retains a signal through consumption and full response completion.
+The private metadata distinguishes `Query` from `Stream`; only `Stream` carries a required completion
+Deferred, settled by the callback after response cleanup. After normal returned-stream EOF, the
+adapter awaits that completion interruptibly; failures and early termination cancel the request.
+Atom helpers supersede their previous run. Resolving a plain query can precede completion of nested
+Flight content; its completed Effect no longer owns that remaining work.
 
 A top-level Effect Stream becomes a Web `ReadableStream` before native Flight encoding. React
 streams its chunks without a replacement framing protocol. Flight eagerly consumes the producer;

@@ -36,6 +36,7 @@
     "@types/bun": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "effective-rsc-docs": "https://registry.npmjs.org/effective-rsc/-/effective-rsc-0.1.4.tgz",
     "shadcn": "4.21.0",
     "typescript": "catalog:",
     "vitest": "catalog:"

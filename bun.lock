@@ -207,6 +207,7 @@
         "@types/bun": "catalog:",
         "@types/react": "catalog:",
         "@types/react-dom": "catalog:",
+        "effective-rsc-docs": "https://registry.npmjs.org/effective-rsc/-/effective-rsc-0.1.4.tgz",
         "shadcn": "4.21.0",
         "typescript": "catalog:",
         "vitest": "catalog:",
@@ -848,6 +849,8 @@
     "effect": ["effect@4.0.0-rc.113", "", {}, "sha512-uZ4Bh7KSlw2sdVdNDHPLSNjLGH+MWap7cheIHZoB/1T/ZJ3pvI4KiN3kUp50MpFKXhygOMmReJJOwWMQPwpPAg=="],
 
     "effective-rsc": ["effective-rsc@workspace:packages/effective-rsc"],
+
+    "effective-rsc-docs": ["effective-rsc@https://registry.npmjs.org/effective-rsc/-/effective-rsc-0.1.4.tgz", { "dependencies": { "@rspack/core": "2.2.3", "@rspack/plugin-react-refresh": "2.0.2", "@tailwindcss/webpack": "4.3.3", "react-refresh": "0.19.0" }, "peerDependencies": { "@effect/platform-browser": "4.0.0-rc.113", "@effect/platform-bun": "4.0.0-rc.113", "effect": "4.0.0-rc.113", "react": "19.3.0-canary-1d34f91d-20260909", "react-dom": "19.3.0-canary-1d34f91d-20260909", "react-server-dom-rspack": "0.1.0" }, "bin": { "ersc": "./bin/ersc.js" } }, "sha512-GvWZ7EG2JxJ6XEKHRAOlL8f5lggnAJgOsFIsje5sT89gF1GqI5yzb36/SU0mVzfdVRSXR3tmo7WZxJdw6BE6oQ=="],
 
     "electron-to-chromium": ["electron-to-chromium@1.5.422", "", {}, "sha512-UvA/32XqrLDdZSn7Jllo1AYNcWji/G0d5M0GTViE7KoGBiMunw3a34Sb2KO4ZZyrSEhqsxFoVhWWJshdyfKqJA=="],
 

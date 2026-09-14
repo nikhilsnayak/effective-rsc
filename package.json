@@ -19,6 +19,7 @@
     "fmt": "oxfmt . '!vendor/**'",
     "fmt:check": "oxfmt --check . '!vendor/**'",
     "release": "bash scripts/release.sh",
+    "release:promote-docs": "bash scripts/promote-docs.sh",
     "check": "bun run lint && bun run fmt:check && bun run docs:check",
     "test": "turbo test test:e2e",
     "test:e2e": "turbo test:e2e",

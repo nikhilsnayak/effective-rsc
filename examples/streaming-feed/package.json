@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "ersc dev --port 18220",
-    "build": "ersc build",
+    "build": "ersc build --adapter @ersc/vercel",
     "start": "ersc start",
     "test": "bun run --bun vitest run",
     "test:e2e": "playwright test"
@@ -22,10 +22,14 @@
   },
   "devDependencies": {
     "@effect/vitest": "catalog:",
+    "@ersc/vercel": "workspace:*",
     "@playwright/test": "catalog:",
     "@types/bun": "catalog:",
     "@types/react": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
+  },
+  "engines": {
+    "bun": ">=1.4.0"
   }
 }

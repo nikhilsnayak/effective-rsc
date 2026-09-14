@@ -25,6 +25,22 @@ Random delays of 1–3 seconds per card make streaming visible. Set `STREAMING_F
 or another nonnegative number for a fixed delay.
 Notes load separately with a 2–4 second delay, configurable through `STREAMING_FEED_DETAIL_DELAY_MS`.
 
+## Deploy to Vercel
+
+The build packages the app with `@ersc/vercel`. Connect this repository in Vercel and set:
+
+| Setting          | Value                                                                          |
+| ---------------- | ------------------------------------------------------------------------------ |
+| Framework Preset | Other                                                                          |
+| Root Directory   | `examples/streaming-feed`                                                      |
+| Install Command  | `bun install --frozen-lockfile`                                                |
+| Build Command    | `bun run --bun turbo run build --filter=@effective-rsc/example-streaming-feed` |
+| Output Directory | Leave the override disabled                                                    |
+
+Enable **Include source files outside of the Root Directory in the Build Step** so the workspace
+packages are available. The output includes the read-only SQLite fixture; no database setup or
+seeding is required. The delay environment variables above also apply to deployments.
+
 ## Data
 
 The application opens the included [SQLite fixture](data/feed.sqlite) read-only. Each page uses the

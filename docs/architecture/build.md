@@ -81,7 +81,10 @@ Vercel project settings and deployment remain separate setup; see [the adapter R
 
 `bun run release <version>` checks aligned framework, adapter, CLI, and template versions,
 runs verification and package dry runs, then asks before publishing and pushing the release tag.
-GitHub creates a draft release.
+For releases from `main`, it then advances the site's tarball-pinned documentation dependency to the
+published framework version, verifies the site build, commits the pin, and pushes `main`. Maintenance
+branch releases require that promotion after their release commit reaches `main`. GitHub creates a
+draft release.
 
 ## Development
 

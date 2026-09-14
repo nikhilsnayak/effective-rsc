@@ -66,7 +66,11 @@ for package in "${packages[@]}"; do
   bun publish --cwd "packages/$package" --dry-run
 done
 
-read -r -p "Publish effective-rsc, @ersc/vercel, and create-ersc-app $version, then push $tag? Type release: " confirmation
+release_actions="publish effective-rsc, @ersc/vercel, and create-ersc-app $version, then push $tag"
+if [[ "$branch" == "main" ]]; then
+  release_actions+=", promote the documentation pin, and push main"
+fi
+read -r -p "$release_actions? Type release: " confirmation
 if [[ "$confirmation" != "release" ]]; then
   echo "Release canceled." >&2
   exit 1
@@ -78,5 +82,18 @@ done
 
 git tag --annotate "$tag" --message "Release $version"
 git push origin "$tag"
+
+if [[ "$branch" == "main" ]]; then
+  echo "Promoting the documentation site to effective-rsc $version."
+  docs_tarball="https://registry.npmjs.org/effective-rsc/-/effective-rsc-$version.tgz"
+  bun add --cwd site --dev "effective-rsc-docs@$docs_tarball"
+  bun run build --filter=@ersc/site
+  git add site/package.json bun.lock
+  git commit --message "docs: publish $version documentation"
+  git push origin main
+else
+  echo "The documentation pin was not updated because $branch does not deploy the site." >&2
+  echo "After merging the release to main, promote effective-rsc-docs to effective-rsc $version." >&2
+fi
 
 echo "GitHub Actions will generate a draft release for $tag. Review and publish it at https://github.com/nikhilsnayak/effective-rsc/releases"

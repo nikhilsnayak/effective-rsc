@@ -41,7 +41,8 @@ the current route, the refreshed Page, Layout, and Component Effects use the ren
 
 `ServerFn.make` accepts one Schema for a single argument, or a readonly list of Schemas for
 positional arguments. The caller passes each Schema's encoded value and the handler receives each
-decoded value in the same position. An empty list declares no arguments. Array and Tuple Schemas
+decoded value in the same position. Omitted `input` and an empty list both declare no arguments
+and reject extra native arguments before invoking the handler. Array and Tuple Schemas
 remain single-argument inputs. A state Schema followed by a FormData decoder supports native
 `useActionState` actions with `(previousState, payload)` arguments without changing React's
 transport or binding.

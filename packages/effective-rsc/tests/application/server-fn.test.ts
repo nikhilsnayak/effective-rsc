@@ -184,6 +184,52 @@ describe('ServerFn.make', () => {
     }),
   );
 
+  it.effect('runs an omitted-input handler lazily with no arguments', () =>
+    Effect.gen(function* () {
+      let invoked = false;
+      const ERSC = Application.ersc();
+      const action = ERSC.ServerFn.make({
+        handler: (...args) =>
+          Effect.sync(() => {
+            invoked = true;
+            return args;
+          }),
+      });
+      const invocation = action();
+      expect(invoked).toBe(false);
+      const result = yield* invocationEffect(invocation, getERSCIdentity(ERSC));
+      expect(result).toEqual([]);
+      expect(invoked).toBe(true);
+    }),
+  );
+
+  it.effect(
+    'rejects extra native arguments for omitted and empty input before running handlers',
+    () =>
+      Effect.gen(function* () {
+        let invoked = false;
+        const ERSC = Application.ersc();
+        const handler = () =>
+          Effect.sync(() => {
+            invoked = true;
+          });
+        const actions = [
+          ERSC.ServerFn.make({ handler }),
+          ERSC.ServerFn.make({ input: [], handler }),
+        ];
+        for (const action of actions) {
+          for (const args of [['extra'], [undefined], [new FormData()]]) {
+            const outcome = yield* invocationEffect(
+              Reflect.apply(action, null, args),
+              getERSCIdentity(ERSC),
+            ).pipe(Effect.match({ onFailure: (error) => error._tag, onSuccess: () => 'Success' }));
+            expect(outcome).toBe('ServerFnInputError');
+          }
+        }
+        expect(invoked).toBe(false);
+      }),
+  );
+
   it.effect('rejects untrusted input before invoking the handler', () =>
     Effect.gen(function* () {
       const invoked = yield* Ref.make(false);

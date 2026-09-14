@@ -2,7 +2,8 @@
 
 Export `ERSC.ServerFn.make({ input, handler })` from a `'use server'` module. It creates a native
 React Server Function: callers pass encoded Schema values; the Effect handler receives decoded
-values and may require application or middleware services. Direct server invocation throws.
+values and may require application or middleware services. `input` is optional; omit it for a
+Server Function that takes no arguments. Direct server invocation throws.
 
 ### Arguments
 
@@ -10,10 +11,12 @@ values and may require application or middleware services. Direct server invocat
 | -------------------- | --------------------------------- |
 | One Schema           | One argument                      |
 | Readonly schema list | One argument per Schema, in order |
-| `[]`                 | No arguments                      |
+| Omitted or `[]`      | No arguments                      |
 
 An Array or Tuple Schema describes one argument. Inline schema lists infer tuples without
 `as const`; let the Schema infer handler parameters.
+
+Omitted `input` and `[]` both reject extra arguments, including FormData supplied by a form.
 
 ```ts
 const followAuthor = ERSC.ServerFn.make({

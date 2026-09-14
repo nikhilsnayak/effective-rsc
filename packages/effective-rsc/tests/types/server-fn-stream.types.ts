@@ -7,6 +7,13 @@ import type { ServerFnError } from '../../src/rsc/server-fn-error';
 
 const ERSC = Application.ersc();
 
+const omittedInput = ERSC.ServerFn.make({ handler: () => Effect.succeed(Stream.make(1)) });
+expectTypeOf<Parameters<typeof omittedInput>>().toEqualTypeOf<[]>();
+expectTypeOf<ReturnType<typeof omittedInput>>().toEqualTypeOf<Promise<ReadableStream<1>>>();
+void ClientServerFn.stream(omittedInput)();
+// @ts-expect-error Omitting input does not allow typed Stream failures.
+ERSC.ServerFn.make({ handler: () => Effect.succeed(Stream.fail('failure')) });
+
 const read = ERSC.ServerFn.make({
   input: Schema.Boolean,
   handler: (text) => Effect.succeed(text ? Stream.make('one') : Stream.make(1)),
@@ -75,6 +82,8 @@ class StreamService extends Context.Service<StreamService, { readonly value: num
   'ersc/tests/types/server-fn-stream/StreamService',
 ) {}
 const serviceStream = Stream.fromEffect(Effect.map(StreamService, ({ value }) => value));
+// @ts-expect-error Omitting input does not allow unavailable Stream services.
+ERSC.ServerFn.make({ handler: () => Effect.succeed(serviceStream) });
 // @ts-expect-error A returned Stream must fit the application's service universe.
 ERSC.ServerFn.make({ input: [], handler: () => Effect.succeed(serviceStream) });
 // @ts-expect-error A nullable Stream cannot hide an unavailable service requirement.

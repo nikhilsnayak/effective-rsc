@@ -53,11 +53,10 @@ interface ServerFunction<
 }
 
 type ServerFnOptions<Input, Output, Services> = {
-  readonly input: Input;
   readonly handler: (
     ...args: ServerFnArguments<Input, 'Type'>
   ) => Effect.Effect<Output, never, Services>;
-};
+} & ([Input] extends [readonly []] ? { readonly input?: Input } : { readonly input: Input });
 
 type ValidateServerFnOutput<Output, Services> = [Output] extends [never]
   ? unknown
@@ -78,7 +77,10 @@ type ValidateServerFnOutput<Output, Services> = [Output] extends [never]
         };
 
 export type ServerFnFactory<ApplicationServices, AvailableServices> = {
-  readonly make: <const Input extends ServerFnInput<AvailableServices>, Output>(
+  readonly make: <
+    const Input extends ServerFnInput<AvailableServices> = readonly [],
+    Output = never,
+  >(
     options: ServerFnOptions<Input, Output, AvailableServices> &
       ValidateServerFnOutput<Output, AvailableServices>,
   ) => ServerFunction<ServerFnArguments<Input, 'Encoded'>, Output, ApplicationServices>;
@@ -120,7 +122,7 @@ export const makeServerFnFactory = <ApplicationServices, AvailableServices>(
   identity: ERSCIdentity<ApplicationServices>,
   middleware: ReadonlyArray<AnyMiddleware<ApplicationServices>>,
 ): ServerFnFactory<ApplicationServices, AvailableServices> => ({
-  make: ({ input, handler }) => {
+  make: ({ input = [], handler }) => {
     const schemas = Array.ensure<Schema.ConstraintDecoder<unknown, AvailableServices>>(input);
     const decode = Schema.decodeUnknownEffect(Schema.Tuple(schemas));
     const serverFunction = (...untrustedArgs: ServerFnArguments<typeof input, 'Encoded'>) => {
@@ -132,7 +134,7 @@ export const makeServerFnFactory = <ApplicationServices, AvailableServices>(
         ),
         // Normalization preserves the positional Type mapping, which the generic branch erases.
         Effect.flatMap((args: ReadonlyArray<unknown>) =>
-          handler(...(args as ServerFnArguments<typeof input, 'Type'>)),
+          handler(...(args as Parameters<typeof handler>)),
         ),
       );
       const unavailable =

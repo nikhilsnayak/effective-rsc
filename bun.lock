@@ -80,6 +80,7 @@
       },
       "devDependencies": {
         "@effect/vitest": "catalog:",
+        "@ersc/vercel": "workspace:*",
         "@playwright/test": "catalog:",
         "@types/bun": "catalog:",
         "@types/react": "catalog:",

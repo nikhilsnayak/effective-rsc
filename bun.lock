@@ -65,6 +65,28 @@
         "typescript": "catalog:",
       },
     },
+    "examples/streaming-feed": {
+      "name": "@effective-rsc/example-streaming-feed",
+      "version": "0.0.0",
+      "dependencies": {
+        "@effect/atom-react": "catalog:",
+        "@effect/platform-browser": "catalog:",
+        "@effect/platform-bun": "catalog:",
+        "effect": "catalog:",
+        "effective-rsc": "workspace:*",
+        "react": "catalog:",
+        "react-dom": "catalog:",
+        "react-server-dom-rspack": "catalog:",
+      },
+      "devDependencies": {
+        "@effect/vitest": "catalog:",
+        "@playwright/test": "catalog:",
+        "@types/bun": "catalog:",
+        "@types/react": "catalog:",
+        "typescript": "catalog:",
+        "vitest": "catalog:",
+      },
+    },
     "fixtures/framework-e2e": {
       "name": "@effective-rsc/framework-e2e",
       "version": "0.0.0",
@@ -361,6 +383,8 @@
     "@effective-rsc/example-event-platform": ["@effective-rsc/example-event-platform@workspace:examples/event-platform"],
 
     "@effective-rsc/example-hello-world": ["@effective-rsc/example-hello-world@workspace:examples/hello-world"],
+
+    "@effective-rsc/example-streaming-feed": ["@effective-rsc/example-streaming-feed@workspace:examples/streaming-feed"],
 
     "@effective-rsc/framework-e2e": ["@effective-rsc/framework-e2e@workspace:fixtures/framework-e2e"],
 

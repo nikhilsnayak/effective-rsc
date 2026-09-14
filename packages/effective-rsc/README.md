@@ -76,6 +76,7 @@ Framework contributors should start with the [architecture docs](https://github.
 
 - [Hello world](https://github.com/nikhilsnayak/effective-rsc/tree/main/examples/hello-world): streaming, navigation, a counter, a form, and Vercel deployment.
 - [Event platform](https://github.com/nikhilsnayak/effective-rsc/tree/main/examples/event-platform): a conference application with SQLite persistence.
+- [Streaming feed](https://github.com/nikhilsnayak/effective-rsc/tree/main/examples/streaming-feed): server-seeded atoms, infinite scrolling, and streamed Server Components.
 
 ## Credits
 

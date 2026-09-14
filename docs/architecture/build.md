@@ -83,8 +83,9 @@ Vercel project settings and deployment remain separate setup; see [the adapter R
 runs verification and package dry runs, then asks before publishing and pushing the release tag.
 For releases from `main`, it then advances the site's tarball-pinned documentation dependency to the
 published framework version, verifies the site build, commits the pin, and pushes `main`. Maintenance
-branch releases require that promotion after their release commit reaches `main`. GitHub creates a
-draft release.
+branch releases require that promotion after their release commit reaches `main`. A failed promotion
+resumes with `bun run release:promote-docs <version>`; it accepts only its manifest and lockfile
+changes or its single unpushed commit. GitHub creates a draft release.
 
 ## Development
 

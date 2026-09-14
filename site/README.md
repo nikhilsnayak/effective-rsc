@@ -17,7 +17,9 @@ The build copies docs, logos, and `LLMS.md` from the released `effective-rsc` ta
 `effective-rsc-docs` into `public/generated/`, copies fonts, and generates `sitemap.xml` and
 `robots.txt` from the documentation index. The tarball URL prevents Bun from substituting the local
 workspace package. The site itself continues to build with that workspace package. A successful
-release from `main` advances the documentation pin.
+release from `main` advances the documentation pin. If promotion fails after publishing, rerun it
+with `bun run release:promote-docs <version>`; the command accepts its own partial manifest and
+lockfile changes and safely resumes an unpushed promotion commit.
 The server indexes titles and validates links at startup, then reads each requested document.
 Numeric prefixes control ordering; examples are displayed, not executed. Rendering, highlighting,
 and shadcn/Base UI controls are site-owned.

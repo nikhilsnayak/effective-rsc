@@ -118,7 +118,7 @@
     },
     "packages/create-ersc-app": {
       "name": "create-ersc-app",
-      "version": "0.1.4",
+      "version": "0.2.0",
       "bin": {
         "create-ersc-app": "./bin/create-ersc-app.js",
       },
@@ -142,7 +142,7 @@
     },
     "packages/effective-rsc": {
       "name": "effective-rsc",
-      "version": "0.1.4",
+      "version": "0.2.0",
       "bin": {
         "ersc": "./bin/ersc.js",
       },
@@ -181,7 +181,7 @@
     },
     "packages/vercel": {
       "name": "@ersc/vercel",
-      "version": "0.1.4",
+      "version": "0.2.0",
       "dependencies": {
         "@vercel/nft": "1.11.0",
       },

@@ -16,11 +16,12 @@ import {
 import { HttpBody, HttpRouter, HttpServer, HttpServerResponse } from 'effect/unstable/http';
 
 import PackageJson from '../../package.json' with { type: 'json' };
-import { DevChannelPath } from '../dev/channel';
+import { FrameworkDevChannelPath, FrameworkDevSourceMapPath } from '../application/namespace';
 import { resolveApplicationBuild } from './build';
 import { loadServerBundle, makeRunnableHttpLayer } from './compiled-server';
 import { DevOutputDir, EnvironmentConfig } from './contract';
 import { makeDevChannel } from './dev-channel';
+import { makeDevSourceMapHttpEffect } from './dev-source-map';
 import { Rspack, type RspackError, type RspackWatchEvent } from './rspack';
 import { makeRspackDevConfig } from './rspack-config';
 import { formatDuration, Terminal } from './terminal';
@@ -176,6 +177,7 @@ export const makeDevApplication = Effect.fnUntraced(function* ({
   const path = yield* Path.Path;
   const rspack = yield* Rspack;
   const channel = yield* makeDevChannel;
+  const sourceMaps = yield* makeDevSourceMapHttpEffect(applicationRoot);
 
   yield* fileSystem.remove(path.join(applicationRoot, DevOutputDir), {
     force: true,
@@ -266,7 +268,8 @@ export const makeDevApplication = Effect.fnUntraced(function* ({
   );
   const httpEffect = yield* HttpRouter.toHttpEffect(
     HttpRouter.addAll([
-      HttpRouter.route('GET', DevChannelPath, channel.httpEffect),
+      HttpRouter.route('GET', FrameworkDevChannelPath, channel.httpEffect),
+      HttpRouter.route('GET', FrameworkDevSourceMapPath, sourceMaps.httpEffect),
       HttpRouter.route('*', '/*', generationStore.httpEffect),
     ]),
   );

@@ -3,11 +3,11 @@ import { expect, it } from '@effect/vitest';
 import { Effect, FileSystem, Layer, Path, Stream } from 'effect';
 import { vi } from 'vitest';
 
+import { FrameworkDevChannelPath } from '../../src/application/namespace';
 import { loadCompiledServer } from '../../src/build/compiled-server';
 import { EnvironmentConfig, ErscOutputDir } from '../../src/build/contract';
 import { Rspack, type RspackWatchEvent } from '../../src/build/rspack';
 import { makeRspackBuildConfig, makeRspackDevConfig } from '../../src/build/rspack-config';
-import { DevChannelPath } from '../../src/dev/channel';
 
 type Compiled = Extract<RspackWatchEvent, { readonly _tag: 'Compiled' }>;
 
@@ -121,7 +121,8 @@ it.effect(
       const clientOutput = yield* readJavaScriptOutput(
         path.join(directory, EnvironmentConfig.development.clientOutputDir),
       );
-      expect(clientOutput).toContain(DevChannelPath);
+      expect(clientOutput).toContain(FrameworkDevChannelPath);
+      expect(clientOutput).toContain('/dev/source-map');
     }).pipe(Effect.provide(Layer.merge(BunServices.layer, Rspack.layer)), Effect.scoped),
   15_000,
 );
@@ -173,7 +174,8 @@ it.effect(
         path.join(directory, EnvironmentConfig.production.clientOutputDir),
       );
       expect(bundle.default.entryCssFiles).toEqual([]);
-      expect(clientOutput).not.toContain(DevChannelPath);
+      expect(clientOutput).not.toContain(FrameworkDevChannelPath);
+      expect(clientOutput).not.toContain('/dev/source-map');
       expect(clientOutput).not.toContain('ersc-dev-refresh');
       expect(clientOutput).not.toContain('ersc-dev-panel');
     }).pipe(Effect.provide(Layer.merge(BunServices.layer, Rspack.layer)), Effect.scoped),

@@ -124,7 +124,9 @@ Build and runtime diagnostics have independent recovery:
   clears build diagnostics; renders and cached traversal cannot clear them.
 - Caught React failures include component stacks. Only a successful recovery commit clears runtime
   diagnostics; starting a refresh or completing a build does not. HMR or navigation can recover the
-  root error boundary without remounting healthy trees. Application boundaries own their recovery.
+  root error boundary without remounting healthy trees. Development-only source-map resolution maps
+  Flight's reconstructed frames through the active client and retained server compilation assets.
+  Application boundaries own their recovery.
 - Recovery never replays a Server Function or retries unchanged code on a timer.
 
 Native React Server Components Performance Tracks use the document timeline for hydration and a

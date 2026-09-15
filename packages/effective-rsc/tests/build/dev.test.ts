@@ -23,6 +23,7 @@ import * as NetAddress from 'effect/unstable/net/NetAddress';
 import { RpcClient, RpcSerialization } from 'effect/unstable/rpc';
 import * as Socket from 'effect/unstable/socket/Socket';
 
+import { FrameworkDevChannelPath } from '../../src/application/namespace';
 import { DevOutputDir } from '../../src/build/contract';
 import {
   acquireDevGeneration,
@@ -33,7 +34,7 @@ import {
 import { makeDevChannel } from '../../src/build/dev-channel';
 import { Rspack, RspackError, type RspackWatchEvent } from '../../src/build/rspack';
 import { Terminal } from '../../src/build/terminal';
-import { DevChannelPath, DevRpcs } from '../../src/dev/channel';
+import { DevRpcs } from '../../src/dev/channel';
 
 const EffectModuleUrl = import.meta.resolve('effect');
 const HttpModuleUrl = import.meta.resolve('effect/unstable/http');
@@ -699,7 +700,7 @@ it.effect('streams updates and stops development through the Effect RPC channel'
     const channel = yield* makeDevChannel;
     const server = yield* HttpServer.HttpServer;
     const serverUrl = HttpServer.formatAddress(server.address);
-    const socketUrl = `${serverUrl.replace(/^http/, 'ws')}${DevChannelPath}`;
+    const socketUrl = `${serverUrl.replace(/^http/, 'ws')}${FrameworkDevChannelPath}`;
     const application = {
       closeDevChannel: channel.close,
       httpEffect: channel.httpEffect,

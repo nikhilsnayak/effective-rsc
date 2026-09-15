@@ -193,7 +193,10 @@ for (const outcome of [
       yield* Deferred.await(received);
       yield* Effect.yieldNow;
       expect(values).toEqual(['card']);
-      expect(encodeReply).toHaveBeenLastCalledWith(['input'], expect.anything());
+      expect(encodeReply).toHaveBeenLastCalledWith(
+        ['input'],
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
       if (outcome !== 'EarlyStop') {
         expect(consumer.pollUnsafe()).toBeUndefined();
         expect(release).not.toHaveBeenCalled();

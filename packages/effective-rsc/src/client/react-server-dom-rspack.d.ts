@@ -13,8 +13,15 @@ declare module 'react-server-dom-rspack/client.browser' {
 
   export function encodeReply(
     value: unknown,
-    options?: { readonly temporaryReferences?: TemporaryReferenceSet },
+    options?: {
+      readonly signal?: AbortSignal;
+      readonly temporaryReferences?: TemporaryReferenceSet;
+    },
   ): Promise<BodyInit>;
+
+  export function setFindSourceMapURLCallback(
+    callback: (fileName: string, environmentName: string) => string | null,
+  ): void;
 
   export function setServerCallback(
     callback: (id: string, args: ReadonlyArray<unknown>) => Promise<unknown>,

@@ -1,17 +1,22 @@
 import * as BrowserSocket from '@effect/platform-browser/BrowserSocket';
 import { Console, Effect, Layer, Ref, Semaphore, Stream } from 'effect';
 import { RpcClient, RpcSerialization } from 'effect/unstable/rpc';
+import { setFindSourceMapURLCallback } from 'react-server-dom-rspack/client.browser';
 
+import { FrameworkDevChannelPath } from '../application/namespace';
 import { navigationMode } from '../client/browser-capabilities';
 import { BrowserRenderStatus } from '../client/browser-render-status';
 import { RouteRefresher } from '../client/route-refresh';
-import { DevChannelPath, DevRpcs, type DevUpdate } from './channel';
+import { DevRpcs, type DevUpdate } from './channel';
 import { decideHotUpdate, type HotUpdateCheck, type PendingDevUpdate } from './hmr-update';
 import { makeDevPanel } from './panel';
 import { fromRenderError, reportBrowserFailures } from './runtime-failure';
+import { findDevSourceMapURL } from './source-map';
+
+setFindSourceMapURLCallback(findDevSourceMapURL);
 
 const socketProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-const socketUrl = `${socketProtocol}//${location.host}${DevChannelPath}`;
+const socketUrl = `${socketProtocol}//${location.host}${FrameworkDevChannelPath}`;
 
 const DevRpcProtocolLayer = RpcClient.layerProtocolSocket({ retryTransientErrors: true }).pipe(
   Layer.provide(BrowserSocket.layerWebSocket(socketUrl)),

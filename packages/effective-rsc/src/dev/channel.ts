@@ -1,8 +1,6 @@
 import { Schema } from 'effect';
 import { Rpc, RpcGroup } from 'effect/unstable/rpc';
 
-export const DevChannelPath = '/_ersc/dev';
-
 const ClientUpdate = Schema.TaggedStruct('ClientUpdate', { clientHash: Schema.String });
 
 const RscUpdate = Schema.TaggedStruct('RscUpdate', { clientHash: Schema.String });

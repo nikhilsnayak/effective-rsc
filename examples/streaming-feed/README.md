@@ -5,7 +5,8 @@ The first six cards render on the server. Scrolling loads subsequent pages one c
 preserving interactive card state. Failed requests can be retried without losing received cards.
 Each card’s full note loads in an Effectful Server Component behind its own Suspense boundary.
 Open a note while it loads to see the fallback; view transitions animate opening, closing, and reveal.
-An interrupted or failed note stays contained within its card and offers a feed reload.
+An interrupted or failed note can be retried through a querying Server Function. The new note
+renders inside the same Suspense boundary without reloading the feed or losing card state.
 
 ## Run
 

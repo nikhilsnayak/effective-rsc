@@ -1,9 +1,19 @@
 'use client';
 
+import { useAtomSet } from '@effect/atom-react';
+import { ServerFn } from 'effective-rsc/client';
 import type { ReactNode } from 'react';
 import { Component, startTransition, Suspense, useState, ViewTransition } from 'react';
 
-class NoteErrorBoundary extends Component<{ readonly children: ReactNode }, { failed: boolean }> {
+import { getStoryNote } from './server-functions';
+
+// Each card needs its own atom so retrying one note doesn't interrupt another note's query.
+const makeStoryNoteAtom = () => ServerFn.queryAtom(getStoryNote);
+
+class NoteErrorBoundary extends Component<
+  { readonly children: ReactNode; readonly retry: () => void },
+  { failed: boolean }
+> {
   override state = { failed: false };
 
   static getDerivedStateFromError() {
@@ -14,8 +24,15 @@ class NoteErrorBoundary extends Component<{ readonly children: ReactNode }, { fa
     return this.state.failed ? (
       <p className='story-note-error'>
         This note couldn’t be loaded.{' '}
-        <button className='retry' type='button' onClick={() => window.location.reload()}>
-          Reload the feed
+        <button
+          className='retry'
+          type='button'
+          onClick={() => {
+            this.props.retry();
+            this.setState({ failed: false });
+          }}
+        >
+          Retry note
         </button>
       </p>
     ) : (
@@ -24,8 +41,17 @@ class NoteErrorBoundary extends Component<{ readonly children: ReactNode }, { fa
   }
 }
 
-export function StoryDetails({ children }: { readonly children: ReactNode }) {
+export function StoryDetails({
+  id,
+  children,
+}: {
+  readonly id: number;
+  readonly children: ReactNode;
+}) {
   const [expanded, setExpanded] = useState(false);
+  const [noteAtom] = useState(makeStoryNoteAtom);
+  const retry = useAtomSet(noteAtom, { mode: 'promise' });
+  const [result, setResult] = useState(children);
   return (
     <div className='story-details'>
       <button
@@ -39,7 +65,7 @@ export function StoryDetails({ children }: { readonly children: ReactNode }) {
       {expanded && (
         <ViewTransition default='none' enter='note' exit='note'>
           <div className='story-detail-body'>
-            <NoteErrorBoundary>
+            <NoteErrorBoundary retry={() => setResult(retry([{ id }]))}>
               <Suspense
                 fallback={
                   <ViewTransition default='none' enter='note' exit='note'>
@@ -48,7 +74,7 @@ export function StoryDetails({ children }: { readonly children: ReactNode }) {
                 }
               >
                 <ViewTransition default='none' enter='note' exit='note'>
-                  {children}
+                  {result}
                 </ViewTransition>
               </Suspense>
             </NoteErrorBoundary>

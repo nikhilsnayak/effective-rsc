@@ -4,7 +4,7 @@ import { ERSC } from './ersc';
 import { FeedService, type Story } from './service';
 import { StoryDetails } from './story-details';
 
-const StoryNote = ERSC.Component.make({
+export const StoryNote = ERSC.Component.make({
   render: Effect.fn('StoryNote')(function* ({ id }: { readonly id: number }) {
     const feed = yield* FeedService;
     const detail = yield* feed.detail(id);
@@ -24,7 +24,7 @@ export function StoryCard({ story }: { readonly story: Story }) {
         </div>
         <h2>{story.title}</h2>
         <p className='story-summary'>{story.summary}</p>
-        <StoryDetails>
+        <StoryDetails id={story.id}>
           <StoryNote id={story.id} />
         </StoryDetails>
       </div>

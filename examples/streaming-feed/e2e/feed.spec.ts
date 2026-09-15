@@ -128,9 +128,19 @@ test('retries transport failure without reloading or losing cards and resumes in
 });
 
 for (const lastCard of [7, 12]) {
-  test(`leaving after card ${lastCard} aborts pending notes and retains received cards`, async ({
+  test(`leaving after card ${lastCard} aborts pending notes and retries only the detail`, async ({
     page,
   }) => {
+    let documents = 0;
+    const detailQueries: string[] = [];
+    page.on('request', (request) => {
+      if (request.isNavigationRequest() && request.method() === 'GET') {
+        documents++;
+      }
+      if (request.method() === 'QUERY' && request.postData()?.includes('"id"')) {
+        detailQueries.push(request.postData()!);
+      }
+    });
     await page.goto('/');
     const query = page.waitForRequest((request) => request.method() === 'QUERY');
     await page.getByRole('status').scrollIntoViewIfNeeded();
@@ -148,10 +158,54 @@ for (const lastCard of [7, 12]) {
     await expect(page.locator('[data-story-id="1"]')).toBeAttached();
     await expect(page.getByRole('alert')).toHaveCount(0);
     const retained = await page.locator('[data-story-id]').count();
+    await page.locator('[data-story-id]').evaluateAll((cards) => {
+      for (const card of cards) {
+        card.setAttribute('data-retained-for-retry', '');
+      }
+    });
+    const firstCard = page.locator('[data-story-id="1"]');
+    await firstCard.getByRole('button', { name: 'Read the note' }).click();
     const interrupted = page.locator(`[data-story-id="${lastCard}"]`);
     await interrupted.getByRole('button', { name: 'Read the note' }).click();
     await expect(interrupted.locator('.story-note-error')).toContainText('couldn’t be loaded');
-    await expect(interrupted.getByRole('button', { name: 'Reload the feed' })).toBeVisible();
+    const retry = interrupted.getByRole('button', { name: 'Retry note' });
+    await expect(retry).toBeVisible();
+    // A failed recovery request must leave the individual note retryable too.
+    await page.route('**/_ersc/query', (route) => route.abort(), { times: 1 });
+    await retry.click();
+    await expect(retry).toBeVisible();
+    expect(detailQueries).toEqual([JSON.stringify([{ id: lastCard }])]);
+    await retry.click();
+    await expect(interrupted.locator('.story-note-loading')).toBeVisible();
+    await expect(interrupted.locator('.story-note-error')).toHaveCount(0);
+    if (lastCard === 12) {
+      const otherNote = page.locator('[data-story-id="11"]');
+      await otherNote.getByRole('button', { name: 'Read the note' }).click();
+      await otherNote.getByRole('button', { name: 'Retry note' }).click();
+      await expect(otherNote.locator('.story-note-loading')).toBeVisible();
+      await expect(interrupted.locator('.story-note-loading')).toBeVisible();
+      await expect(otherNote.locator('.story-note-loading')).toHaveCount(0);
+      await expect(otherNote.locator('.story-note-error')).toHaveCount(0);
+      await expect(otherNote.locator('.story-detail-body p')).not.toBeEmpty();
+    }
+    await expect(interrupted.locator('.story-note-loading')).toHaveCount(0);
+    await expect(interrupted.locator('.story-detail-body p')).not.toBeEmpty();
+    // Infinite scrolling may add cards, but retry must preserve every existing card element.
+    await expect(page.locator('[data-retained-for-retry]')).toHaveCount(retained);
+    await expect(firstCard.getByRole('button', { name: 'Close note' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    await expect(interrupted.getByRole('button', { name: 'Close note' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    expect(detailQueries).toEqual([
+      JSON.stringify([{ id: lastCard }]),
+      JSON.stringify([{ id: lastCard }]),
+      ...(lastCard === 12 ? [JSON.stringify([{ id: 11 }])] : []),
+    ]);
+    expect(documents).toBe(1);
     await page.getByRole('status').scrollIntoViewIfNeeded();
     await expect
       .poll(() => page.locator('[data-story-id]').count())
